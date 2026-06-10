@@ -115,6 +115,14 @@ pub struct PromoteReport {
     pub commit: String,
 }
 
+struct ScanResult {
+    /// (path, needs_add): every user-visible change, with whether the
+    /// worktree differs from the index for it (index-only changes — e.g.
+    /// staged deletions after a restore's read-tree — need no `git add`).
+    changed: Vec<(String, bool)>,
+    bigfiles: BigFiles,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CheckpointOpts {
     pub message: Option<String>,
@@ -401,6 +409,13 @@ impl Workspace {
         self.journal.append(&entry)?;
         self.shadow.update_ref(HEAD_REF, &commit)?;
 
+        // Large captures leave tens of thousands of loose objects, which
+        // makes whole-tree fork clones pay for every inode. Repack once so
+        // the store collapses into a handful of files. Best-effort.
+        if files_changed > 5_000 {
+            let _ = self.shadow.run(&["repack", "-a", "-d", "-q"]);
+        }
+
         Ok(Some(CheckpointInfo {
             seq,
             commit,
@@ -410,13 +425,14 @@ impl Workspace {
         }))
     }
 
-    /// Pointer-aware staging: detect big files, sync excludes, stage the
-    /// worktree, splice in pointer blobs, and return the resulting tree oid
-    /// plus the current big-file set. The index never holds big-file content,
-    /// and pointer paths are removed from the index afterwards so the next
-    /// `add -A` skips them (untracked + excluded).
+    /// Pointer-aware staging: one status scan drives change detection, big-
+    /// file maintenance, and a no-op fast path; only changed paths are staged
+    /// (full scan above a threshold); pointer blobs are spliced in; pointer
+    /// paths are removed from the index afterwards so the next capture skips
+    /// them (untracked + excluded). Returns the tree oid + big-file set.
     fn stage_tree(&self) -> Result<(String, BigFiles)> {
-        let bigfiles = self.process_big_files()?;
+        let ScanResult { changed, bigfiles } = self.scan_changes()?;
+
         let mut excludes = self.config.shadow_excludes();
         excludes.push("# --- asp generated: large-blob sidecar ---".to_string());
         for path in bigfiles.files.keys() {
@@ -424,98 +440,175 @@ impl Workspace {
         }
         self.shadow.write_excludes(&excludes)?;
 
-        self.shadow.run(&["add", "-A", "."])?;
-        for (path, entry) in &bigfiles.files {
-            let oid = self.shadow.run_with_stdin(
-                &["hash-object", "-w", "--stdin"],
-                &blobs::pointer_json(entry),
+        // Fast path: nothing changed -> the head tree already describes the
+        // working state exactly (the index deliberately lacks pointer paths,
+        // so we must not write-tree here).
+        let head = self.shadow.rev_parse(HEAD_REF)?;
+        if changed.is_empty() {
+            if let Some(ref h) = head {
+                return Ok((self.shadow.tree_of(h)?, bigfiles));
+            }
+        }
+
+        // Stage what changed. Above the threshold a full scan is cheaper
+        // than a giant pathspec; big files never go through `add`.
+        const FULL_SCAN_THRESHOLD: usize = 2000;
+        let to_add: Vec<&str> = changed
+            .iter()
+            .filter(|(p, needs_add)| *needs_add && !bigfiles.files.contains_key(p.as_str()))
+            .map(|(p, _)| p.as_str())
+            .collect();
+        if changed.len() > FULL_SCAN_THRESHOLD {
+            self.shadow.run(&["add", "-A", "."])?;
+        } else if !to_add.is_empty() {
+            self.shadow.run_with_stdin(
+                &[
+                    "--literal-pathspecs",
+                    "add",
+                    "-A",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                ],
+                &to_add.join("\0"),
             )?;
-            self.shadow.run(&[
-                "update-index",
-                "--add",
-                "--cacheinfo",
-                &format!("100644,{oid},{path}"),
-            ])?;
+        }
+
+        // Splice pointer blobs for all big files in ONE batched index call;
+        // pointer oids are cached in bigfiles.json (computed only when a big
+        // file is new or changed).
+        let mut bigfiles = bigfiles;
+        if !bigfiles.files.is_empty() {
+            let mut oids_changed = false;
+            for entry in bigfiles.files.values_mut() {
+                if entry.pointer_oid.is_none() {
+                    let oid = self.shadow.run_with_stdin(
+                        &["hash-object", "-w", "--stdin"],
+                        &blobs::pointer_json(entry),
+                    )?;
+                    entry.pointer_oid = Some(oid);
+                    oids_changed = true;
+                }
+            }
+            if oids_changed {
+                blobs::save_bigfiles(&blobs::bigfiles_path(&self.layout.asp), &bigfiles)?;
+            }
+            let add_input: String = bigfiles
+                .files
+                .iter()
+                .map(|(path, e)| {
+                    format!(
+                        "100644 {}\t{path}\n",
+                        e.pointer_oid.as_deref().expect("oid cached above")
+                    )
+                })
+                .collect();
+            self.shadow
+                .run_with_stdin(&["update-index", "--index-info"], &add_input)?;
         }
         let tree = self.shadow.run(&["write-tree"])?;
-        for path in bigfiles.files.keys() {
+        if !bigfiles.files.is_empty() {
+            // Mode 0 removes the entry — one spawn for all pointer paths.
+            let rm_input: String = bigfiles
+                .files
+                .keys()
+                .map(|path| format!("0 {}\t{path}\n", "0".repeat(40)))
+                .collect();
             self.shadow
-                .run(&["update-index", "--force-remove", "--", path])?;
+                .run_with_stdin(&["update-index", "--index-info"], &rm_input)?;
         }
         Ok((tree, bigfiles))
     }
 
-    /// Maintain the big-file cache: scan status-dirty paths for files over
-    /// the threshold, stat-check known entries, store new content in the CAS.
-    fn process_big_files(&self) -> Result<BigFiles> {
+    /// One `git status` scan shared by everything stage_tree needs: the list
+    /// of user-visible changed paths (rename pairs included, managed big-file
+    /// pointer deletions filtered out) and the maintained big-file cache.
+    fn scan_changes(&self) -> Result<ScanResult> {
         let threshold = self.config.blob_threshold_bytes();
         let bf_path = blobs::bigfiles_path(&self.layout.asp);
         let mut bf = blobs::load_bigfiles(&bf_path)?;
-        let mut changed = false;
+        let mut bf_changed = false;
 
-        if threshold == 0 {
-            return Ok(bf); // sidecar disabled
-        }
-
-        // New/changed files visible to git (big KNOWN files are excluded from
-        // status, so they are stat-checked separately below). -uall expands
-        // untracked directories into individual files.
+        // -uall expands untracked dirs into individual files so new big
+        // files deep in fresh directories are seen.
         let raw = self
             .shadow
             .run_raw(&["status", "--porcelain", "-z", "-uall"])?;
-        let mut candidates: Vec<String> = Vec::new();
+        let mut changed: Vec<(String, bool)> = Vec::new();
         let mut iter = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
         while let Some(entry) = iter.next() {
             if entry.len() < 4 {
                 continue;
             }
             let xy = &entry[..2];
+            // Y != ' ' means the worktree differs from the index; '??' is
+            // untracked. Everything else is already staged in the index.
+            let needs_add = xy == b"??" || xy[1] != b' ';
             let path = String::from_utf8_lossy(&entry[3..]).to_string();
             if xy.contains(&b'R') || xy.contains(&b'C') {
-                iter.next();
-            }
-            candidates.push(path);
-        }
-
-        for path in candidates {
-            if bf.files.contains_key(&path) {
-                continue; // handled by the stat pass below
-            }
-            let abs = self.layout.root.join(&path);
-            if let Ok(md) = abs.metadata() {
-                if md.is_file() && md.len() >= threshold {
-                    let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
-                    bf.files.insert(path, entry);
-                    changed = true;
+                // Rename/copy: the following record is the source path; its
+                // staged deletion is already in the index.
+                if let Some(orig) = iter.next() {
+                    changed.push((String::from_utf8_lossy(orig).to_string(), false));
                 }
             }
+            // The staged-deletion entry for a managed big file is asp's own
+            // bookkeeping, not a user change.
+            if xy.contains(&b'D')
+                && bf.files.contains_key(&path)
+                && self.layout.root.join(&path).is_file()
+            {
+                continue;
+            }
+            changed.push((path, needs_add));
         }
 
-        // Stat-check known big files: rehash on change, demote on shrink,
-        // drop when deleted.
-        let known: Vec<String> = bf.files.keys().cloned().collect();
-        for path in known {
-            let abs = self.layout.root.join(&path);
-            match abs.metadata() {
-                Ok(md) if md.is_file() && md.len() >= threshold => {
-                    let rec = &bf.files[&path];
-                    if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+        if threshold > 0 {
+            // Promote new big files out of the changed set into the CAS.
+            for (path, _) in &changed {
+                if bf.files.contains_key(path) {
+                    continue;
+                }
+                let abs = self.layout.root.join(path);
+                if let Ok(md) = abs.metadata() {
+                    if md.is_file() && md.len() >= threshold {
                         let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
-                        bf.files.insert(path, entry);
-                        changed = true;
+                        bf.files.insert(path.clone(), entry);
+                        bf_changed = true;
                     }
                 }
-                _ => {
-                    bf.files.remove(&path);
-                    changed = true;
+            }
+            // Stat-check known big files (they are invisible to status):
+            // rehash on change, demote on shrink, drop on delete — each of
+            // those is a real change that must defeat the no-op fast path.
+            let known: Vec<String> = bf.files.keys().cloned().collect();
+            for path in known {
+                let abs = self.layout.root.join(&path);
+                match abs.metadata() {
+                    Ok(md) if md.is_file() && md.len() >= threshold => {
+                        let rec = &bf.files[&path];
+                        if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+                            let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
+                            bf.files.insert(path.clone(), entry);
+                            bf_changed = true;
+                            changed.push((path, false));
+                        }
+                    }
+                    _ => {
+                        bf.files.remove(&path);
+                        bf_changed = true;
+                        changed.push((path, false));
+                    }
                 }
             }
         }
 
-        if changed {
+        if bf_changed {
             blobs::save_bigfiles(&bf_path, &bf)?;
         }
-        Ok(bf)
+        Ok(ScanResult {
+            changed,
+            bigfiles: bf,
+        })
     }
 
     /// Pointer manifest of a checkpoint, if it has one.
@@ -693,6 +786,7 @@ impl Workspace {
                             blake3: ptr.blake3.clone(),
                             size: ptr.size,
                             mtime_ms: blobs::mtime_ms(&md),
+                            pointer_oid: None,
                         },
                     );
                 }
@@ -736,6 +830,7 @@ impl Workspace {
                             blake3: ptr.blake3.clone(),
                             size: ptr.size,
                             mtime_ms: blobs::mtime_ms(&md),
+                            pointer_oid: None,
                         },
                     );
                 }

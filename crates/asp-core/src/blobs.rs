@@ -50,6 +50,10 @@ pub struct BigFileEntry {
     /// Quick-check stamp: rehash only when size or mtime changed.
     #[serde(default)]
     pub mtime_ms: i64,
+    /// git blob oid of this entry's pointer JSON (cached so captures need
+    /// zero per-file hash-object spawns).
+    #[serde(default)]
+    pub pointer_oid: Option<String>,
 }
 
 pub fn pointer_json(entry: &BigFileEntry) -> String {
@@ -105,6 +109,7 @@ pub fn store_in_cas(cas_dir: &Path, file: &Path) -> Result<BigFileEntry> {
         blake3: hash,
         size: md.len(),
         mtime_ms: mtime_ms(&md),
+        pointer_oid: None,
     })
 }
 
@@ -203,6 +208,7 @@ mod tests {
             blake3: "ab".repeat(32),
             size: 123,
             mtime_ms: 0,
+            pointer_oid: None,
         };
         let json = pointer_json(&e);
         let p = parse_pointer(json.as_bytes()).unwrap();

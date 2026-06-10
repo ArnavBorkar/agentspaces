@@ -1,6 +1,6 @@
 # Spike results — EPIC 1 de-risk benchmarks
 
-*2026-06-11 · machine: Intel Mac, macOS 15.5, APFS, 460GB SSD · synthetic monorepo: 100,026 files, 3.28 GiB (200 packages of Rust-like source 1–20KB, 20k-file node_modules-style noise dir, 24 incompressible binary assets totaling 3 GiB) · generator: `scripts/spike/gen_tree.py --files 100000 --blob-gb 3 --seed 42`*
+*2026-06-11 · machine: Apple M3 Pro, macOS 15.5, APFS, 460GB SSD · synthetic monorepo: 100,026 files, 3.28 GiB (200 packages of Rust-like source 1–20KB, 20k-file node_modules-style noise dir, 24 incompressible binary assets totaling 3 GiB) · generator: `scripts/spike/gen_tree.py --files 100000 --blob-gb 3 --seed 42`*
 
 ## Verdict: **GO.** Both existential claims hold.
 
@@ -15,7 +15,7 @@
 
 - Kernel-recursive `clonefile` is **11x faster than per-file cloning and 15x faster than `git worktree add`** — and unlike worktrees it carries untracked files, `.env`, and build artifacts.
 - Cost scales with **inode count, not bytes** (3.3 GiB forked for 32 MB of metadata). Typical repos (1k–50k files) will fork in **10–500 ms**.
-- 100k files ≈ 0.9s on this Intel machine; Apple Silicon should be materially faster. "Sub-second fork on a 100k-file tree" is honest on this hardware.
+- 100k files ≈ 0.9s on this machine (Apple M3 Pro). "Sub-second fork on a 100k-file tree" is honest on this hardware.
 
 ## 2. Change-detection scan (`crates/asp-core/examples/walk_bench.rs`, release build)
 
@@ -52,6 +52,6 @@ Single-threaded `walkdir` + lstat. No parallelism needed for v1.
 
 ## Honest caveats
 
-- Numbers are from one Intel Mac; Linux reflink (btrfs/XFS) path not yet measured (EPIC 6 CI matrix).
+- Numbers are from one Apple M3 Pro Mac; Linux reflink (btrfs/XFS) path not yet measured (EPIC 6 CI matrix).
 - `clonefile` requires same-volume destination; cross-volume falls back to copy with a warning (engine handles this).
 - The 100k-file synthetic tree is a stress case, deliberately harsher than typical repos.

@@ -150,6 +150,9 @@ impl Shadow {
             ));
         }
         self.run(&["config", "core.compression", "0"])?;
+        // Packs get light compression: repack speed matters less than the
+        // loose-object hot path, and source text compresses well.
+        self.run(&["config", "pack.compression", "1"])?;
         self.run(&["config", "gc.auto", "0"])?;
         self.run(&["config", "core.untrackedCache", "true"])?;
         // Point HEAD at asp's ref so `git status` compares against the latest

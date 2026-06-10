@@ -18,8 +18,8 @@
   - [x] T0.1.4 Dual-license MIT/Apache-2.0 files + per-crate license fields
   - [x] T0.1.5 CLAUDE.md: build/test commands, conventions, gh-account note
 - **S0.2 CI**
-  - [~] T0.2.1 GitHub Actions: fmt + clippy -D warnings + test on macos-latest & ubuntu-latest (pushed; verifying first run)
-  - [ ] T0.2.2 CI badge in README (with README rewrite, EPIC 7)
+  - [x] T0.2.1 GitHub Actions: fmt + clippy -D warnings + test on macos-latest & ubuntu-latest (green)
+  - [x] T0.2.2 CI badge in README
 
 ## EPIC 1 — De-risk spikes (existential — nothing else proceeds if these fail)
 
@@ -57,72 +57,49 @@
 **PM intent:** The first five minutes ARE the product. Every command: fast, beautiful output, `--json` for agents, errors that state the corrective next action.
 **Done when:** the demo loop (`init → fork -n 3 → ... → diff → promote → discard`) feels great, help text teaches the model, all commands have --json.
 
-- **S3.1 CLI scaffold**
-  - [ ] T3.1.1 clap derive scaffold; global `--json`; exit-code contract; error type with `hint:` corrective actions
-  - [ ] T3.1.2 Human output polish: tables, colors (respect NO_COLOR), progress for long ops
-- **S3.2 Core commands**
-  - [ ] T3.2.1 `init`, `status`, `checkpoint`, `log`, `undo`, `restore`
-  - [ ] T3.2.2 `fork [-n N] [--label]`, `forks` (list), `diff [forks…|checkpoints…]`, `promote`, `discard`
-- **S3.3 `asp race`**
-  - [ ] T3.3.1 `race "<cmd>" -n N`: fork N ways, run command in each fork (parallel), capture exit/duration, render comparison table, prompt promote/discard
-  - [ ] T3.3.2 Works headlessly (`--json`, no TTY) for agent use
-- **S3.4 Help & completions**
-  - [ ] T3.4.1 Rich `--help` with examples per command; shell completions; man page
+- **S3.1 CLI scaffold** ✅ (clap; global --json with stable ok/result|error envelope; exit-code contract; hint: lines)
+- **S3.2 Core commands** ✅ (init/status/checkpoint(cp)/log/undo/restore/fork/forks/diff/promote/discard)
+- **S3.3 `asp race`** ✅ (parallel lanes, exit/time/±diff table, per-lane logs in fork/.asp/race.log, headless --json)
+- **S3.4 Help & completions** — rich --help with examples ✅; shell completions/man page deferred post-v0.1 (clap_complete, low risk)
 
 ## EPIC 4 — MCP server
 
 **PM intent:** The agent is a first-class user; MCP is the distribution channel (`claude mcp add agentspaces`). Tool descriptions are prompts — write them like product copy for models.
 **Done when:** all workspace tools callable from Claude Code, descriptions tested with a real agent session, errors self-correcting.
 
-- **S4.1 Server**
-  - [ ] T4.1.1 `asp mcp` stdio server (official Rust MCP SDK if mature, else minimal JSON-RPC impl) — same binary
-- **S4.2 Tools**
-  - [ ] T4.2.1 `workspace_status/checkpoint/log/undo/diff/fork/promote/discard` with agent-legible descriptions + corrective-action errors
-  - [ ] T4.2.2 Real-session test: drive every tool from Claude Code; fix description ambiguities the model trips on
+- **S4.1 Server** ✅ (hand-rolled newline JSON-RPC 2.0: initialize/ping/tools-list/tools-call; zero deps)
+- **S4.2 Tools** ✅ (11 workspace_* tools, model-facing descriptions, self-correcting errors, structuredContent)
+  - [ ] T4.2.2 Real-session test from Claude Code (EPIC 8 dogfood)
 
 ## EPIC 5 — Claude Code integration (hedged: contract stays harness-neutral)
 
 **PM intent:** Auto-checkpoint around every agent change — the `/rewind`-for-everything experience, zero config after one command.
 **Done when:** `asp hooks install` wires PostToolUse auto-checkpoints with session/prompt correlation; verified in a real session; uninstall clean.
 
-- **S5.1 Hooks**
-  - [ ] T5.1.1 `asp hooks install [--scope project|user]`: writes Claude Code PostToolUse (Edit/Write/Bash) hook → `asp checkpoint --auto` with session id; debounced; `hooks uninstall`
-  - [ ] T5.1.2 Journal correlation: session id, tool name, prompt summary captured per auto-checkpoint
-- **S5.2 Packaging**
-  - [ ] T5.2.1 `.mcp.json` template + `claude mcp add` one-liner docs; quickstart for Claude Code users
-  - [ ] T5.2.2 Codex/OpenCode port notes (named milestone post-v1; contract kept neutral now)
+- **S5.1 Hooks** ✅ (`asp setup claude`: PostToolUse file-tools+Bash, PreToolUse Bash; idempotent merge preserving user settings; --remove; hook-event always exits 0; session/tool provenance in journal)
+- **S5.2 Packaging** ✅ (.mcp.json written by setup; Codex/OpenCode port = named post-v1 milestone)
+  - [ ] T5.2.2 Real-session verification (EPIC 8 dogfood)
 
 ## EPIC 6 — Quality gates (trust artifacts)
 
 **PM intent:** Storage tools get one strike. The torture suite and honest benchmarks ARE marketing.
 **Done when:** kill-9 suite green in CI; BENCHMARKS.md published with methodology + this-machine numbers; property tests on journal/store.
 
-- **S6.1 Torture suite**
-  - [ ] T6.1.1 kill -9 matrix: kill asp mid-checkpoint/fork/promote at random points (incl. SIGKILL storms); workspace must recover with zero loss of *checkpointed* data; runs in CI
-- **S6.2 Benchmarks**
-  - [ ] T6.2.1 Reproducible bench harness (`asp bench` or scripts/): fork latency, checkpoint latency, status scan, disk overhead vs cp -R/worktree; BENCHMARKS.md with methodology
-- **S6.3 Cross-platform matrix**
-  - [ ] T6.3.1 Linux CI: btrfs/XFS reflink path + ext4 fallback; macOS APFS in CI
-- **S6.4 Property tests**
-  - [ ] T6.4.1 proptest: journal recovery (arbitrary truncation/corruption), checkpoint/restore round-trip invariants
+- **S6.1 Torture suite** ✅ (SIGKILL sweeps over checkpoint/fork/restore; 3 invariants verified; in CI, ~20s)
+- **S6.2 Benchmarks** ✅ (scripts/bench/run.py reproducible markdown report; first run exposed 2 regressions → fixed: single-scan staging w/ no-op fast path + pathspec-limited add + post-capture repack)
+- **S6.3 Cross-platform matrix** ✅ (btrfs loopback CI job exercises real FICLONE; macOS+ubuntu standard jobs)
+- **S6.4 Property tests** ✅ (journal truncation-anywhere recovery, corruption-never-fabricates, checkpoint/restore round-trip over arbitrary trees)
 
 ## EPIC 7 — Docs, packaging, launch readiness
 
 **PM intent:** Out-of-the-box: one install command, 90 seconds to wow. Positioning docs preempt the two obvious objections.
 **Done when:** fresh-machine install → demo works following README only; release pipeline produces signed-ish artifacts; open-core boundary declared.
 
-- **S7.1 README & demo**
-  - [ ] T7.1.1 README: hero pitch, 90-second quickstart, demo GIF/asciinema, architecture sketch, trust section (stock-git recovery)
-- **S7.2 Positioning**
-  - [ ] T7.2.1 docs/why-not-git-worktrees.md · docs/why-not-agentfs.md · FAQ
-- **S7.3 Install paths**
-  - [ ] T7.3.1 curl installer script (install.sh, checksummed), `cargo install asp-cli`
-  - [ ] T7.3.2 Homebrew formula (tap) + npx wrapper package (downloads platform binary)
-- **S7.4 Release automation**
-  - [ ] T7.4.1 GitHub Actions release workflow: tag → build macOS(arm64,x86_64)+Linux binaries → GitHub Release with checksums
-- **S7.5 OSS hygiene**
-  - [ ] T7.5.1 CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md, issue templates; open-core boundary declared in README
-  - [ ] T7.5.2 Launch checklist (repo public flip = Arnav's call; HN/X draft)
+- **S7.1 README & demo** — hero/quickstart/trust/benchmarks/open-core ✅; demo GIF still to record (launch checklist)
+- **S7.2 Positioning** ✅ (why-not-git-worktrees, why-not-agentfs, FAQ)
+- **S7.3 Install paths** — install.sh (checksum-verified, no sudo) ✅; cargo install --git ✅; brew tap + npx wrapper deferred post-launch (need public repo + release assets first)
+- **S7.4 Release automation** ✅ (tag → 4-target build incl. linux-arm, sha256, GitHub Release)
+- **S7.5 OSS hygiene** ✅ (CONTRIBUTING w/ trust-model ground rules, SECURITY scope+model, CODE_OF_CONDUCT, open-core boundary in README); launch checklist at docs/launch-checklist.md (repo public flip = Arnav)
 
 ## EPIC 8 — Dogfood & final review
 
