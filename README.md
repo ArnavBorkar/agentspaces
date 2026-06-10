@@ -13,11 +13,11 @@
 
 ---
 
-Coding agents change files faster than you can review them — and not just tracked files. They run bash, touch `.env`, regenerate artifacts, delete things. Harness checkpoints (like `/rewind`) only cover the model's own edits and die with the session. Git worktrees only carry tracked files. **The state your agents actually produce has no safety net.**
+Coding agents change files faster than you can review them — and not just tracked files. They run bash, regenerate artifacts, delete things, scribble over files you never committed. Harness checkpoints (like `/rewind`) only cover the model's own edits and die with the session. Git worktrees only carry tracked files. **The state your agents actually produce has no safety net.**
 
 `asp` is that safety net, as one static binary:
 
-- **`asp fork -n 3`** — three copy-on-write clones of your *entire* directory (untracked files, `node_modules`, build artifacts included), each instantly runnable. Typical repos fork in well under a second; a 100k-file, 3.3 GiB monorepo takes ~1.2s end-to-end and ~32 MB of disk.
+- **`asp fork -n 3`** — three copy-on-write clones of your *entire* directory (untracked files, `.env`, `node_modules`, build artifacts — literally everything), each instantly runnable. Typical repos fork in well under a second; a 100k-file, 3.3 GiB monorepo takes ~1.2s end-to-end and ~32 MB of disk.
 - **Auto-checkpoints** — with the Claude Code integration, every file edit and bash command is captured with session/tool provenance. `asp undo` reverts agent damage that `/rewind` can't see.
 - **`asp race -n 3 -- claude -p "fix the failing test"`** — run the same task in N parallel lanes, get an exit/time/diff comparison table, promote the winner.
 - **`asp promote <fork>`** — the winner lands as an ordinary git branch. No force-pushes, no HEAD moves, no hooks run. Review it like any PR.
@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/instal
 
 cd your-project
 asp init                      # instant; touches nothing
-asp checkpoint -m "baseline"  # capture everything, untracked files included
+asp checkpoint -m "baseline"  # capture everything except gitignored files
 
 # wire up Claude Code (hooks + MCP) — one command
 asp setup claude
@@ -52,7 +52,7 @@ Two primitives with deliberately different scopes:
 
 | | **Fork** | **Checkpoint** |
 |---|---|---|
-| What | whole physical tree (everything) | source-of-truth files (respects `.gitignore` + derived-state excludes) |
+| What | whole physical tree (literally everything) | source files: tracked + untracked, minus `.gitignore`d and derived-state excludes |
 | How | `clonefile(2)` on macOS, reflink on Linux | shadow git repo in `.asp/` (your `.git` is never touched) |
 | Cost | ~O(inode count), bytes are shared CoW | sub-second incremental; no-op when nothing changed |
 | For | running agents in parallel, instant safety copies | timeline, undo, diff, audit, promote |
@@ -87,14 +87,14 @@ Honest numbers from the stress tree (100k files / 3.3 GiB, including 3 GiB of bi
 ## Install
 
 ```bash
-# script (macOS arm64/x86_64, Linux x86_64)
+# script (macOS arm64/x86_64, Linux x86_64/aarch64 — static musl builds on Linux)
 curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
 
 # from source
 cargo install --git https://github.com/ArnavBorkar/agentspaces asp
 ```
 
-Requires `git` ≥ 2.30 on PATH (asp uses it as its storage engine — that's the trust model, not a shortcut).
+Requires `git` ≥ 2.32 on PATH (asp uses it as its storage engine — that's the trust model, not a shortcut).
 
 ## Project status & open-core boundary
 

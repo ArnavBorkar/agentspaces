@@ -6,11 +6,11 @@ Git worktrees are great, and if they solve your problem you should use them. `as
 
 A worktree materializes the *committed* tree. Everything that makes a checkout actually runnable — `.env`, `node_modules`, `target/`, build caches, the SQLite file your dev server writes, the fixture an agent generated two prompts ago — is absent. Each worktree pays the full `npm install` / `cargo build` tax before an agent can do anything.
 
-An `asp fork` is a copy-on-write clone of the **whole physical directory**. Every fork is born runnable. On the 100k-file / 3.3 GiB benchmark tree: `asp fork` ≈ 0.9s and 32 MB of disk; `git worktree add` took 13.8s and produced a checkout you still can't run.
+An `asp fork` is a copy-on-write clone of the **whole physical directory**. Every fork is born runnable. On the 100k-file / 3.3 GiB benchmark tree ([methodology](benchmarks/BENCHMARKS.md)): `asp fork` ≈ 1.2s end-to-end with 32 MB of disk; `git worktree add` took ~10s and produced a checkout you still can't run.
 
 ## 2. Agents change things that were never committed
 
-The changes you most want to rewind are exactly the ones git never saw: a bash command that deleted the wrong directory, a generated config, an edit to an untracked prototype file. `git checkout` can't bring back what was never tracked. asp checkpoints capture the full source tree — untracked files included — automatically after every agent tool call (with the Claude Code hooks), so `asp undo` reverts bash damage, not just edits.
+The changes you most want to rewind are exactly the ones git never saw: a bash command that deleted the wrong directory, a generated config, an edit to an untracked prototype file. `git checkout` can't bring back what was never tracked. asp checkpoints capture the full source tree — untracked (not-gitignored) files included — automatically after every agent tool call (with the Claude Code hooks), so `asp undo` reverts bash damage, not just edits.
 
 ## 3. Worktrees demand git ceremony mid-flight
 

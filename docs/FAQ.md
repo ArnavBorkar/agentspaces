@@ -18,8 +18,14 @@ Yes — `asp` is a plain CLI; `checkpoint`/`fork`/`undo`/`race` work with any ag
 **Does `asp undo` undo my database / external side-effects?**
 No. asp versions the file tree under the workspace root. Side-effects outside it (databases, network calls, global installs) are out of scope — that honesty matters.
 
+**Are gitignored files like `.env` checkpointed?**
+No — checkpoints respect your `.gitignore` (plus derived-state excludes), so secrets and noise stay out of the store by design. Two consequences: `asp undo` cannot revert changes to gitignored files, and gitignored files are NOT protected against deletion. Forks, by contrast, carry literally everything — `.env` included — because they are physical clones.
+
+**Why does my first checkpoint take a while on a big repo?**
+The first capture stores every source file (one-time). On a 100k-file monorepo it's ~45 seconds; typical repos take a second or two. Every capture after that is incremental (sub-second), and a no-op capture costs ~0.25s.
+
 **What's the difference between `asp undo` and Claude Code's `/rewind`?**
-`/rewind` tracks the model's own file edits within a session. asp checkpoints the *whole tree* (untracked files and bash side-effects included), persists across sessions and crashes, and adds forks/diff/promote on top. They compose fine — keep both.
+`/rewind` tracks the model's own file edits within a session. asp checkpoints the whole source tree (untracked-but-not-ignored files and bash side-effects included), persists across sessions and crashes, and adds forks/diff/promote on top. They compose fine — keep both.
 
 **Symlinks, permissions, empty dirs?**
 Symlinks are preserved in forks and checkpoints (as symlinks, like git). Execute bits are preserved. Empty directories aren't checkpointed (git semantics) but survive in forks.

@@ -11,13 +11,13 @@ say() { printf '%s\n' "$*" >&2; }
 fail() { say "error: $*"; exit 1; }
 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
-command -v git >/dev/null 2>&1 || say "warning: git not found — asp requires git >= 2.30 at runtime"
+command -v git >/dev/null 2>&1 || say "warning: git not found — asp requires git >= 2.32 at runtime"
 
 os="$(uname -s)"
 arch="$(uname -m)"
 case "$os" in
   Darwin) os="apple-darwin" ;;
-  Linux) os="unknown-linux-gnu" ;;
+  Linux) os="unknown-linux-musl" ;;
   *) fail "unsupported OS: $os (build from source: cargo install --git https://github.com/$REPO asp)" ;;
 esac
 case "$arch" in

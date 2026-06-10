@@ -47,3 +47,11 @@ jobs:
           sudo chmod 1777 /mnt/btrfs
       - name: Test on btrfs (exercises FICLONE reflink forks)
         run: TMPDIR=/mnt/btrfs cargo test --workspace
+      - name: Assert forks really reflink on btrfs (no silent copy fallback)
+        run: |
+          cargo build --release -p asp
+          mkdir -p /mnt/btrfs/proj && echo data > /mnt/btrfs/proj/file.txt
+          ./target/release/asp -C /mnt/btrfs/proj init
+          ./target/release/asp -C /mnt/btrfs/proj checkpoint -m base
+          ./target/release/asp -C /mnt/btrfs/proj --json fork --name rf | tee /tmp/fork.json
+          grep -q '"method": "reflink"' /tmp/fork.json
