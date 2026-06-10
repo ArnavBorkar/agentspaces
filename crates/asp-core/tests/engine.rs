@@ -402,7 +402,7 @@ fn stock_git_recovery_runbook_works() {
 #[test]
 fn big_files_go_to_cas_sidecar_and_restore() {
     let (_tmp, root) = project();
-    let ws = Workspace::init(&root, None).unwrap();
+    let _ = Workspace::init(&root, None).unwrap();
     // Lower the threshold to 1 MB for the test.
     std::fs::write(
         root.join(".asp/config.toml"),
