@@ -27,5 +27,23 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
+      - name: Test (includes kill -9 torture suite)
         run: cargo test --workspace
+
+  linux-reflink:
+    name: linux reflink path (btrfs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Mount a btrfs volume for TMPDIR
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q btrfs-progs
+          truncate -s 3G /tmp/btrfs.img
+          mkfs.btrfs -q /tmp/btrfs.img
+          sudo mkdir -p /mnt/btrfs
+          sudo mount -o loop /tmp/btrfs.img /mnt/btrfs
+          sudo chmod 1777 /mnt/btrfs
+      - name: Test on btrfs (exercises FICLONE reflink forks)
+        run: TMPDIR=/mnt/btrfs cargo test --workspace
