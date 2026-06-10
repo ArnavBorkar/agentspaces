@@ -3,3 +3,4 @@
 .DS_Store
 /bench-data/
 .asp/
+.claude/scheduled_tasks.lock
