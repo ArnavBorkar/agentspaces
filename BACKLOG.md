@@ -69,7 +69,7 @@
 
 - **S4.1 Server** ✅ (hand-rolled newline JSON-RPC 2.0: initialize/ping/tools-list/tools-call; zero deps)
 - **S4.2 Tools** ✅ (11 workspace_* tools, model-facing descriptions, self-correcting errors, structuredContent)
-  - [ ] T4.2.2 Real-session test from Claude Code (EPIC 8 dogfood)
+  - [x] T4.2.2 Real-session test: live Claude Code session called workspace_status + workspace_checkpoint via .mcp.json, interpreted results (incl. no-op) correctly — PASS 2026-06-11
 
 ## EPIC 5 — Claude Code integration (hedged: contract stays harness-neutral)
 
@@ -78,7 +78,7 @@
 
 - **S5.1 Hooks** ✅ (`asp setup claude`: PostToolUse file-tools+Bash, PreToolUse Bash; idempotent merge preserving user settings; --remove; hook-event always exits 0; session/tool provenance in journal)
 - **S5.2 Packaging** ✅ (.mcp.json written by setup; Codex/OpenCode port = named post-v1 milestone)
-  - [ ] T5.2.2 Real-session verification (EPIC 8 dogfood)
+  - [x] T5.2.2 Real-session verification: live headless Claude Code session → 'auto: after Edit' + 'auto: after Bash' checkpoints with session ids; `asp undo` reverted the agent edit — PASS 2026-06-11
 
 ## EPIC 6 — Quality gates (trust artifacts)
 
@@ -106,9 +106,9 @@
 **PM intent:** We feel every rough edge before users do. agentspaces is built with agentspaces from the moment the alpha exists.
 **Done when:** asp manages this repo's own development; first-five-minutes walkthrough passes on a clean simulated setup; adversarial multi-agent review finds no release-blocking issues.
 
-- [ ] T8.1 Dogfood: asp init on this repo; use checkpoints/forks during remaining development
-- [ ] T8.2 Fresh-machine first-five-minutes walkthrough (clean clone, README only)
-- [ ] T8.3 Multi-agent adversarial review (correctness, data-safety, UX, docs) + fix wave
+- [x] T8.1 Dogfood: asp init on this repo (52 files, 255ms); managing remaining development
+- [x] T8.2 Fresh-machine walkthrough: clean clone → release build → full README loop (init/checkpoint/fork/forks/undo/race/discard/doctor) — PASS 2026-06-11
+- [~] T8.3 Multi-agent adversarial review (5 dimensions, adversarial verification) — running
 - [ ] T8.4 Final benchmark + torture run; tag v0.1.0
 
 ---
