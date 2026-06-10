@@ -705,3 +705,25 @@ fn non_utf8_filenames_are_captured() {
     write(&root, "src/main.rs", "after\n");
     cp(&ws, "after").unwrap();
 }
+
+#[test]
+fn restore_handles_case_only_renames() {
+    // Found by proptest on macOS CI: checkpoint A has "L/a", state B has
+    // "l/a" (same file on case-insensitive filesystems). Restoring A must
+    // not let the deletion pass clobber the freshly-materialized file.
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    write(&root, "L/a", "upper content\n");
+    let c1 = cp(&ws, "upper").unwrap();
+
+    std::fs::remove_dir_all(root.join("L")).unwrap();
+    write(&root, "l/a", "lower content\n");
+    cp(&ws, "lower").unwrap();
+
+    ws.restore(&c1.seq.to_string(), &[], None).unwrap();
+    assert_eq!(read(&root, "L/a"), "upper content\n");
+    // Round-trip back to the lowercase state too (explicit restore — undo
+    // correctly walks BACKWARD from the restored position, not forward).
+    ws.restore("2", &[], None).unwrap();
+    assert_eq!(read(&root, "l/a"), "lower content\n");
+}

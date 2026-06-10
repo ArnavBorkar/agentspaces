@@ -820,16 +820,11 @@ impl Workspace {
             .expect("head exists after safety checkpoint");
 
         let (files_written, files_deleted) = if paths.is_empty() {
-            // Full restore: materialize target, then delete files that exist
-            // now but not in the target.
-            self.shadow.run(&["read-tree", &target_commit])?;
-            self.shadow.run(&["checkout-index", "-a", "-f"])?;
-            let written = self
-                .shadow
-                .run(&["ls-tree", "-r", "--name-only", &target_commit])?
-                .lines()
-                .count() as u64;
-
+            // Full restore: delete files that exist now but not in the
+            // target FIRST, then materialize the target. Order matters on
+            // case-insensitive filesystems: materializing `L/a` while the
+            // old `l/a` still exists reuses the old name, and the deletion
+            // pass afterwards would clobber the freshly-restored file.
             let raw = self.shadow.run_raw(&[
                 "diff-tree",
                 "-r",
@@ -859,6 +854,14 @@ impl Workspace {
                     }
                 }
             }
+
+            self.shadow.run(&["read-tree", &target_commit])?;
+            self.shadow.run(&["checkout-index", "-a", "-f"])?;
+            let written = self
+                .shadow
+                .run(&["ls-tree", "-r", "--name-only", &target_commit])?
+                .lines()
+                .count() as u64;
             // Materialize big files: replace restored pointer files with
             // their CAS content, and reset the big-file cache + index so the
             // next capture treats them correctly.

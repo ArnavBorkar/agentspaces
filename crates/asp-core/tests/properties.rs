@@ -96,8 +96,15 @@ fn file_tree() -> impl Strategy<Value = BTreeMap<String, Vec<u8>>> {
     )
     .prop_map(|parts| parts.join("/"));
     prop::collection::btree_map(rel_path, prop::collection::vec(any::<u8>(), 0..512), 1..12)
-        .prop_filter("no path is a prefix-dir of another", |m| {
-            let keys: Vec<&String> = m.keys().collect();
+        .prop_filter("case-insensitive-unique and no prefix-dir conflicts", |m| {
+            // Lowercase comparisons: paths differing only by case are the
+            // SAME file on default macOS APFS — a tree containing both is
+            // unrepresentable on disk (filesystem semantics, not asp's).
+            let keys: Vec<String> = m.keys().map(|k| k.to_lowercase()).collect();
+            let unique: std::collections::HashSet<&String> = keys.iter().collect();
+            if unique.len() != keys.len() {
+                return false;
+            }
             !keys.iter().any(|a| {
                 keys.iter()
                     .any(|b| a != b && b.starts_with(&format!("{a}/")))

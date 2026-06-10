@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.1 — 2026-06-11
+
+**Fix (restore correctness on case-insensitive filesystems):** full restore now deletes
+outgoing paths *before* materializing the target. Previously, restoring across a
+case-only rename (checkpoint has `L/a`, working tree has `l/a` — the same file on
+default macOS APFS) could let the deletion pass remove the freshly restored file.
+Found by our own property tests in CI within hours of v0.1.0; deterministic
+regression test added. Also hardened the property-test strategy to model
+case-insensitive filesystem semantics correctly.
+
 ## v0.1.0 — 2026-06-11
 
 First release. `asp` is a single static binary giving AI agents durable, branchable, fully-reviewable workspaces over real directories.
