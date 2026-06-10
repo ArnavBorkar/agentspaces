@@ -26,16 +26,16 @@
 **PM intent:** The two claims the whole pitch rests on, proven with published numbers before we invest in features: (1) whole-directory CoW fork + status is sub-second on a big dirty tree; (2) every byte is recoverable with stock git.
 **Done when:** docs/benchmarks/spike-results.md has honest numbers from this machine, and a written go/reposition decision.
 
-- **S1.1 CoW fork benchmark**
-  - [ ] T1.1.1 Generator: synthetic monorepo (100k files, ~2–5 GB, realistic dir shape, mixed sizes incl. some 50–200 MB blobs)
-  - [ ] T1.1.2 Benchmark clonefile (macOS) whole-dir fork vs `cp -R` vs `git worktree add`; record latency + extra disk
-  - [ ] T1.1.3 Benchmark change-detection scan (mtime-index walk) on the 100k-file tree; cold vs warm
-  - [ ] T1.1.4 Write up results + go/no-go in docs/benchmarks/spike-results.md
-- **S1.2 Shadow-git capture spike**
-  - [ ] T1.2.1 Sidecar GIT_DIR (`.asp/shadow.git`) capturing the user worktree including untracked files, without touching user's `.git`
-  - [ ] T1.2.2 Measure full-checkpoint latency on the 100k tree (initial + incremental); decide index/batching strategy
-  - [ ] T1.2.3 Prove stock-git recovery: restore any checkpoint with plain `git --git-dir` commands; document the runbook
-  - [ ] T1.2.4 Large-blob policy decision from data (threshold, sidecar vs in-git), recorded in format doc
+- **S1.1 CoW fork benchmark** ✅
+  - [x] T1.1.1 Generator: synthetic monorepo (100,026 files, 3.28 GiB)
+  - [x] T1.1.2 clonefile(dir) **919ms/32MB** vs cp -R 27s/3.7GB vs worktree 13.8s — 15x win
+  - [x] T1.1.3 Change-detection scan: 263ms warm on 100k files
+  - [x] T1.1.4 docs/benchmarks/spike-results.md — **verdict: GO**
+- **S1.2 Shadow-git capture spike** ✅
+  - [x] T1.2.1 Sidecar GIT_DIR captures untracked files; user .git untouched (PASS)
+  - [x] T1.2.2 Incremental checkpoint **462ms**; initial 66s → mitigations decided (excludes, blob sidecar, capture-on-first-checkpoint)
+  - [x] T1.2.3 Stock-git restore byte-identical (PASS); runbook = read-tree + checkout-index
+  - [x] T1.2.4 Blob policy: >50MB → BLAKE3 CAS sidecar via clonefile + pointer in shadow git (6 format decisions recorded in spike-results.md)
 
 ## EPIC 2 — Core engine (`asp-core`)
 
