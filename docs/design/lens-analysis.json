@@ -1,0 +1,1045 @@
+{
+  "synthesis": {
+    "convergences": [
+      "All five lenses independently land on the identical form factor: an open-source, local-first, single static binary that is simultaneously a CLI and an MCP server, providing O(1) copy-on-write fork / checkpoint / diff / promote / discard over the user's REAL working directory \u2014 including untracked files and bash side-effects \u2014 with no FUSE, no daemon, no signup, no server.",
+      "All five reject the same three head-on plays for the same reasons: hosted POSIX filesystem (Archil's + now AWS's capital game), hosted versioned FS (Mesa's game, unwinnable on trust for a solo vendor), and headless git API for platforms (Pierre's $23M moat, wrong sales motion). Four of five also independently reject the session-manager UI layer as commoditized and harness-absorbed.",
+      "The wedge gap is identically diagnosed everywhere: harness-native checkpoints (Claude Code /rewind) cover only the model's edits and die with the session; git worktrees cover only git-tracked files. Durable cross-session timelines, whole-directory forks, and undo of agent bash damage are unserved \u2014 and the individual harness power user is the one customer none of the three funded incumbents addresses.",
+      "Customer #1 converges across PM and customer lenses: the engineer running 3\u20138 parallel Claude Code/Codex sessions and fork-N-compare-promote loops, currently duct-taping cp -r, shell scripts, and worktrees. Crucially, the agent itself is a first-class user \u2014 verb-named MCP tools, --json on every command, and error messages that state the corrective next action.",
+      "Distribution consensus: OSS + the MCP/hooks channel ('claude mcp add agentspaces', .mcp.json, the API-frozen MCP registry) is the only channel a 1-person team owns, and none of Archil/Mesa/Pierre occupies it. Open source is not ideology here \u2014 it is simultaneously the distribution strategy, the trust strategy (no one bets a state layer on a closed solo vendor), and the only durable defense against incumbent bundling.",
+      "Git interop at the edge, never a git wire-protocol server: every checkpoint exportable as a commit, promote lands as an ordinary git branch/PR, and state is never trapped in a proprietary format. Architect, scout, and skeptic all explicitly kill the idea of speaking git's wire protocol as a server.",
+      "Zero custody in v1 and a content-addressed, sync-ready on-disk format from day one: BYO disk now, BYO S3/R2 bucket sync as the first expansion (conditional-write ref CAS means no service to operate), hosted open-core control plane only after trust and adoption exist. Approach the report's Section-5 primitive from below, not from a datacenter.",
+      "Identical non-negotiables on quality and risk: data loss is a one-strike permanent kill for a storage-adjacent tool, so a published crash-safety torture suite (kill -9 matrix, fault injection) ships with v1; and the performance bar is unambiguous \u2014 fork + status must be sub-second on a multi-GB, 100k-file dirty tree or the pitch dies in the first demo.",
+      "Turso AgentFS is named by four lenses as the nearest collision, with the same differentiation each time: AgentFS is a local SQLite-file substrate, not git-interoperable and not durable to cloud; agentspaces is the workflow/version layer over real directories and real repos, git-native and sync-ready. The seam AgentFS has published intentions toward but not shipped is exactly the target \u2014 which makes speed a strategy, not a virtue.",
+      "The killer demo is the same in every lens: fork the workspace N ways, run N agent sessions, get a side-by-side diff table, promote the winner, discard the rest \u2014 the human-approval gate expressed as a storage operation, which is the report's 'promotion as a recorded act' made tangible on a laptop."
+    ],
+    "conflicts": [
+      "Engine internals \u2014 custom CAS vs git-native storage. The architect rejects the git object model internally (no chunking, packfile complexity) and specifies SQLite-as-truth + BLAKE3/FastCDC CAS; the prior-art scout and skeptic argue for plain git plumbing / shadow-git capture first (gitoxide later), because everything stays recoverable with stock git. Adjudication: the scout and skeptic are right for v1. For a solo storage vendor, 'worst-case failure degrades to a plain git repo' is the single most valuable trust asset available (the skeptic's one-strike point), and git-native storage makes the moat-bearing interop free by construction. The architect's real concerns (large blobs, micro-commit churn) are handled by a FastCDC/BLAKE3 sidecar for big files, write-batching, and periodic repack \u2014 and by hiding the engine behind a Workspace trait so hot paths can move to gitoxide or a custom CAS when profiling, not aesthetics, demands it.",
+      "Exec in v1 \u2014 the architect wants a local exec driver plus two sandbox adapters by week 12; PM and customer lenses defer attached compute entirely ('sandboxes are partners, not product'). Adjudication: split the difference at the thin end. A minimal run-wrapper that records command, exit code, and duration into the journal and auto-checkpoints is in v1 \u2014 it is what makes 'commits are the audit log' literal and powers the race demo. Sandbox adapters (E2B/Modal/Daytona) and any exec service are out until post-v1; the report itself says compute is a verb, and verbs can be added later.",
+      "Sync timing \u2014 the architect ships BYO-bucket sync inside the 6-week window; skeptic and customer lenses push it to a v2 fast-follow after local trust is earned; the PM puts hosted at month 4\u20136. Adjudication: the skeptic wins on sequencing, the architect wins on design. The format is content-addressed and sync-ready from day one (this is load-bearing and cheap), but zero-server BYO-bucket sync is the first post-v1 milestone at weeks 5\u20138, not a v1 component \u2014 shipping a flawless local engine in 4 weeks beats shipping a distracted one with sync in 6. Hosted multi-tenant anything is gated on the custody and runway forks below.",
+      "Timeline realism \u2014 the architect claims production-grade local-first at 6 weeks; the scout says 8\u201312 weeks; the skeptic demands a credible v1 with published torture tests inside ~10 weeks. Adjudication: split 'demoable' from 'trusted.' A dogfoodable alpha inside Claude Code by week 2 and a soft-launched v1 at week 4 are realistic on the git-plumbing engine; the word 'production-grade' is not used publicly until the torture suite, benchmark suite, and 4+ weeks of dogfooding exist (weeks 8\u201310). The 4-week sketch below reflects alpha-to-soft-launch, not GA.",
+      "Persona ordering \u2014 the customer lens ranks the eval/fleet engineer above the Claude Code daily-driver; the PM merges them; the customer lens itself then warns that a solo founder can only feel one workflow. Adjudication: they are the same artifact and nearly the same person; polish the dogfooded Claude Code daily-driver loop first (the founder lives in it, so taste is felt rather than guessed) and co-design the diff/promote comparison UX with 2\u20133 recruited eval-heavy users \u2014 the customer lens's own hybrid option.",
+      "Mount ambition \u2014 the architect keeps a month-4 FUSE/NFS go/no-go alive (with a 1-week read-only NFSv3 loopback spike); customer and skeptic lenses say cede mounts and isolation permanently to sandboxes and Archil-class vendors. Adjudication: not a v1 question and not yet a founder fork \u2014 default to staying the version-semantics/workflow layer, spend the 1-week NFSv3 spike at month 4 only if traction exists, and treat 'become a filesystem company' as a decision to re-open with data, not now. It is deliberately excluded from the founder forks below because the cheap probe makes it reversible."
+    ],
+    "decision_forks": [
+      {
+        "header": "Endgame ambition",
+        "question": "What is agentspaces for, ultimately: a venture-scale run at the agent state layer, a profitable independent dev-tool business, or a serious open-source project whose business shape is decided later?",
+        "options": [
+          {
+            "label": "Venture path",
+            "implication": "Raise a pre-seed/seed on the wedge thesis within ~3 months of launch; race to the hosted open-core tier and the full Section-5 primitive; accept the custody business, hiring, and the obligation to compete with Mesa/Archil for the layer rather than coexist."
+          },
+          {
+            "label": "Independent business",
+            "implication": "Bootstrap to revenue via prosumer/team sync subscriptions; stay small; optimize for a beloved tool with durable maintenance over land-grab speed; acquisition interest from Mesa/Archil becomes a live exit rather than a distraction."
+          },
+          {
+            "label": "Earn-the-decision optionality",
+            "implication": "Commit only to making the OSS wedge undeniable; instrument the 90-day metrics (installs, weekly actives, forks/week, retention, hosted waitlist) and decide raise-vs-bootstrap at month 3 with evidence instead of forecasts. Costs some speed if venture is the eventual answer; preserves both doors."
+          }
+        ],
+        "recommended": "Earn-the-decision optionality",
+        "rationale": "Every lens agrees the first 90 days look identical regardless of endgame: same artifact, same OSS launch, same metrics. The PM and customer lenses both independently propose deferring this call to real adoption data, and the skeptic's red-team shows the venture path's custody obligations are exactly the early risks to avoid. The only thing that must be decided NOW to preserve optionality is the license (next fork) \u2014 so decide that, ship, and let 90-day evidence price the ambition. If Arnav already knows he wants venture scale, choose it openly: it pulls fundraising prep and the hosted design forward and changes nothing about v1."
+      },
+      {
+        "header": "Runway tolerance",
+        "question": "How many months of zero revenue will you fund, given this plan is realistically $0 until a hosted/sync tier exists (month 4\u20136 earliest, month 6\u20139 to first real payers)?",
+        "options": [
+          {
+            "label": "12+ months funded",
+            "implication": "Run the plan as written: pure OSS through 2026, BYO-bucket sync as a free feature, monetize from strength in 2027. The strongest version of the strategy and the one all five lenses implicitly assume."
+          },
+          {
+            "label": "~6 months funded",
+            "implication": "Pull a thin paid tier (hosted sync control plane: Worker + R2, or paid prosumer sync at $10\u201320/mo) forward to month 3\u20134, accepting a rougher OSS v1 and roughly halved engine velocity during the squeeze."
+          },
+          {
+            "label": "Under 6 months",
+            "implication": "Per the skeptic, bottom-up OSS infra has a 12\u201324 month gestation \u2014 on this horizon the honest move is to either raise money now on the wedge thesis before writing much code, or pick a different, demo-shaped project. Do not start this plan hoping the clock is wrong."
+          }
+        ],
+        "recommended": "12+ months funded",
+        "rationale": "The skeptic's analysis is the decisive one: the competitive clocks (Turso's disaggregation trajectory, harness-native checkpointing deepening every release) reward shipping fast, but the adoption clock for trust-sensitive storage tooling cannot be compressed below ~12 months. Building the monetization layer early loses both races \u2014 the PM, customer, and skeptic lenses all converge on this exact failure mode. Only Arnav knows his bank account; but the plan should only be started on a horizon that lets it work."
+      },
+      {
+        "header": "License posture",
+        "question": "What license ships on the engine \u2014 a decision that is effectively irreversible after launch?",
+        "options": [
+          {
+            "label": "MIT/Apache core, declared open-core line",
+            "implication": "Maximum adoption and trust (the only posture that makes a solo vendor adoptable as a state layer); the format can become the standard harnesses and session managers build on. You accept that Turso, a hyperscaler, or Mesa could ship your work as a service \u2014 the defense is pace, format ownership, and owning the sync/control plane you declare proprietary from day one."
+          },
+          {
+            "label": "BUSL/FSL source-available",
+            "implication": "Legally protects the future hosted tier from competitive hosting; costs real adoption friction with exactly the OSS-native personas who are the entire distribution plan, and blunts the 'become the standard' defense against bundlers."
+          },
+          {
+            "label": "Closed binary, generous free tier",
+            "implication": "Fastest theoretical path to charging; per the customer lens, likely fatal \u2014 neither eval engineers nor Claude Code power users will adopt a closed state layer from a one-person company, and the channel dies."
+          }
+        ],
+        "recommended": "MIT/Apache core, declared open-core line",
+        "rationale": "Four of five lenses independently conclude permissive is the strongest fit: it is the distribution channel (PM), the only defensible posture against bundling (architect), the trust prerequisite for the paying persona (customer), and the bus-factor mitigation (skeptic). The free-rider risk is real but second-order: the engine is weeks of work for anyone, so the moat was never the code \u2014 it is format adoption, integration depth, and pace. Declare the open-core boundary (engine and format open forever; hosted sync/control plane proprietary) in the README at launch so the community never feels rug-pulled."
+      },
+      {
+        "header": "Harness concentration",
+        "question": "How hard do you ride Claude Code \u2014 the best distribution channel available and also the vendor most likely to absorb the feature?",
+        "options": [
+          {
+            "label": "Claude-Code-first, hedged",
+            "implication": "Deep hooks integration (PreToolUse/PostToolUse auto-checkpoints around Bash/Edit) and polished MCP experience ship in v1; the CLI/MCP contract stays strictly harness-neutral underneath; a Codex/OpenCode port is a named, dated milestone (~week 6, where an open Codex feature request for exactly this already exists). Fastest time-to-wow with a priced, bounded absorption risk."
+          },
+          {
+            "label": "Ride Claude Code maximally",
+            "implication": "All polish into the Anthropic surface, ports whenever. Deepest single-channel love and fastest initial growth; a single Anthropic release note covering bash side-effects and untracked files compresses the wedge to near zero."
+          },
+          {
+            "label": "Strictly harness-agnostic",
+            "implication": "MCP + CLI only, no harness-specific hooks anywhere. Most durable against absorption; dilutes the v1 experience, slows time-to-wow, and forfeits the one distribution advantage a solo founder has."
+          }
+        ],
+        "recommended": "Claude-Code-first, hedged",
+        "rationale": "PM and skeptic both land on the hedge independently. The durable layers \u2014 cross-session durability, whole-directory forks, git interop, and eventually sync \u2014 are precisely the things a harness vendor won't build (they are cross-harness and cross-machine by nature), so deep integration is rentable distribution while the defensible value accretes underneath. The hedge converts 'kill zone' from an existential bet into a scheduled diversification."
+      },
+      {
+        "header": "Custody ceiling",
+        "question": "Will you ever operate a hosted storage service \u2014 on-call rotation of one, personal liability for other people's bytes \u2014 and if so, on what condition?",
+        "options": [
+          {
+            "label": "Custody after revenue funds ops",
+            "implication": "v1 and the sync tier stay zero-custody (BYO S3/R2 bucket, user's keys, thin stateless control plane at most); a true hosted tier ('GitHub for agent workspaces') waits until revenue or funding pays for a second engineer and real ops. Caps near-term revenue shape to prosumer/control-plane pricing; keeps the catastrophic-failure surface at zero while trust is being earned."
+          },
+          {
+            "label": "Zero custody forever",
+            "implication": "The business ceiling becomes support, sponsorship, and control-plane subscriptions; the venture endgame effectively closes; in exchange, the one risk that kills storage companies overnight is permanently off the table."
+          },
+          {
+            "label": "Custody as the plan",
+            "implication": "Commit now to the hosted tier as the product, design billing/multi-tenancy early, and accept that a solo operator selling custody of strangers' code pre-track-record is the single position every lens rated unwinnable."
+          }
+        ],
+        "recommended": "Custody after revenue funds ops",
+        "rationale": "The skeptic frames this exactly right: every serious monetization path eventually runs through custody, so pretending the question doesn't exist is how architectures get built wrong. The BYO-bucket design (conditional-write ref CAS on the user's own S3/R2) is the elegant middle \u2014 it delivers multi-machine durability and even team sharing with zero bytes custodied, keeps the hosted door open because the format and sync protocol are already proven, and defers the on-call-of-one liability until there is a team. Answering this now also settles what the architect needs: tokens designed into the API, unenforced until a control plane exists."
+      }
+    ],
+    "proposed_v1": "Agentspaces v1 is a single static binary, `asp`, that is simultaneously a CLI and an MCP stdio server, MIT/Apache-licensed, macOS (APFS) and Linux (btrfs/XFS, degraded fallback elsewhere) \u2014 no FUSE, no daemon, no account, no telemetry. `asp init` adopts any existing directory or git repo without disturbing it (sidecar store, never rewrites the user's history); `asp fork [-n N]` produces O(1) clonefile/reflink copies of the WHOLE working directory \u2014 untracked files, .env, build artifacts included; a shadow-git capture layer (plain git plumbing behind a Workspace trait, FastCDC/BLAKE3 sidecar for large blobs) records every change as a commit-grained checkpoint with an append-only journal mapping each checkpoint to the tool call, session, and prompt that caused it, all recoverable with stock git plumbing by design. The core loop: fork per agent attempt \u2192 auto-checkpoint around every change (Claude Code PreToolUse/PostToolUse hooks make bash side-effects rewindable \u2014 the documented gap in /rewind) \u2192 durable cross-session timeline and undo \u2192 `asp diff` cross-fork comparison table \u2192 `asp promote` lands the winner as an ordinary git branch/PR, `asp discard` deletes the rest; `asp race \"<prompt>\" -n 3` packages the whole loop as the demo. The MCP server exposes workspace_fork / checkpoint / diff / promote / undo / log with agent-legible descriptions, --json on every command, and error strings that state the corrective next action, so the agent itself is a first-class user across Claude Code, Codex, and OpenCode. Shipped alongside the binary: a kill -9 crash-safety torture suite in CI, honest published benchmarks (fork latency and disk overhead on a 5GB dirty 100k-file monorepo vs cp -r and git worktree), a 90-second README demo, and a 'why not git worktrees / why not AgentFS' doc. The on-disk format is content-addressed and sync-ready from day one, with capability-token fields present in the API but unenforced. Explicitly OUT of v1: any hosted service or custody of bytes, BYO-bucket sync (first post-v1 milestone, weeks 5\u20138), FUSE/NFS/mounts, sandbox exec adapters, token enforcement, Windows, web UI, the versioned-memory feature, session-manager UI, and all non-coding verticals.",
+    "north_star": "Agentspaces is the open-source, local-first state engine that turns every agent session into an instant, disposable, fully-reviewable fork of your real working directory \u2014 fork is control flow, the checkpoint journal is the audit log, and promote is the only way work lands.",
+    "first_four_weeks": [
+      "Week 1 \u2014 Kill the two existential risks before building anything else: benchmark clonefile/reflink whole-directory fork plus mtime-indexed status on a real 5GB/100k-file dirty monorepo (target: sub-second, published numbers), and spike the shadow-git capture layer (untracked files, write-batching, large-blob sidecar) proving everything is recoverable with stock git. Scaffold `asp init/fork/checkpoint/diff/discard` behind the Workspace trait and write the one-page format doc that locks in content-addressed, sync-ready objects.",
+      "Week 2 \u2014 Demoable alpha inside Claude Code, dogfooded on agentspaces itself: hooks integration auto-checkpointing around every Bash/Edit tool call, MCP server with workspace_* verbs, --json on every command, corrective-action error strings. From this week forward, agentspaces is built using agentspaces \u2014 every rough edge is felt, not guessed.",
+      "Week 3 \u2014 Complete the loop and earn the trust claims: promote-to-git (winner lands as an ordinary branch/PR), durable cross-session timeline and undo, `asp race -n N` end-to-end, kill -9 crash-safety torture suite running in CI. Recruit 5\u201310 Claude Code power users and 2\u20133 eval/fleet engineers as weekly design partners; co-design the diff comparison table with the latter.",
+      "Week 4 \u2014 Polish the first five minutes and soft-launch: brew/npx/curl install, 90-second README demo (8 forks of a 5GB workspace in under a second, diff table, promote), published benchmarks vs cp -r and git worktrees, the 'why not worktrees / why not AgentFS' positioning docs, declared open-core license boundary. Ship to the recruited cohort, fix what they hit, and prep the public HN/X launch for week 5\u20136 \u2014 with the Codex/OpenCode port and BYO-bucket sync already scheduled as the next two milestones."
+    ]
+  },
+  "lenses": {
+    "pm": {
+      "lens": "Product Manager / founder-strategy",
+      "summary": "The three incumbents have carved up the hosted, platform-facing territory \u2014 Archil owns \"POSIX mount, maximum speed,\" Mesa owns \"every write versioned,\" Pierre owns \"headless git for platforms\" \u2014 but all three are closed, hosted, and sell to platforms or cloud workloads; none of them serves the individual harness power user working on their own machine, and none is open source. Meanwhile the harness ecosystem proves the demand locally: Claude Code ships native per-prompt checkpoints and worktree support, and an entire cohort of session managers (Conductor, Nimbalyst/ex-Crystal, parallel-code) exists purely to run parallel agents in worktrees \u2014 yet harness checkpoints explicitly do NOT cover bash commands or user edits and die with the session, and worktrees only version git-tracked files, forcing every user to hand-copy .env, node_modules, build caches, and data files, with no protection against an agent's `rm -rf` or migration script. The unoccupied ground is therefore the open-source, local-first workspace STATE ENGINE underneath harnesses and session managers: copy-on-write fork/checkpoint/diff/promote semantics over the WHOLE working directory (untracked files and bash side-effects included), git-interoperable, distributed as a CLI + Claude Code hooks + MCP server. Customer #1 is the staff-level engineer or solo technical founder running 3\u20138 Claude Code/Codex sessions daily on one repo, who today maintains shell scripts to clone untracked state into worktrees and has lost work to agent bash commands that /rewind cannot undo. The wedge is credibly \"the primitive\" and not a feature because it owns the state format and audit log that session managers, eval runners, and eventually the hosted tier all build on \u2014 the expansion path is local engine \u2192 integrations (session managers, CI, Codex/OpenCode) \u2192 open-core hosted sync (\"GitHub for agent workspaces\": durable named workspaces, lazy pull, team review) \u2192 the report's full Section-5 primitive, approached from below rather than from the datacenter. Open-core is the only model that fits a 1-person team: OSS is the sole realistic distribution channel against three funded closed products, and hosted sync at pay-nothing-at-rest pricing (free local forever; ~$0.15\u20130.20/GB-month on ACTIVE data only, zero egress on agent-path reads, generous free cold tier) is the monetization that the report shows every winner converges on. Success in 90 days looks like: 500+ real installs with \u22651 fork, 50 weekly-active users averaging \u226520 forks/week, week-4 retention \u226530%, p50 whole-workspace fork <500ms on a 5GB dirty repo, 2+ session-manager or harness-adjacent integrations, and a 100+ signup waitlist for hosted sync. What NOT to build, explicitly: no NVMe cache fleet or network filesystem (Archil's capital game), no hosted versioned-FS service as v1 (Mesa's game, pre-trust), no distributed git API for platforms (Pierre's moat, requires enterprise SLA a solo founder can't sign), no sandbox/compute substrate, and no session-manager UI (crowded, thin \u2014 power those tools instead of competing with them).",
+      "form_factor_options": [
+        {
+          "option": "Local-first OSS workspace engine: CLI + Claude Code hooks + MCP server (copy-on-write fork/checkpoint/diff/promote of the whole working directory)",
+          "pros": [
+            "Genuinely unoccupied: all three incumbents are hosted/closed and ignore the individual harness user; harness-native checkpoints cover only model edits (not bash/user changes) and worktrees cover only git-tracked files \u2014 the gap is documented and felt daily",
+            "Distribution is free and immediate: ships as `npx`/brew install, a Claude Code hooks config, and an MCP server \u2014 lands directly inside the highest-engagement developer surface of 2026",
+            "Buildable to production quality by 1 person + AI: APFS clonefile / Linux reflink + a content-addressed journal is weeks of work, not Archil's protocol or Pierre's distributed refs",
+            "Open source counter-positions all three closed incumbents at once and makes the format adoptable by session managers (Conductor, Nimbalyst, parallel-code) as infrastructure rather than competition",
+            "Local-first means zero trust barrier \u2014 no one has to put their repo on a solo founder's servers",
+            "Directly embodies the report's primitive at small scale: forks are control flow, checkpoints+journal are the audit log, promote is the HITL gate"
+          ],
+          "cons": [
+            "Anthropic could deepen native checkpointing to cover bash and untracked files, compressing the wedge (they iterate fast on exactly this surface)",
+            "CoW portability tax: APFS and btrfs/XFS reflink are easy, ext4 and Windows are not \u2014 platform matrix eats solo-dev time",
+            "Zero revenue for months; monetization arrives only with the hosted tier",
+            "Thin technical moat at v1 \u2014 defensibility must come from format adoption, integration depth, and pace"
+          ],
+          "verdict": "PURSUE \u2014 this is the v1; it is the only form factor where a 1-person team has both a real gap and a free distribution channel."
+        },
+        {
+          "option": "Open-core hosted sync: durable named workspaces in the cloud, lazy pull to any machine/sandbox, team review UI (\"GitHub for agent workspaces\")",
+          "pros": [
+            "The natural monetization of the local engine \u2014 push/pull workspaces like git remotes, billed pay-nothing-at-rest",
+            "Expansion path to the full Section-5 primitive (lazy materialization, data-scoped tokens, mount into sandboxes) approached from an installed base rather than cold",
+            "By the time it ships, the local format and audit log are already in users' muscle memory \u2014 the hosted tier sells itself to existing users"
+          ],
+          "cons": [
+            "Premature now: a solo founder hosting other people's code needs trust signals (SOC2, durability story) that take time",
+            "Building it first would mean competing with Mesa/Archil head-on with 1/20th the resources",
+            "Distracts from winning the local wedge, which is the whole strategy"
+          ],
+          "verdict": "DEFER \u2014 design the local format so every object is content-addressed and sync-ready from day one; ship hosted around month 4\u20136 once weekly actives prove pull."
+        },
+        {
+          "option": "Hosted versioned filesystem (mini-Mesa): FUSE/VFS mounts, every-write versioning as a cloud service",
+          "pros": [
+            "Closest literal match to the report's primitive",
+            "Mesa is still in private beta, so a GA window technically exists"
+          ],
+          "cons": [
+            "Capital- and ops-intensive: durable multi-tenant storage, mount infrastructure, on-call \u2014 exactly what a 1-person team cannot run credibly",
+            "Head-on with a funded team (Mesa, $5M, ex-Microsoft/Census) and with Archil's GA product on the POSIX side",
+            "No trust story: nobody mounts production state from an unknown solo operator",
+            "Sales motion (platform/enterprise) mismatched to founder capacity"
+          ],
+          "verdict": "REJECT \u2014 this is Mesa's game; entering it head-on with fewer resources and later timing is strictly dominated."
+        },
+        {
+          "option": "Headless git API for platforms (mini-Pierre)",
+          "pros": [
+            "Proven revenue pool (codegen platforms), clear buyer",
+            "Git interop is real moat-bearing territory per the report"
+          ],
+          "cons": [
+            "Pierre has ~$23M, years of distributed-git systems work, ex-GitHub help, and existing platform deals \u2014 the moat is exactly the part a newcomer can't speed-run",
+            "Platform customers demand SLAs, scale proof, and vendor diligence a solo founder fails by default",
+            "Concedes the 'agents just want files' interface thesis the rest of the strategy is built on"
+          ],
+          "verdict": "REJECT \u2014 strongest incumbent moat of the three; nothing about a 1-person team improves the attack."
+        },
+        {
+          "option": "Session-manager / parallel-agent UI app (compete with Conductor, Nimbalyst, parallel-code)",
+          "pros": [
+            "Visible, demo-friendly, directly monetizable as a prosumer app",
+            "Existing tools prove willingness to adopt"
+          ],
+          "cons": [
+            "Crowded and churning (Crystal already deprecated into Nimbalyst); differentiation is UI taste, not infrastructure",
+            "Harness vendors absorb this layer first (Claude Code desktop already auto-creates worktrees per session)",
+            "Positions agentspaces as a competitor to the very tools that should adopt the engine"
+          ],
+          "verdict": "REJECT as a product; ship only a minimal fork-compare flow (`asp race`) as the demo of the engine, and court session managers as integration partners."
+        },
+        {
+          "option": "Per-agent memory/workspace product (versioned memory for harness users)",
+          "pros": [
+            "Memory is a rising, well-understood pain; versioned memory directories with rollback/audit is a real differentiator vs flat memory files",
+            "MCP-native distribution fits"
+          ],
+          "cons": [
+            "Memory as a standalone product is crowded and increasingly shipped natively by harnesses",
+            "Small-file, low-byte workloads make the storage engine overkill as the headline",
+            "It's a feature of the workspace (a versioned subtree that survives forks), not a wedge"
+          ],
+          "verdict": "DEFER / fold in \u2014 ship `~/.agentspaces/memory` as a versioned, fork-surviving subtree feature once the engine exists; never lead with it."
+        }
+      ],
+      "v1_scope": {
+        "must_have": [
+          "Core CoW engine: `asp fork` / `asp checkpoint` / `asp diff` / `asp promote` / `asp discard` over the entire working directory including untracked files \u2014 APFS clonefile (macOS) first since harness power users skew Mac, btrfs/XFS reflink second, copy fallback elsewhere",
+          "Claude Code hooks integration: PreToolUse/PostToolUse auto-checkpoints around every Bash and Edit tool call, making bash side-effects rewindable \u2014 the exact documented gap in native checkpointing ('checkpoints apply to Claude's edits and not user edits or bash commands')",
+          "MCP server exposing fork/checkpoint/diff/promote/log so agents themselves (any MCP harness: Claude Code, Codex, OpenCode) can manage workspace state as tools",
+          "Git interop at the edge: a workspace wraps a repo; `promote` lands as a normal git branch/commit so CI, GitHub, and review work unchanged; engine also works in non-git directories (data folders, document workspaces)",
+          "Append-only audit journal: every change-producing tool call mapped to a checkpoint with timestamp, session, and prompt \u2014 'commits are the audit log' made literal and greppable",
+          "One killer demo flow: `asp race \"<prompt>\" -n 3` \u2014 fork the workspace N ways, run N harness sessions, present side-by-side diffs, promote the winner, discard the rest",
+          "Content-addressed on-disk format designed for future sync (hash-stable objects, no machine-local assumptions) even though sync itself does not ship",
+          "Honest benchmarks published in the README: fork latency and disk overhead on a 5GB dirty node/python monorepo vs `git worktree add` + manual copying"
+        ],
+        "defer": [
+          "Hosted sync / remote workspaces and any server-side component (month 4\u20136, after weekly actives prove demand)",
+          "FUSE/NFS/network mounts and lazy materialization from remote",
+          "Attached compute (`exec`) of any kind \u2014 sandboxes are partners, not product",
+          "Data-scoped capability tokens, team RBAC, review UI",
+          "Windows support and ext4-without-reflink optimization",
+          "Per-syscall write interception (FSEvents/eBPF journaling) \u2014 per-tool-call granularity is enough for v1",
+          "Versioned agent-memory subtree as a named feature",
+          "Non-coding verticals (claims, contracts, data rooms) \u2014 the report says they're real, but they buy from vendors with SOC2, not from a repo",
+          "Merge of divergent forks beyond git-level merge on promote (jj-grade conflict semantics can come later)"
+        ]
+      },
+      "risks": [
+        "Channel-as-competitor (the big one): Anthropic iterates fast on exactly this surface \u2014 native checkpoints and worktree support already shipped (code.claude.com/docs/en/worktrees, platform.claude.com/docs/en/agent-sdk/file-checkpointing); extending checkpoints to bash side-effects and untracked files would compress the v1 wedge. Mitigation: be cross-harness (Codex has an open feature request for exactly this \u2014 openai/codex#12558), durable across sessions, git-interoperable, and own the sync/hosted layer harness vendors won't build.",
+        "Feature-not-product gravity: the v1 engine is weeks of work, so it is also weeks of work for anyone else; moat must be earned through format adoption, integration breadth, and the hosted tier \u2014 if adoption stalls, this collapses into a popular gist.",
+        "CoW portability fragmentation: macOS APFS is clean, but Linux ext4 lacks reflink, Docker volume drivers vary, and Windows is its own world \u2014 a solo dev can sink a quarter into the platform matrix; mitigate by being loudly macOS+btrfs/XFS-first.",
+        "Mesa squeeze from above: if Mesa GAs with a local/VFS mode and a free tier, it offers 'the same but with a cloud behind it'; the counters are open source, offline-first, and zero trust requirement \u2014 keep those genuinely true.",
+        "Session managers build instead of adopt: Conductor/Nimbalyst could each ship a bespoke snapshot layer; mitigate by making adoption trivially easier than building (stable lib API, permissive license for the client SDK).",
+        "Monetization lag: OSS-first means ~$0 revenue for 6+ months and hosted sync requires trust-building (SOC2-lite, durability story) before anyone pushes private code; founder runway is a hard constraint, not a footnote.",
+        "Solo-founder bus factor mirrored at Archil: the report flags single-founder risk for Archil \u2014 the same applies here for anyone evaluating agentspaces as a dependency; OSS partially mitigates (forkable), hosted tier reintroduces it.",
+        "Performance credibility: if fork on a real dirty 5GB monorepo isn't visibly instant (<1s), the whole pitch dies in the first demo; this is the one benchmark that must be unimpeachable before launch."
+      ],
+      "open_questions": [
+        {
+          "question": "Ambition and endgame: is agentspaces a venture-scale run at the state layer, or a profitable independent dev-tool business?",
+          "why_it_matters": "This decides the license (MIT/Apache maximizes adoption but lets Mesa/Archil/Anthropic absorb the format; BUSL/AGPL protects the hosted tier but slows the OSS flywheel), whether to raise money before the hosted tier, and how aggressively to chase the full Section-5 primitive versus staying a beloved tool.",
+          "options": [
+            "Venture path: permissive core + raise a seed once weekly actives prove pull, race to hosted sync and the full primitive",
+            "Independent path: BUSL-style license, bootstrap to hosted revenue, stay small and profitable",
+            "Optionality path: permissive core now, defer the decision until 90-day metrics exist (costs some protection, preserves both doors)"
+          ]
+        },
+        {
+          "question": "Bet concentration: Claude-Code-first with deep hooks integration, or harness-agnostic from day one?",
+          "why_it_matters": "Claude-Code-first gives the deepest integration, fastest user love, and the clearest demo \u2014 but maximizes exposure to Anthropic shipping the feature natively. Harness-agnostic (MCP-only, plus Codex/OpenCode) spreads the risk but dilutes the v1 experience and slows time-to-wow. Only the founder can price his own risk tolerance on a channel he doesn't control.",
+          "options": [
+            "Claude-Code-first: hooks + MCP, port to Codex/OpenCode in month 2\u20133",
+            "Harness-agnostic from day one: MCP + CLI only, no harness-specific hooks",
+            "Claude-Code-first but with the Codex port as the explicit week-6 milestone (hedged concentration)"
+          ]
+        },
+        {
+          "question": "Posture toward the incumbents: build toward partnership/acquisition, or declare independence and compete for the primitive?",
+          "why_it_matters": "Agentspaces-as-local-on-ramp is a natural acquisition or partnership for Mesa (local mode for their cloud FS) or Archil (local tier below the NVMe fleet); optimizing for that means format compatibility and warm relationships. Optimizing for independence means building the hosted tier yourself and treating them as competitors. The strategies diverge early \u2014 in license, in format design, and in whether you take their calls.",
+          "options": [
+            "Independent: build the hosted tier, compete for the layer",
+            "Partner-curious: stay compatible (e.g., git-interop everywhere, jj-friendly internals), engage Mesa/Archil early, keep acquisition as a live exit",
+            "Ecosystem-neutral: also court Anthropic \u2014 position the format as the standard harnesses adopt, monetize sync only"
+          ]
+        },
+        {
+          "question": "Runway: how many months of zero revenue is acceptable, and is there outside money on the table?",
+          "why_it_matters": "The plan has revenue \u2248 $0 until the hosted tier (month 4\u20136 at the earliest, realistically month 6\u20139 to first paying teams). Whether that's fine, tight, or impossible determines whether to compress the OSS phase, consult part-time, or raise \u2014 and only the founder knows his bank account and appetite.",
+          "options": [
+            "Self-funded 12+ months: run the plan as written",
+            "Self-funded 6 months: pull hosted sync forward to month 3, accept a rougher OSS v1",
+            "Raise a small angel/pre-seed round on the wedge thesis now, buy 18 months"
+          ]
+        }
+      ],
+      "recommendation": "Build agentspaces as the open-source, local-first branchable-workspace engine for agent harness users: a CLI + Claude Code hooks + MCP server that makes every agent session an instant copy-on-write fork of the WHOLE working directory (untracked files and bash side-effects included \u2014 the two documented gaps in native harness checkpoints and git worktrees), with checkpoint/diff/promote/discard semantics, an append-only audit journal, and git interop on promote. Customer #1 is the engineer running 3\u20138 parallel Claude Code/Codex sessions who today shell-scripts untracked state into worktrees and cannot undo an agent's bash damage. Win that user through OSS + MCP distribution (the channel none of Archil/Mesa/Pierre occupies and none can credibly enter as closed hosted vendors), make the on-disk format content-addressed and sync-ready from day one, and expand open-core into hosted workspace sync at pay-nothing-at-rest pricing (~$0.15\u20130.20/GB-month active data, zero agent-path egress, free local forever) around month 4\u20136 \u2014 approaching the report's Section-5 primitive from below, on the strength of an installed base, rather than from a datacenter you cannot afford. Explicitly do not build: a network filesystem, a hosted versioned FS at v1, a platform git API, any compute substrate, or a session-manager UI \u2014 power Conductor-class tools instead of competing with them."
+    },
+    "architect": {
+      "lens": "Chief Architect \u2014 what a 1-person+AI team can actually ship to production, and in what order",
+      "summary": "The architecture question is not \"which storage engine\" but \"which surface can one developer make production-grade while three funded teams (Archil ~$18M, Mesa ~$5M, Pierre ~$23M) build cloud services above us\" \u2014 and the answer is the surface none of them occupy: local-first, open-installable, harness-native. All three competitors are cloud-service-first with waitlists and sales motions; nobody owns the \"works inside Claude Code in 30 seconds, no account, no mount, no server\" position, which is also the only position that survives the report's sharpest counter-thesis (incumbents/sandbox vendors bundling approximations of the primitive) because an open local engine becomes the format others adopt rather than the service they crush. Concretely: a single static Rust binary containing (1) a content-addressed engine \u2014 SQLite-as-truth for the commit DAG, tree manifests, refs, mtime index, and branch leases, plus a BLAKE3 CAS with FastCDC chunking for files >1MB and inline storage \u22644KB \u2014 where O(1) copy-on-write forking falls out for free because commits/trees/chunks are immutable and structurally shared, a branch is one row; (2) a built-in MCP stdio server exposing exactly the Section-5 verbs (open/fork/checkpoint/diff/merge/exec/grep) plus materialize-to-workdir so the harness's native file tools operate on a real directory while version semantics ride MCP; (3) exec-attached-to-state as fork\u2192materialize\u2192run-subprocess\u2192record(cmd,exit,duration)\u2192auto-checkpoint, with Docker and E2B/Modal/Daytona adapters later (inject the same static binary into the sandbox, checkout from bucket, push back) \u2014 we never build isolation; (4) git interop at the edges via gitoxide export/import, never a git wire-protocol server; (5) zero-server sync to a BYO S3/R2 bucket, with chunk upload as idempotent CAS replication and ref updates as compare-and-swap via S3 conditional writes ([If-Match PutObject, GA Nov 2024](https://aws.amazon.com/about-aws/whats-new/2024/11/amazon-s3-functionality-conditional-writes/)) \u2014 meaning multi-machine sync ships without operating a service. We deliberately reject the jj-lib backend (steal its semantics \u2014 fork-on-first-write, op log, eventually conflict-carrying changes \u2014 but own the bytes; jj-lib's API churn and human-VCS working-copy assumptions cost more than they buy, and Mesa owns that narrative) and reject the git object model internally (no chunking, tree-granularity, packfile complexity; git belongs at the edge). Lazy materialization is honest-but-approximate without a kernel layer: path-scoped checkout with chunk-level fetch and dedup, fully-lazy reads only via the SDK VFS \u2014 true fault-on-open laziness requires the FUSE/NFS bet, which is a deliberate month-4+ decision, not a v1 component. Capability tokens (workspace/branch-glob/path-glob/mode/ttl) are designed into the API from day one but unenforced while local-first; enforcement is meaningful only when a thin sync service exists (a Cloudflare Worker in front of R2 is the cheapest enforcement point), because plain-S3 sync cannot enforce path scoping. Timeline honesty: 2 weeks = demoable alpha inside Claude Code (not production); 6 weeks = production-grade local-first (kill -9 crash matrix in CI, sub-second status on 100k files, GC, git edge, bucket sync); 12 weeks = tokens + thin sync service + two sandbox exec adapters \u2014 anything claiming more than this from one developer is fiction, which is precisely why form factors (a) and (c) are traps. Primary grounding: /Users/apple/Projects/agentspaces/docs/agent-infra-research-archil-mesa-code.md, Sections 4\u20135.",
+      "form_factor_options": [
+        {
+          "option": "(a) FUSE/NFS mount daemon (Rust or Go) \u2014 kernel-adjacent POSIX mount over the workspace store",
+          "pros": [
+            "Highest fidelity: every unmodified tool (compilers, git, grep, the harness itself) just works on mounted state",
+            "Only path to true fault-on-open lazy materialization \u2014 unlocks large-corpora use cases (report #21 ML datasets, #26 data rooms, #45 media)",
+            "NFSv3 loopback variant avoids macFUSE kext pain and works where FUSE is unavailable",
+            "Matches the premium UX Archil/Mesa charge for; strong moat if achieved"
+          ],
+          "cons": [
+            "Production bar is brutal: page-cache coherence, mmap, locking, fsync semantics, crash consistency \u2014 Archil bet 10 months of a whole company on just the protocol layer",
+            "FUSE is unavailable or privileged in most sandboxes (needs /dev/fuse + CAP_SYS_ADMIN; gVisor/Firecracker support varies) \u2014 undermines the mount-into-any-sandbox story for exactly the environments agents use",
+            "macOS story fragments across macFUSE/FSKit/NFS loopback \u2014 a support matrix one person cannot soak-test",
+            "Head-on competition with Archil where they are strongest; consumes the entire 12-week runway for one surface"
+          ],
+          "verdict": "defer \u2014 month 4+ optional accessor (start with a 1-week read-only NFSv3 loopback spike serving a commit), never the v1 interface; pursuing this first is how a 1-person team dies"
+        },
+        {
+          "option": "(b) In-process SDK virtual filesystem (TypeScript first, Python later) \u2014 agents/harnesses call the store directly",
+          "pros": [
+            "Zero kernel, zero privileges: works inside any sandbox, isolate, or just-bash simulated environment \u2014 the one surface that reaches P6 isolate-scale deployments",
+            "Naturally fully-lazy: reads pull manifests/chunks on demand, the cleanest lazy-materialization story of any form factor",
+            "The right embedding surface for platform builders (repo-per-user-session apps); Mesa's VFS+just-bash validates the pattern",
+            "Thin layer if generated over the same engine API as the CLI \u2014 low marginal cost once the engine exists"
+          ],
+          "cons": [
+            "Invisible to any process not linking the SDK: compilers, git, system grep, and the harness's own file tools cannot see VFS files unless materialized \u2014 standalone, it is a toy for coding agents",
+            "Ecosystem expects both TS and Python \u2014 double maintenance for a team of one",
+            "As a standalone wedge it competes with Mesa's exact play with 1/10th the capital and no GA pressure relief"
+          ],
+          "verdict": "pursue as a component, not the wedge \u2014 TS SDK in weeks 5\u20138 as a thin binding over the engine's API, paired with materialize-to-workdir for everything outside the SDK; Python deferred"
+        },
+        {
+          "option": "(c) Git-protocol-compatible server \u2014 speak smart-HTTP/pack protocol so existing tools interop directly",
+          "pros": [
+            "Instant interop with the entire human SDLC, CI, and IDE tooling \u2014 the moat-bearing edge per the report",
+            "Pierre proves platforms pay real money for exactly this"
+          ],
+          "cons": [
+            "Packfile negotiation and ref-transaction correctness at production grade is a multi-year systems effort \u2014 Pierre took ~3 years with ex-GitHub engineers; this is the single worst effort-to-wedge ratio available to us",
+            "Requires operating a server, contradicting the local-first wedge and adding on-call burden to a team of one",
+            "Adopting git's object model internally to make this easier poisons the engine: no chunking for large files, SHA-1/SHA-256 awkwardness, tree-granularity writes"
+          ],
+          "verdict": "reject as a form factor \u2014 ship git interop at the edges instead: `ws git export/import` via gitoxide in v1, and a git remote-helper (`git push ws::...`) later, which delivers ~80% of the interop value at ~2% of the cost"
+        },
+        {
+          "option": "(d) Local CLI + content-addressed store with optional sync (SQLite-as-truth + BLAKE3/FastCDC CAS over object storage)",
+          "pros": [
+            "The only engine architecture a 1-person+AI team can make genuinely production-grade in weeks: SQLite WAL gives transactions and multi-process safety on one host; crash-safety is testable with a kill -9 matrix",
+            "O(1) CoW branching falls out structurally: branch = one row pointing at an immutable commit; trees/chunks structurally shared; checkpoint-every-step has no ceremony cost",
+            "Single static musl binary doubles as the sandbox-injection mechanism \u2014 curl one file into any E2B/Modal/Daytona box and the workspace follows the agent",
+            "Zero-server sync: chunk replication is idempotent CAS upload; ref updates use S3 conditional writes (If-Match CAS) against a plain BYO bucket \u2014 durability scales from laptop to S3 with no service to operate",
+            "Open-sourceable like git itself \u2014 the only defensible posture against incumbent bundling",
+            "Beats the alternatives examined: git object model (no chunking, packfiles), jj-lib backend (API churn, human-VCS working-copy assumptions, Mesa owns the narrative), pure-CAS-no-DB (loses transactional metadata and fast status)"
+          ],
+          "cons": [
+            "A CLI alone has no distribution wedge \u2014 developers already have git; it needs (e) to reach users",
+            "Lazy materialization is approximate: path-scoped checkout + chunk fetch + dedup, not fault-on-open \u2014 large-corpora use cases out of reach until/unless (a)",
+            "The 'why not git worktrees?' objection arrives daily and must be answered crisply (O(1) fork of dirty state including untracked files, checkpoint without commit ceremony, non-code trees, agent-scale ref churn, no .git exposed to the agent)"
+          ],
+          "verdict": "pursue \u2014 this is the engine; riskiest bet is snapshot/status latency on large dirty trees, so week-1 prototype is an mtime-indexed status scan + BLAKE3/FastCDC throughput benchmark on a 100k-file tree"
+        },
+        {
+          "option": "(e) MCP server exposing workspace operations (open/fork/checkpoint/diff/merge/exec) to agent harnesses",
+          "pros": [
+            "Distribution through the agent ecosystem itself: `claude mcp add agentspaces` is a 30-second, no-account install \u2014 a channel none of the three competitors occupy (all are cloud-service-first)",
+            "The MCP tool surface maps 1:1 onto the report's Section-5 interface sketch \u2014 the product is literally the primitive",
+            "Pairs with workdir materialization: the harness's native Read/Edit/Bash tools operate on a real directory while fork/checkpoint/diff/merge/promote ride MCP \u2014 best of both interfaces",
+            "Compounds with the ecosystem: every harness (Claude Code, Codex, OpenCode) speaks MCP, and Anthropic's own guidance pushes state into the execution filesystem",
+            "Near-zero marginal cost as a `ws mcp` subcommand of the same binary \u2014 one artifact, no separate server"
+          ],
+          "cons": [
+            "Distribution-shaped risk, not tech risk: MCP servers are commodities; adoption depends on harness power users caring about branchable state",
+            "Per-tool-call overhead in long agent loops (mitigated: the harness can equally drive the CLI via Bash; MCP is discovery + ergonomics, CLI is the hot path)",
+            "Does not reach platform builders embedding workspaces in products \u2014 that is (b)'s job",
+            "Exposed to the harness vendor shipping native checkpoint/workspace semantics"
+          ],
+          "verdict": "pursue \u2014 the wedge interface; validate by week 3 by dogfooding agentspaces to build agentspaces and recruiting 5\u201310 Claude Code power users"
+        },
+        {
+          "option": "(f) Combination: (d) engine + (e) MCP wedge + (b) SDK component + (c) reduced to git edges \u2014 one static binary",
+          "pros": [
+            "One Rust binary = CLI + MCP stdio server + exec drivers + git edge, all reading the same SQLite+CAS store \u2014 one artifact to build, test, version, and inject into sandboxes",
+            "Covers all four audiences in priority order: harness users (MCP, week 2), scripts/CI (CLI, week 2), human SDLC (git edge, week 6), platform builders (TS SDK, week 8)",
+            "Each milestone is independently shippable: 2-week alpha, 6-week production local-first, 12-week sync+tokens+sandbox-adapters \u2014 no big-bang integration risk",
+            "Exec-attached-to-state without building a sandbox company: local subprocess \u2192 Docker \u2192 partner sandbox adapters, all the same fork\u2192run\u2192checkpoint contract with the run recorded in commit metadata as the audit log"
+          ],
+          "cons": [
+            "Three surfaces invite scope creep \u2014 requires ruthless discipline to keep (a), (c)-as-server, and hosted multi-tenant out of the first 12 weeks",
+            "Local-first means no revenue surface until the thin sync service exists (founder decision, not architecture)"
+          ],
+          "verdict": "pursue \u2014 this is the recommendation"
+        }
+      ],
+      "v1_scope": {
+        "must_have": [
+          "Single static Rust binary `ws` (musl): init, snapshot, fork, checkout (path-scoped), status, diff, log, merge, gc \u2014 fork and checkpoint must be O(1) and feel instant",
+          "Storage engine: SQLite (WAL) as truth for commit DAG, tree manifests, refs, mtime index, branch leases; BLAKE3 content-addressed chunk store with FastCDC chunking >1MB, whole-blob 4KB\u20131MB, inline \u22644KB in SQLite",
+          "Concurrency model: branch-per-agent by default (fork-on-open, Mesa's observe-mode insight); single-writer lease per branch with TTL in SQLite; readers always read immutable commits; 3-way text merge with conflict markers, never blocking",
+          "Built-in MCP stdio server (`ws mcp`): workspace_open / fork / checkpoint / diff / merge / log / exec / grep + materialize-to-workdir \u2014 tool descriptions written for harness ergonomics",
+          "Local exec driver: fork \u2192 materialize workdir \u2192 run subprocess \u2192 record (command, exit code, duration, env hash) in commit metadata \u2192 auto-checkpoint; sane defaults (workdir-jailed cwd)",
+          "Git at the edge: export branch to a real git repo / import a git repo, via gitoxide",
+          "BYO-bucket sync (week 6): idempotent chunk push/pull + ref compare-and-swap via S3/R2 conditional writes \u2014 zero servers operated",
+          "Capability-token format (workspace, branch-glob, path-glob, mode, ttl, exec) present in the API surface from day one, explicitly unenforced while local-first",
+          "Production evidence, not claims: kill -9 crash-recovery matrix in CI; benchmark suite proving sub-second status/fork on a 100k-file tree; quickstart that gets Claude Code from zero to forked-checkpointed-merged in under 5 minutes"
+        ],
+        "defer": [
+          "FUSE/NFS mount daemon \u2014 explicit go/no-go decision at month 4 after a 1-week read-only NFSv3 loopback spike",
+          "Git wire-protocol server \u2014 likely never; a git remote-helper delivers the interop instead",
+          "Hosted multi-tenant sync service + capability-token enforcement (thin Cloudflare Worker in front of R2) \u2014 weeks 10\u201312 at the earliest, gated on the founder's revenue-horizon answer",
+          "Sandbox exec adapters (E2B, Modal, Daytona): inject static binary, scoped-token checkout, run, push \u2014 weeks 9\u201312",
+          "TypeScript SDK alpha weeks 5\u20138 (cuttable); Python SDK post-v1",
+          "jj-style first-class conflict-carrying changes and op-log undo \u2014 v2 semantics upgrade, design the commit format so it does not preclude them",
+          "Web UI / diff viewer",
+          "Machine/memory snapshots \u2014 permanently out of scope: per the report, machine images are a derived cache of the workspace, not the layer of record"
+        ]
+      },
+      "risks": [
+        "Performance cliff is the riskiest technical bet of the whole plan: if fork + materialize + status is not sub-second on real repos (100k files, dirty trees, node_modules pathologies), the core promise \u2014 fork-per-attempt, checkpoint-every-step \u2014 dies regardless of how elegant the DAG is. Prototype the mtime-indexed status scan and BLAKE3/FastCDC throughput in week 1 before writing anything else.",
+        "Incumbent/vendor bundling (the report's own strongest counter-thesis): Anthropic shipping native workspace/checkpoint semantics in Claude Code, or E2B/Modal bundling branchable volumes, compresses the wedge. The only durable posture for a team of one is becoming the open format others adopt \u2014 which makes the founder's open-source decision load-bearing, not cosmetic.",
+        "Turso's AgentFS already occupies adjacent open-source mindshare ([github.com/tursodatabase/agentfs](https://github.com/tursodatabase/agentfs), [turso.tech/blog/agentfs](https://turso.tech/blog/agentfs), now with a FUSE option and WASM build) \u2014 it is isolation/audit-shaped (snapshot = copy the .db) rather than a branch/merge/diff DAG with git interop and fleet sync, but the positioning must be differentiated explicitly and early or we get read as a clone.",
+        "Honest-laziness gap: without the kernel layer, v1 cannot serve large-corpora use cases (ML datasets, data rooms, media pipelines \u2014 report #21/#26/#45). Marketing must scope claims to code- and document-sized trees or credibility burns on first contact.",
+        "The 'why not git worktrees?' objection will arrive in every single conversation; without a crisp documented answer (O(1) dirty-state fork including untracked files, checkpointing without commit ceremony, non-code trees, agent-scale ref churn, no .git foot-gun in the agent's view) the wedge stalls at hello.",
+        "Zero-server sync depends on conditional-write parity across S3/R2/GCS/MinIO; semantic drift between providers forces the thin enforcement service earlier than planned \u2014 verify with a 3-concurrent-writer torture test before committing the design.",
+        "Deferred token enforcement means no multi-tenant story until month 3+: correct for local-first, fatal if a platform-builder design partner shows up in week 4 \u2014 manage that expectation explicitly rather than improvising enforcement.",
+        "The local exec driver runs agent-chosen commands as a subprocess by default \u2014 without conservative defaults this becomes the security anecdote that defines the product; the box is not our trust boundary but we must not make the data layer a privilege-escalation path either.",
+        "MCP spec churn and per-call overhead in long loops; mitigated because the CLI is the hot path and MCP is discovery/ergonomics, but the binding code must be regenerable, not hand-grown.",
+        "One developer in Rust: crash-safety and durability claims must be earned in CI (kill-matrix, fault injection) rather than asserted, and the soak time for 'production-grade' is real \u2014 6 weeks buys production-grade local-first, not production-grade distributed anything."
+      ],
+      "open_questions": [
+        {
+          "question": "Open-source posture for the engine: is agentspaces the 'git' (open core, sell the GitHub later) or a closed product from day one?",
+          "why_it_matters": "This is the load-bearing strategic decision. Against three funded cloud services and the bundling threat, an open local-first engine is the only position a 1-person team can defend \u2014 adoption becomes the moat and the sync/token/exec service becomes the business. But it forecloses some acquisition/pricing paths and commits to community overhead. Architecture is identical either way; everything about distribution, hiring leverage, and which risks bite is not.",
+          "options": [
+            "Apache-2/MIT engine + future paid sync/cloud (the git/GitHub playbook \u2014 strongest fit with the MCP wedge)",
+            "Source-available (BSL/FSL) \u2014 hedged, but blunts the 'become the standard' defense against bundlers",
+            "Closed SaaS from day one \u2014 maximizes optionality on pricing, minimizes the wedge"
+          ]
+        },
+        {
+          "question": "First customer for the first 12 weeks: harness power users (bottom-up, MCP-first) or agent-platform builders (B2B, SDK-first, repo-per-user-session)?",
+          "why_it_matters": "Decides the polish ordering between the MCP server and the TS SDK, whether token enforcement can genuinely wait, whether a hosted service is needed in 2026 at all, and what the demo is. The architecture serves both from one binary, but a team of one can only do developer-experience excellence for one audience at a time.",
+          "options": [
+            "Claude Code/Codex power users first \u2014 fastest validation loop, dogfoodable while building, zero sales motion (the plan above assumes this)",
+            "Platform builders first \u2014 bigger contracts, but demands tokens + sync + SLAs immediately, i.e., Pierre's game with Pierre's costs",
+            "Sequential: harness users weeks 1\u20138, first design-partner platform weeks 9\u201312"
+          ]
+        },
+        {
+          "question": "Revenue horizon and runway tolerance: can agentspaces stay pre-revenue, local-first + BYO-bucket through roughly Q4 2026?",
+          "why_it_matters": "A paid hosted sync service pulls capability-token enforcement, billing, multi-tenancy, and on-call into the 12-week window and roughly halves engine velocity. If runway or psychology demands revenue by week 12, the v1 scope above must shed the sandbox adapters and possibly the git edge to make room \u2014 that trade is the founder's to make, not the architect's.",
+          "options": [
+            "Local-first through 2026, monetize in 2027 once the wedge has users",
+            "Thin paid sync service (Worker + R2) shipping at week 12",
+            "Design-partner contracts (one platform builder) funding hosted work early, accepting the velocity hit"
+          ]
+        },
+        {
+          "question": "Appetite for the kernel-adjacent bet at month 4: commit 3\u20136 months to a FUSE/NFS mount, partner for mounts instead, or stay materialization-based indefinitely?",
+          "why_it_matters": "The mount is the only path to true fault-on-open laziness and the large-corpora third of the market, and it is the difference between 'workspace engine' and 'filesystem company.' It is also the single biggest schedule and reliability risk available to us, and it competes head-on with Archil's core strength. This is a taste-and-ambition call about what kind of company agentspaces is.",
+          "options": [
+            "Commit at month 4 if the wedge has traction (start with the 1-week read-only NFSv3 loopback spike)",
+            "Partner: stay the version-semantics layer and let Archil-class mounts or sandbox vendors carry the bytes",
+            "Never: stay materialization-based and concede large corpora permanently"
+          ]
+        }
+      ],
+      "recommendation": "Ship agentspaces as one static Rust binary that is simultaneously the engine, the CLI, and an MCP server \u2014 form factor (f) = (d)+(e), with (b) as a later component and (c) reduced to git edges. Engine: SQLite-as-truth (commit DAG, tree manifests, refs, mtime index, branch leases) + BLAKE3 content-addressed chunk store with FastCDC chunking, giving O(1) copy-on-write fork/checkpoint structurally (branch = a row; everything beneath is immutable and shared) \u2014 explicitly rejecting the git object model and the jj-lib backend internally while stealing jj's semantics (fork-on-first-write, branch-per-agent, never-blocking merges) and keeping git interop at the boundary via gitoxide. Wedge: `ws mcp` exposes open/fork/checkpoint/diff/merge/exec/grep plus materialize-to-workdir directly to Claude Code-class harnesses \u2014 a 30-second, no-account, no-server install through the agent ecosystem itself, the one channel Archil, Mesa, and Pierre all leave open. Exec attaches to state without building a sandbox company: fork \u2192 materialize \u2192 run (local subprocess now; Docker, then E2B/Modal/Daytona adapters by injecting the same binary) \u2192 record the run in commit metadata \u2192 auto-checkpoint, so commits are the audit log by construction. Durability is local disk first with CI-enforced crash-safety, then zero-server BYO-bucket sync using S3/R2 conditional-write ref CAS at week 6; capability tokens are in the API from day one but unenforced until a thin Worker+R2 sync service makes enforcement real (weeks 10\u201312 or later, per the founder's revenue answer). Sequence: week 1 prototype the two riskiest bets (mtime-indexed sub-second status on 100k files; chunking throughput), week 2 alpha demoable in Claude Code, week 6 production-grade local-first, week 12 sync + tokens + two sandbox adapters. Defer the FUSE/NFS mount to an explicit month-4 decision and never build a git wire-protocol server. This is the git-not-GitHub play: the three funded competitors are all selling services above the primitive \u2014 we ship the primitive itself, where small, sharp, and local-first is an advantage rather than a handicap."
+    },
+    "customer": {
+      "lens": "User / customer \u2014 who actually adopts this, what their first five minutes must feel like, what makes them churn, and what they will pay",
+      "summary": "Walking the four personas as real adopters, the ranking by (reachability for a tiny team) x (pain intensity) is: AI engineers running fork-N-compare-promote loops (#1), Claude Code/Codex power users (#2), agent-product developers needing per-user durable state (#3), enterprise platform teams (#4). The eval/fleet engineer's current workaround is cp -r, tarballs, and git worktrees \u2014 slow on multi-GB trees, disk-hungry, no cross-attempt diffing, no provenance \u2014 and their winning five minutes is 'brew install agentspaces; asp init in an existing directory; asp fork -n 8; run agents; asp diff shows a comparison table; asp promote 3' with zero signup, zero FUSE, zero daemon; they only adopt free OSS, but they are the single most reachable audience for a one-person team via an HN/X devtools launch. The Claude Code power user is served by the same artifact through 'claude mcp add agentspaces' \u2014 but Claude Code's native /rewind has already absorbed session-scoped undo, so the wedge for them is what the harness cannot do: durable cross-session timelines, parallel forks of whole workspaces (not just code edits), and diff/promote across concurrent agent sessions; they pay little ($0\u201320/mo) but are the loudest distribution channel, and critically the agent itself is the primary user \u2014 demanding verb-named tools (workspace_fork, workspace_diff, workspace_promote), --json on every command, and error strings that state the corrective next action ('fork \\\"attempt-3\\\" has uncommitted changes; run workspace_checkpoint first or pass force=true') so the model self-corrects instead of flailing. The agent-product developer duct-taping S3+Postgres (tarball-restore latency into sandboxes, silent concurrent-write clobbering, hand-rolled version tables) has the strongest willingness to pay \u2014 this is a real infra line item at roughly $0.15\u20130.30/GB-month equivalents \u2014 but is exactly who funded Mesa, Pierre, and Archil are courting with more capital; a tiny team wins them only after OSS-earned trust, with 'same CLI, but workspace.open(\\\"user-123\\\") is hosted, backed by your own S3 bucket' as the upgrade path, and open core is itself the trust strategy because no one bets their product's state layer on a one-person closed-source vendor. The enterprise platform team pays the most ($50k+/yr for audit trails and approval gates) and is structurally unreachable: procurement, SOC 2, SSO, and vendor-risk review all fail a team of one \u2014 harvest their requirements (append-only audit export, gate-on-promote) as roadmap and reach them later through persona 3's products. Adoption-friction realities cut hard and consistently: FUSE is disqualifying on macOS, any signup before the aha kills the top two personas, and Turso's AgentFS already occupies the 'SQLite agent filesystem' mindshare \u2014 which is why the differentiated, buildable wedge is not another storage substrate but the workspace control plane over files people already have: O(1) reflink/clonefile forks of real directories and git repos, checkpoint/undo/timeline, fork-N-compare-promote, git/jj-interoperable at the edge. Churn triggers are near-uniform across personas: any data loss (one strike, permanently fatal for a storage-adjacent tool), being slower than cp -r on small trees, fighting the user's existing git repo, or requiring an account or kernel module. The first five minutes must end in a felt aha \u2014 'eight forks of a 5 GB workspace in under a second, and a diff table that names the winner' \u2014 or none of these users come back.",
+      "form_factor_options": [
+        {
+          "option": "A. Local-first OSS single-binary CLI + bundled MCP server: workspace verbs (init/fork/checkpoint/diff/promote/undo/timeline) layered over real directories and existing git repos via reflink/clonefile copy-on-write and a content-addressed sidecar store",
+          "pros": [
+            "Zero-friction first five minutes for the two most reachable personas: brew/npm install, no FUSE, no signup, no daemon \u2014 the aha happens inside one terminal session",
+            "Buildable to production grade by one person + AI: APFS clonefile / XFS-btrfs reflink CoW plus a sidecar object store is weeks of work, not an NVMe cache fleet",
+            "Agents are first-class users via the MCP server; distribution rides the Claude Code plugin/MCP ecosystem for free, and every agent transcript using it is marketing",
+            "Nobody funded owns this lane \u2014 Archil, Mesa, and Pierre are all cloud-first services; AgentFS is a substrate (SQLite db) rather than a workflow over your real repo",
+            "OSS trust compounds directly into the hosted upsell that persona 1 (the paying persona) requires before adopting a tiny vendor",
+            "Works inside any sandbox unchanged (static binary + directory), so it composes with E2B/Modal/Daytona instead of competing with them"
+          ],
+          "cons": [
+            "Near-zero direct revenue for months; the top two personas only adopt free",
+            "Edges overlap with harness-native checkpoints (Claude Code /rewind) and Turso AgentFS \u2014 must win on workflow depth (fork-N-compare-promote, cross-session timeline, git interop), not on substrate claims",
+            "Filesystem heterogeneity (APFS vs ext4 vs overlayfs-in-containers, symlinks, xattrs, case sensitivity) is a long tail of correctness work for a team of one"
+          ],
+          "verdict": "pursue \u2014 highest (reachability x pain) coverage per unit of build effort, and it is the trust engine for every later monetization step"
+        },
+        {
+          "option": "B. Hosted versioned cloud filesystem competing head-on with Mesa/Archil (mountable durable workspaces as a service)",
+          "pros": [
+            "Directly serves the paying persona (agent-product developers) from day one",
+            "Most completely matches the report's Section 5 primitive",
+            "Usage-based pricing with a clear infra-line-item budget to claim"
+          ],
+          "cons": [
+            "Capital-intensive: cache fleets, multi-AZ durability, on-call \u2014 exactly what the report says a tiny team cannot out-build",
+            "Trust bar is unpassable pre-track-record: customers are storing their users' state with a one-person company",
+            "12+ months to a credible beta while Archil (GA, $18M) and Mesa ($5M, design partners) iterate; signup friction also blocks all bottom-up adoption"
+          ],
+          "verdict": "reject \u2014 out-built and out-trusted on day one; survives only as the thin hosted-sync layer in v2 (option D)"
+        },
+        {
+          "option": "C. MCP-only checkpoint/memory plugin for Claude Code (standalone)",
+          "pros": [
+            "Cheapest possible ship; days of work",
+            "Instant distribution via 'claude mcp add'",
+            "Tightest dogfooding loop \u2014 Arnav uses it on agentspaces itself"
+          ],
+          "cons": [
+            "Claude Code's native /rewind already absorbed the core session-undo value; the harness vendor can obsolete a thin plugin in one release",
+            "Ceiling is a feature, not a product \u2014 no path to persona 1 revenue",
+            "No differentiation vs the dozens of checkpoint plugins already in the ecosystem"
+          ],
+          "verdict": "reject as a standalone \u2014 fold the MCP surface into option A as its agent-legible front end; it is the distribution wrapper, not the product"
+        },
+        {
+          "option": "D. Embeddable SDK/VFS + bring-your-own-bucket hosted sync: per-user durable, forkable workspaces for agent products (workspace.open per end-user, restore-into-sandbox in ~100ms, fork per attempt)",
+          "pros": [
+            "This is where the money is: persona 1 pays infra rates and replaces real duct tape (S3 sync code + Postgres version tables deleted is the aha)",
+            "BYO-S3 as source of truth defuses the 'tiny vendor' risk objection \u2014 their data stays in their bucket",
+            "Natural upgrade of the same on-disk workspace format: 'same CLI, hosted workspaces' rather than a second product"
+          ],
+          "cons": [
+            "Needs the OSS engine's trust and a frozen format first; shipping it cold means competing on Mesa/Pierre turf with no credibility",
+            "Multi-tenant durability and consistency is serious engineering with one-strike failure tolerance",
+            "6\u201312 months of sequencing before it can credibly start"
+          ],
+          "verdict": "defer \u2014 the v2 monetization, sequenced behind option A; design v1's workspace format from day one so this layers on without migration"
+        },
+        {
+          "option": "E. Enterprise audit/approval gateway over agent output (gates, attribution, compliance export)",
+          "pros": [
+            "Highest contract values; the report is explicit that promotion-as-recorded-act is 'what enterprises will buy' (use cases #26, #36\u201340, #48)",
+            "Differentiated angle nobody sells standalone"
+          ],
+          "cons": [
+            "Procurement, SOC 2, SSO/SCIM, and vendor-risk review structurally exclude a team of one for 18+ months",
+            "Sales cycles longer than the runway; no five-minute adoption path exists for this buyer",
+            "Building for an unreachable buyer starves the reachable ones"
+          ],
+          "verdict": "reject for now \u2014 encode audit-friendly internals (append-only checkpoint log, signed promote events) in v1 so this door stays open via persona-1 products later"
+        }
+      ],
+      "v1_scope": {
+        "must_have": [
+          "Single-binary install (brew/npm/curl) on macOS + Linux; zero FUSE, zero kernel modules, zero signup, zero daemon \u2014 works identically inside any sandbox",
+          "asp init on an existing directory or git repo without disturbing it (sidecar store, .gitignore-safe, never rewrites the user's git history)",
+          "O(1) copy-on-write fork via APFS clonefile / XFS-btrfs reflink with hardlink fallback: N forks of a multi-GB tree in under a second, and provably faster than cp -r even on small trees",
+          "Durable cross-session checkpoint / undo / timeline (the thing Claude Code's session-scoped /rewind cannot do), surviving harness restarts and machine reboots",
+          "The fleet workflow end-to-end: fork -n N, run agents in each, asp diff producing a cross-fork comparison table, asp promote <fork> / asp discard",
+          "Git/jj interop at the edge: any checkpoint exportable as a commit, promote lands as a mergeable branch \u2014 never trap state in a proprietary format",
+          "MCP server with agent-legible verb tools (workspace_fork, workspace_checkpoint, workspace_diff, workspace_promote, workspace_undo), one-line claude mcp add setup, and tool descriptions written for the model",
+          "--json on every CLI command and error messages that state the corrective next action, so an LLM self-corrects without human intervention",
+          "Crash-safe, fsync-correct sidecar store with a torture-test suite from day one \u2014 data loss is the one-strike churn event",
+          "A 90-second README demo that delivers the aha: 8 forks of a 5 GB workspace, a diff table, a promote"
+        ],
+        "defer": [
+          "Hosted sync / remote named workspaces / multi-tenant API (v2, the persona-1 monetization)",
+          "FUSE/FSKit/NFS mounts and enforced isolation \u2014 cede enforcement to sandboxes and AgentFS; we are the workflow layer, not the jail",
+          "Attached compute (exec on workspace), GPUs, browser state",
+          "Enterprise SSO/SCIM, SIEM export, SOC 2, approval-gate UI",
+          "Windows support",
+          "GUI or web dashboard beyond CLI tables",
+          "Lazy materialization of remote trees (only matters once hosted workspaces exist)"
+        ]
+      },
+      "risks": [
+        "Apathy beats pain: cp -r and git worktrees are tolerated daily; if forks aren't dramatically faster and the diff/promote workflow isn't obviously better, the response is a shrug, not adoption",
+        "Platform absorption: Claude Code already shipped native checkpoints (/rewind, Esc-Esc); harnesses or sandbox vendors can absorb fork-N-compare next, compressing the standalone tool into a feature",
+        "Lane crowding: Turso AgentFS (OSS, beta, CoW, FUSE, SQLite-backed) owns 'agent filesystem' mindshare and Mesa/Pierre/Archil own the cloud story \u2014 agentspaces must be legible as the workflow layer over real repos, or it gets bucketed as a worse substrate",
+        "Monetization gap: the two personas we can reach adopt free OSS only; the paying persona arrives 6\u201312 months later via hosted sync, where funded incumbents will have matured \u2014 the OSS-to-paid bridge may be slower than runway or motivation",
+        "One-strike correctness: a single publicized data-loss or repo-corruption incident permanently kills a storage-adjacent tool from a tiny vendor; the torture-test investment is not optional",
+        "Filesystem long tail: reflink semantics differ across APFS/ext4/btrfs/overlayfs-in-Docker; symlinks, xattrs, sparse files, and case-insensitivity can consume a one-person team's entire roadmap in edge cases",
+        "Silent agent-side failure: when the agent is the user, a confusing tool description or error doesn't generate a bug report \u2014 the agent flails, the human blames the product and uninstalls; interface quality for LLMs is invisible until churn shows it",
+        "Free-rider asymmetry: if the OSS engine succeeds, a funded competitor (or Turso) can wrap it or clone the verbs into their distribution before the hosted tier exists"
+      ],
+      "open_questions": [
+        {
+          "question": "What distribution does Arnav actually have, and which is he willing to grind: a public OSS launch motion (HN/X/Discord presence, devrel writing) or warm intros to 3\u20135 agent companies as design partners?",
+          "why_it_matters": "The persona ranking flips on this. With public reach, the OSS CLI for eval engineers and Claude Code users is the right opening; with company intros but no audience, starting closer to persona 1 (an embedded SDK shaped by one design partner) becomes defensible despite the competition. An analyst cannot know his network or appetite for public-facing developer marketing.",
+          "options": [
+            "OSS-first: public launch, plugin ecosystem, build audience while building product",
+            "Design-partner-first: 1\u20133 agent companies shape an embedded SDK, OSS later",
+            "Sequenced both: OSS engine now, recruit design partners from its users at month 3\u20134"
+          ]
+        },
+        {
+          "question": "What is the money ambition and horizon \u2014 venture-scale outcome requiring persona-1 revenue within ~12 months, or a sustainable dev-tool business where prosumer subscriptions and slow OSS-to-cloud conversion are acceptable?",
+          "why_it_matters": "It sets when the hosted sync layer (the only real revenue path) must start, which trades directly against polishing the free OSS engine that earns the trust. Building the hosted tier too early loses both races; only the founder knows his runway, income needs, and whether he intends to raise.",
+          "options": [
+            "Venture path: hosted BYO-bucket sync development starts by month 4\u20135, fundraise on OSS traction",
+            "Lifestyle/sustainable path: 12+ months pure OSS + prosumer sync ($10\u201320/mo), monetize companies opportunistically",
+            "Optionality path: design the format for hosting from day one, decide at month 6 based on adoption signal"
+          ]
+        },
+        {
+          "question": "Open-source posture: MIT/Apache core with a paid cloud, source-available (BSL), or closed with a free tier?",
+          "why_it_matters": "For a one-person vendor, open core is the only thing that makes persona 1 willing to bet their product's state layer on us \u2014 but it also hands the verbs to better-funded copycats. This is a taste-and-conviction call about moat versus trust that only the founder can own, and it is nearly irreversible after launch.",
+          "options": [
+            "MIT/Apache core + closed hosted tier (maximum trust and adoption, weakest legal moat)",
+            "BSL/source-available (visible code, blocks competitive hosting, some community drag)",
+            "Closed binary with generous free tier (fastest to monetize, likely fatal to personas 2/3 adoption)"
+          ]
+        },
+        {
+          "question": "Whose five minutes get polished first \u2014 his own? Is Arnav committed to running agentspaces on agentspaces daily (Claude Code workflows, persona 3) as the design oracle, or does he want to build for fleet/eval workflows (persona 2) he may not personally run at scale?",
+          "why_it_matters": "A team of one cannot user-test broadly; the product's taste will come from whichever workflow the founder actually lives in. If he doesn't run multi-fork eval loops himself, persona 2's ergonomics will be guessed rather than felt \u2014 that argues either for re-weighting toward persona 3's daily-driver workflow or for recruiting two or three eval-heavy early users he talks to weekly.",
+          "options": [
+            "Dogfood-first: optimize the Claude Code daily-driver loop he personally feels, let fleet features follow",
+            "Proxy-user-first: recruit 2\u20133 eval/fleet engineers as weekly feedback partners before writing the diff/promote UX",
+            "Hybrid: dogfood the core verbs, co-design only asp diff/promote with external eval users"
+          ]
+        }
+      ],
+      "recommendation": "Build agentspaces v1 as a local-first, open-source, single-binary workspace engine \u2014 a CLI plus bundled MCP server \u2014 that adds the workspace verbs (fork-N, checkpoint, cross-session timeline, diff, compare, promote, undo) to the directories and git repos users already have, via reflink/clonefile copy-on-write and a crash-safe sidecar store: no FUSE, no signup, no daemon, aha in under five minutes. Aim it at the AI engineer running fork-N-compare-promote loops as the wedge persona (highest reachability-x-pain for a one-person team, currently served by cp -r and worktrees), with Claude Code power users as the distribution flywheel through 'claude mcp add agentspaces' \u2014 designing every tool name, JSON output, and error message for the agent as the literal user. Do not build a storage substrate or a hosted filesystem in v1 \u2014 that fight is lost to Archil/Mesa/Pierre/AgentFS on capital and trust \u2014 but freeze a workspace format that lets the v2 hosted BYO-bucket sync layer ('same CLI, workspace.open(\\\"user-123\\\") in the cloud') convert OSS trust into revenue from agent-product developers in 6\u201312 months, and treat enterprise audit/approval purely as internal design constraints (append-only checkpoint log, promote as a recorded act) until there is a team big enough to pass procurement."
+    },
+    "skeptic": {
+      "lens": "Skeptic / red team",
+      "summary": "Run the kill-list first: by June 2026 most of this category's obvious slices are already lost, and two of the report's \"incumbent risk\" scenarios have partially happened. AWS shipped Amazon S3 Files in April 2026 (buckets as ~1ms filesystems, explicitly pitched at agents), Tigris-style bucket forking brought GitHub-style forks to object storage, GitHub has Agent HQ, Turso's AgentFS is a free OSS copy-on-write agent filesystem with FUSE and browser builds, and Claude Code shipped native worktree isolation in April 2026 \u2014 so the hosted-POSIX-mount, hosted-versioned-FS, headless-git, and local-worktree-manager slices are respectively owned by AWS+Archil, Mesa+Turso, Pierre, and free OSS plus the harnesses themselves. Every one of the five failure vectors (capitalized competitors, incumbent compression, good-enough git, no sales motion, data-loss blast radius) points at the same conclusions: a solo dev must not operate a hosted multi-tenant storage fleet, must not compete on latency benchmarks, must not depend on platform sales, and must not be the source of truth for anyone's bytes in v1. What those constraints leave open is exactly one structural gap nobody is incented to fill: a user-owned, local-first, git-interoperable branchable-workspace engine \u2014 the Section 5 primitive implemented as a single binary over the user's own disk and bucket, where worst-case failure degrades to \"you still have a plain git repo,\" not data loss. The hosted vendors won't build it (their business is custody), hyperscalers won't do version semantics, harness vendors won't do durable cross-substrate state, and git worktrees genuinely don't cover untracked files, large artifacts, audit trails, or fleet-scale fan-out. Distribution must be bottom-up OSS riding the harnesses (Claude Code hooks/MCP, OpenCode, Codex CLI), because that is the only channel a one-person team has. The honest residual risks are that Turso extends AgentFS to object storage and git interop (their blog signals this), that harness-native checkpointing keeps deepening, and that OSS adoption may never convert to revenue \u2014 which is why the founder's ambition and horizon questions below are the real decision, not the technical shape.",
+      "form_factor_options": [
+        {
+          "option": "Hosted POSIX cloud filesystem with NVMe caching (compete with Archil / AWS S3 Files)",
+          "pros": [
+            "Largest TAM in the category; the 'agents want files' thesis is correct",
+            "Clear pricing model (active-data metering) already validated"
+          ],
+          "cons": [
+            "AWS shipped S3 Files in April 2026 \u2014 the incumbent compression already happened on this exact slice",
+            "Requires a cache fleet, multi-AZ replication, kernel-adjacent client trust; capital and headcount problem, unwinnable solo",
+            "Data-loss blast radius is maximal: you custody hot bytes for strangers from day one",
+            "No solo distribution path \u2014 this is sold to infra teams"
+          ],
+          "verdict": "reject \u2014 the incumbent move already happened and the capital requirements are disqualifying"
+        },
+        {
+          "option": "Hosted versioned filesystem service (compete with Mesa)",
+          "pros": [
+            "Semantically the most correct product per the report's 50-case tally",
+            "Mesa is pre-GA, so there is a theoretical timing window"
+          ],
+          "cons": [
+            "Mesa has $5M, a team of ex-Microsoft/AWS engineers, and 10 months head start on the jj engine; Turso AgentFS gives away the embedded tier for free",
+            "Still a hosted custody business: durability SLAs, on-call, trust-building a solo dev cannot credibly offer",
+            "'Private beta behind a waitlist' is exactly where an underfunded clone goes to die"
+          ],
+          "verdict": "reject \u2014 second-mover with less capital into a pre-GA market is the worst position on the board"
+        },
+        {
+          "option": "Headless git infrastructure for platforms (compete with Pierre)",
+          "pros": [
+            "Proven willingness to pay from codegen platforms",
+            "Git interop is the moat-bearing edge per the report"
+          ],
+          "cons": [
+            "$23M, ex-GitHub help, three years of distributed-git systems work \u2014 the deepest technical moat of the three",
+            "Buyer is a platform: enterprise sales motion, SLAs, customer concentration; a solo dev has none of these",
+            "GitHub Agent HQ shows the incumbent is awake on this flank"
+          ],
+          "verdict": "reject \u2014 strongest competitor, worst distribution fit for a team of one"
+        },
+        {
+          "option": "Local-first, git-native branchable workspace engine (single binary, BYO disk + BYO bucket, OSS)",
+          "pros": [
+            "Zero custody: source of truth stays the user's plain git repo and own object store; worst-case bug degrades to 'use stock git', which is the only survivable blast radius for solo-built storage software",
+            "Fills the gap worktrees actually leave: untracked files, build artifacts, large non-code state, every-write audit log, O(1) forks beyond git's branch granularity, durability across machines",
+            "Structurally unoccupied: hosted vendors are incented toward custody, hyperscalers won't do version semantics, harnesses won't do durable cross-substrate state",
+            "OSS + harness integration (Claude Code hooks/MCP, OpenCode) is a real bottom-up channel that requires no sales motion",
+            "Scales into the report's Section 5 primitive later: BYO-bucket sync, capability tokens, and a paid control plane are additive, not rewrites"
+          ],
+          "cons": [
+            "Turso AgentFS is the near-collision \u2014 OSS, funded, popular brand, and their published direction ('disaggregated agent filesystem on object storage') points at this exact territory",
+            "Harness absorption risk: Claude Code already does worktree isolation and checkpoint/rewind; each harness release shrinks the wedge",
+            "OSS adoption converts to revenue slowly or never; single-maintainer infra dependencies face justified bus-factor skepticism",
+            "Filesystem heterogeneity tax (reflink on APFS/XFS/btrfs but not ext4; Windows) eats solo engineering time"
+          ],
+          "verdict": "pursue \u2014 the only shape that survives all five failure vectors simultaneously"
+        },
+        {
+          "option": "Orchestration/UX control plane over existing substrates (worktree manager++, dashboard over Archil/Mesa/Pierre)",
+          "pros": [
+            "Fastest to ship; no storage risk at all",
+            "Rides others' infrastructure investments"
+          ],
+          "cons": [
+            "This slice is already commoditized: Worktrunk, Nimbalyst, agentmux, Composio's orchestrator are free, and Claude Code + Codex shipped worktrees natively in 2026",
+            "Thin-wrapper economics: no moat, absorbed by the next harness release",
+            "Nimbalyst's corporate sponsor already shut down (April 2026) \u2014 the market is telling you this layer doesn't sustain a company"
+          ],
+          "verdict": "reject \u2014 looks attractive, is the canonical trap; the harnesses already ate it"
+        },
+        {
+          "option": "Vertical workspace product on top of the primitive (contract redlining, claims case-files, audit-mandatory back office)",
+          "pros": [
+            "Report identifies versioned FS as a 'near-perfect fit' for contracts/claims; enterprises pay for audit and approval gates",
+            "Differentiated from all three companies, who sell horizontal infra"
+          ],
+          "cons": [
+            "Legal/insurance buyers require enterprise sales, compliance posture, and trust a solo unknown cannot manufacture in months",
+            "Premature verticalization before the engine exists means building two hard things at once"
+          ],
+          "verdict": "defer \u2014 this is the plausible monetization layer in 12-18 months, not the v1"
+        },
+        {
+          "option": "Agent state audit/time-travel/replay tool (the 'commits are the audit log' feature as a standalone product)",
+          "pros": [
+            "Bottom-up appeal; demo-able; complements rather than competes with storage vendors"
+          ],
+          "cons": [
+            "It is a feature of the workspace engine, not a company; standalone it has no data gravity",
+            "Observability vendors and harnesses both adjacent and likely to bundle it"
+          ],
+          "verdict": "defer \u2014 build it as the engine's killer demo (replay any agent run file-by-file), not as the product"
+        }
+      ],
+      "v1_scope": {
+        "must_have": [
+          "Single static binary (Rust or Go) + library: `agentspaces` CLI that turns any git repo or directory into a workspace with fork / checkpoint / diff / promote / discard semantics",
+          "O(1) copy-on-write forks via reflink (APFS/XFS/btrfs) with hardlink/copy fallback \u2014 each fork a real directory of real files, so every harness and tool works with zero integration (no FUSE, no mount, no kernel trust)",
+          "Shadow-git capture layer: every agent write recorded as a commit-grained change in a hidden repo that includes untracked files and artifacts, kept out of the user's real history; everything recoverable with stock git plumbing \u2014 the explicit no-data-loss design (the user's repo is never the write target of novel code paths)",
+          "Promote-to-PR flow: diff a fork against base, squash/land onto a real git branch \u2014 the human-approval gate as a storage operation, mirroring Mesa/Pierre semantics locally",
+          "First-class Claude Code integration (hooks + MCP server) and a plain CLI contract for Codex/OpenCode/any bash-loop agent \u2014 checkpoint-per-turn, rewind, best-of-N fork fan-out",
+          "Works fully offline; no server, no account, no telemetry by default \u2014 the trust posture is the product",
+          "Crash-safety and fsync discipline tested with fault injection from day one; a torture-test suite published in the repo as a credibility artifact"
+        ],
+        "defer": [
+          "Any hosted multi-tenant service, durability SLA, or custody of user bytes",
+          "FUSE/NFS mount layer, custom wire protocols, lazy/partial materialization of huge corpora",
+          "Attached compute (exec-on-workspace), capability-token service, web UI/dashboard",
+          "BYO S3/R2 remote sync for cross-machine durability and team sharing (fast-follow once local engine is trusted \u2014 this is the v2 wedge, not v1)",
+          "Merge engine beyond git's (jj-style conflict-carrying changes), multi-writer concurrency",
+          "Windows beyond best-effort; enterprise/vertical packaging (contracts, claims)",
+          "Monetization mechanics (open-core boundary, paid control plane) \u2014 decide after adoption signal, not before"
+        ]
+      },
+      "risks": [
+        "Turso extends AgentFS to object storage + git interop (their 'disaggregated agent filesystem' blog post signals exactly this trajectory) \u2014 a funded OSS brand landing on the same wedge; mitigation is speed plus git-native rather than SQLite-native positioning, but the collision is real",
+        "Harness absorption: Claude Code already ships worktree isolation and checkpoint/rewind; every harness release from Anthropic/OpenAI shrinks the residual wedge, and a harness-native durable workspace would compress it to zero",
+        "Good-enough inertia: for most individual users, plain worktrees genuinely suffice; the acute pain (fleets, audit, artifacts) concentrates in funded platforms who can buy Pierre/Mesa \u2014 leaving a possibly-thin middle market",
+        "OSS adoption \u2260 revenue: the realistic outcome distribution is heavy on 'respected tool, no business'; monetization (hosted sync control plane, vertical packaging) is a second product bet stacked on the first",
+        "Single-maintainer infra is a dependency nobody wants: teams rationally refuse storage layers with bus factor 1; must be countered with boring recoverable formats (everything readable by stock git) and aggressive test artifacts, and even then adoption lags",
+        "Storage software earns trust in years and loses it in one incident: a single corruption report in a GitHub issue can permanently kill the project even if user data was recoverable",
+        "Filesystem heterogeneity (no reflink on ext4, Windows semantics, case-insensitivity on macOS) is a silent multi-month engineering tax that a solo team underestimates",
+        "Category re-compression from above: an Anthropic/OpenAI agent-cloud workspace primitive, or GitHub extending Agent HQ into repo-per-agent-session storage, would devalue all independent players at once \u2014 including this one"
+      ],
+      "open_questions": [
+        {
+          "question": "What is this actually for: portfolio piece, durable OSS project, or venture-shaped company?",
+          "why_it_matters": "The three answers demand different v1s. A portfolio piece optimizes for demo brilliance and can cut corners on crash-safety; a durable OSS project optimizes for boring trustworthiness and a 24-month maintenance commitment; a venture optimizes for a monetizable control plane and forces an eventual hosted-custody decision the red-team analysis says to avoid early. Choosing wrong wastes the only scarce resource (one person's year).",
+          "options": [
+            "Portfolio/learning artifact \u2014 ship the demo, accept abandonment risk",
+            "OSS infrastructure project \u2014 SQLite/litestream ethos, revenue maybe never",
+            "Venture seed \u2014 OSS as wedge, raise on adoption, accept the custody business later"
+          ]
+        },
+        {
+          "question": "Will you ever be willing to operate a hosted storage service with an on-call rotation of one and personal liability for other people's data?",
+          "why_it_matters": "Every monetization path in this category eventually runs through custody (hosted sync, team control plane, SLAs). If the answer is a hard no, the ceiling is sponsorships/support revenue and the venture option above is closed \u2014 better to know before architecting for it. If yes, the v2 BYO-bucket sync layer should be designed now with that operational future in mind.",
+          "options": [
+            "Hard no \u2014 stay zero-custody forever, cap the business model accordingly",
+            "Yes, but only after revenue funds a second engineer/SRE",
+            "Yes, accept it as the price of a real company"
+          ]
+        },
+        {
+          "question": "What is the honest time horizon and runway before this must show a signal?",
+          "why_it_matters": "Bottom-up OSS infra has a 12-24 month gestation before meaningful adoption, during which Turso, the harnesses, and the funded trio keep moving. A 6-month horizon makes this project unwise regardless of its merits; an 18+ month horizon makes the wedge credible. The competitive clock (especially Turso's trajectory) is the fastest-ticking one.",
+          "options": [
+            "~6 months \u2014 pick a smaller, demo-shaped scope or a different project",
+            "12-18 months \u2014 viable if v1 ships within 8-10 weeks and integrates with Claude Code immediately",
+            "24+ months \u2014 full plan including BYO-bucket sync and vertical monetization is on the table"
+          ]
+        },
+        {
+          "question": "How do you feel about building in the kill zone of the harness vendors \u2014 including Anthropic, whose tooling you'd integrate with most deeply?",
+          "why_it_matters": "The single most likely compression event is harness-native durable workspaces. Deep Claude Code integration is simultaneously the best distribution channel and the clearest path to being obsoleted by a release note. This is a taste/risk question only the founder can price: ride the channel knowing it may eat you, or stay harness-agnostic and grow slower.",
+          "options": [
+            "Ride Claude Code hard as primary channel, accept absorption risk",
+            "Strict harness-agnosticism (plain CLI/MCP contract only), slower but more durable",
+            "Hedge: deep integration now, with the storage format as the defensible layer"
+          ]
+        },
+        {
+          "question": "License posture: how much do you care if a cloud vendor or Turso ships your work as a service?",
+          "why_it_matters": "For an OSS storage engine this decision is nearly irreversible and shapes both adoption (permissive spreads faster, which a solo project needs) and the future business (BUSL/AGPL protects a hosted offering you may never build). It is a values-and-ambition tradeoff, not an analytical one.",
+          "options": [
+            "MIT/Apache \u2014 maximize adoption, accept being commoditized",
+            "BUSL or AGPL \u2014 protect optionality, accept adoption friction",
+            "Permissive core + proprietary sync/control plane (open-core line drawn now)"
+          ]
+        }
+      ],
+      "recommendation": "Build the zero-custody version of the Section 5 primitive: an open-source, single-binary, local-first branchable workspace engine (\"agentspaces\") that gives any agent harness O(1) copy-on-write forks of real directories, commit-grained capture of every agent write (including untracked files and artifacts) into a shadow git repo, and a diff-then-promote approval gate that lands winners as ordinary git branches/PRs \u2014 distributed bottom-up via first-class Claude Code hooks/MCP integration and a plain CLI for every other harness. This is the only form factor that survives all five red-team vectors at once: it custodies no bytes (worst-case failure degrades to a plain git repo, the sole survivable blast radius for solo-built storage), it competes on semantics and trust rather than NVMe benchmarks, it needs no sales motion, it sits in the one structural gap none of the funded players or incumbents is incented to fill, and it is positioned to grow into the full primitive (BYO-bucket sync, capability tokens, paid team control plane) only after it has earned trust. Explicitly do NOT build: a hosted filesystem or versioned-FS service (Archil/Mesa/AWS S3 Files own it; custody kills you), headless git for platforms (Pierre owns it; wrong buyer), or a worktree-orchestration UX layer (already commoditized by free OSS and absorbed by the harnesses in 2026). The two clocks to respect: ship a credible v1 with published crash-safety torture tests inside ~10 weeks, because Turso's AgentFS trajectory and harness-native checkpointing are both converging on this ground."
+    },
+    "scout": {
+      "summary": "Build-vs-reuse verdict: every layer of the branchable-workspace primitive except the product itself already exists as a permissively-licensed, actively-maintained library, and a 1-dev+AI team should assemble, not invent. The version engine is free (git's object model via gitoxide or plain git plumbing gives content-addressed trees, O(1) branches, diff/merge, and git interop at the edge by construction \u2014 the thing Pierre charges for and Mesa had to build a translation layer for). The large-file/cold tier is free (FastCDC + BLAKE3 + SQLite manifest + R2, the restic/bup recipe, all MIT/BSD). The genuinely hard, fleet-scale parts \u2014 Archil's NVMe cache protocol, Pierre's quorum ref store, Mesa's jj-at-scale \u2014 are exactly the parts a wedge product can defer by being LOCAL-FIRST: state lives in a per-workspace CAS on the developer's machine or a single-tenant volume, syncs to object storage, and reaches agents through three progressively heavier surfaces: (1) CLI + MCP server (distribution via `claude mcp add` / .mcp.json / the now-API-frozen MCP registry \u2014 a one-person-shippable channel no competitor in the report owns), (2) in-process VFS for just-bash/Node sandboxes (Apache-2.0, validated by Mesa pairing with it), (3) a localhost userspace NFSv3 mount (nfsserve, BSD-3, proven by XetHub and copied by both ZeroFS and Turso's AgentFS for macOS) \u2014 the no-kext mount path that sidesteps FSKit, which is currently broken for third parties on macOS 26 by an Apple bug. Key landscape facts verified today: Turso AgentFS (MIT, beta v0.6.4, 3.2k stars) is the nearest collision \u2014 local SQLite-file workspaces with CoW branching and FUSE/NFS mounts \u2014 but it is local-only and not git-interoperable; its S3-disaggregated version is explicitly 'a direction, not a finished system' (Penberg, Jan 2026). That gap \u2014 durable, git-interoperable, cloud-synced, sandbox-mountable \u2014 is the open seam. Mount-into-any-sandbox is NOT uniform (Modal's gVisor forbids FUSE; E2B needs a custom template; Daytona has first-class FUSE volumes; Fly is full VMs), so the architecture must treat the real mount as the premium tier and degrade gracefully to VFS/sync \u2014 which conveniently matches the build order a solo dev needs anyway. Recommended stack: Rust core daemon (gitoxide engine \u2014 start with plain git plumbing + worktrees + APFS clonefile for week-1 credibility), FastCDC/BLAKE3/SQLite/R2 CAS for large files, TypeScript MCP server as the distribution face, nfsserve mount as v2. Roughly 8\u201312 weeks to a production v1 without the mount; the mount layer is the single riskiest component in every stack and should never block the first release.",
+      "building_blocks": [
+        {
+          "name": "Plain git plumbing (subprocess: worktrees, partial clone, bundles, cat-file --batch)",
+          "what_it_is": "The git CLI driven as a subprocess: `git worktree` for O(1)-ish parallel checkouts, `--filter=blob:none` partial clones for lazy materialization, bundles for offline transport, hash-object/mktree/commit-tree for synthetic commits without a working tree.",
+          "how_it_helps": "Gives the entire version core of the primitive (branch = fork, commit = audit log, diff = review gate) with zero code, total battle-testing, and perfect ecosystem interop. Worktrees are already the harness-native parallelism idiom (Claude Code ships EnterWorktree). Synthetic-commit plumbing lets the daemon commit every agent write without a checkout.",
+          "maturity": "The most battle-tested software in this domain; stable for decades; partial clone stable since ~2.27.",
+          "license": "GPLv2, but subprocess invocation imposes no license coupling on your code.",
+          "verdict": "use \u2014 this is the correct week-1 engine; replace hot paths with gitoxide later, not before profiling proves the fork cost matters."
+        },
+        {
+          "name": "gitoxide (gix)",
+          "what_it_is": "Pure-Rust idiomatic git implementation; gix 0.84.0 (May 26, 2026), actively developed, powers cargo's git operations and is used by GitButler/Radicle. Read paths (odb, refs, trees, diff) are strong; merge landed recently; push/server-side paths still maturing per crate-status.md.",
+          "how_it_helps": "In-process git object model: content-addressed trees, refs-as-branches, diffs \u2014 no subprocess overhead, no libgit2 C FFI, embeddable in a daemon that does thousands of micro-commits (one per agent write).",
+          "maturity": "Pre-1.0 but production-adjacent; mixed per-crate (gix-lock/tempfile production-grade, write/transport paths younger); very active (monthly releases through 2026).",
+          "license": "MIT OR Apache-2.0 (dual).",
+          "verdict": "use \u2014 as the in-process engine for the Rust core in phase 2; keep behind your own Workspace trait so the git-plumbing fallback stays available."
+        },
+        {
+          "name": "Jujutsu jj-lib",
+          "what_it_is": "The library crate behind jj (Apache-2.0, 29.5k stars, very active \u2014 pushed today). 0.42.0 (June 4, 2026). Explicitly designed for non-CLI consumers; change-based DAG, fork-on-write, first-class non-blocking conflicts; has a git backend that stores commits in a real git repo.",
+          "how_it_helps": "Its semantics ARE the report's Section-5 primitive (Mesa's whole engine bet): every write a change, observe-then-fork, conflicts that don't block agents. The git backend means jj semantics with git interop for free.",
+          "maturity": "Pre-1.0 with explicit warning of backward-incompatible on-disk format changes before 1.0; API surface acknowledged as unpolished.",
+          "license": "Apache-2.0.",
+          "verdict": "consider \u2014 steal the semantic model (fork-on-first-write, change IDs over commit IDs) and implement it as a thin layer over git refs yourself; taking the crate dependency means riding pre-1.0 format breaks AND fighting Mesa on Mesa's chosen ground."
+        },
+        {
+          "name": "libgit2",
+          "what_it_is": "The canonical embeddable C git library with bindings in every language (git2-rs, pygit2, nodegit).",
+          "how_it_helps": "Mature in-process git if the core were C/Python/Node; powers GitHub/GitLab internals historically.",
+          "maturity": "Very mature, slower-moving; known performance ceilings on huge repos; git2-rs maintained.",
+          "license": "GPLv2 WITH linking exception (effectively permissive for dynamic use, but legal review friction).",
+          "verdict": "avoid \u2014 gitoxide dominates it for a new Rust core (no FFI, better perf trajectory, cleaner license); only relevant if you abandoned Rust."
+        },
+        {
+          "name": "isomorphic-git + LightningFS / memfs",
+          "what_it_is": "Pure-JS git (MIT, mature, maintained) plus in-memory/IDB-backed fs shims for Node and browsers.",
+          "how_it_helps": "Lets a TypeScript SDK do real git operations inside an isolate/edge runtime with no native deps \u2014 the P6 (isolates) surface of the primitive.",
+          "maturity": "Stable but slow on large repos (no packfile mmap, JS hashing); memfs is the standard Node fs shim; LightningFS browser-focused.",
+          "license": "MIT (all three).",
+          "verdict": "consider \u2014 only for an edge/browser surface later; do not make it the engine, large-repo performance is disqualifying."
+        },
+        {
+          "name": "FastCDC (fastcdc-rs) / restic chunker",
+          "what_it_is": "Content-defined chunking: fastcdc crate 4.0.1 (Apr 2026, MIT, Nathan Fiedler) implementing FastCDC 2016/2020; restic's Go chunker (BSD-2) is the same idea, a decade in production.",
+          "how_it_helps": "Dedup for files git handles badly (datasets, media, node_modules, model weights): chunk \u2192 BLAKE3 \u2192 CAS. This is the entire 'pay only for unique bytes per branch' economics of Archil's branch billing, as a library.",
+          "maturity": "Algorithm and crates both mature; restic proves the design at exabyte aggregate scale.",
+          "license": "MIT (fastcdc-rs), BSD-2 (restic chunker).",
+          "verdict": "use \u2014 fastcdc-rs for the large-file tier alongside (not inside) git objects."
+        },
+        {
+          "name": "BLAKE3",
+          "what_it_is": "Official blake3 crate from the BLAKE3 team; SIMD/multithreaded, ~10x SHA-256 throughput; verified streaming via its Bao tree mode.",
+          "how_it_helps": "Content addresses for the CAS tier; tree mode enables verified partial/lazy reads of large blobs \u2014 the lazy-materialization property at the hash level.",
+          "maturity": "Production-grade, used by Iroh, bao, cargo ecosystem; stable since 2020.",
+          "license": "CC0-1.0 OR Apache-2.0.",
+          "verdict": "use \u2014 uncontroversial."
+        },
+        {
+          "name": "SQLite / libsql",
+          "what_it_is": "Embedded SQL (public domain) and Turso's MIT fork adding embedded replicas and a sync protocol.",
+          "how_it_helps": "The manifest/metadata store: path\u2192chunk maps, branch heads, lease/lock tables, audit log, token scopes. One file per workspace = trivially snapshottable (AgentFS's whole trick). libsql sync offers a shortcut to multi-device metadata replication.",
+          "maturity": "SQLite is the most deployed software on earth; libsql production at Turso (note: Turso is a direct competitor via AgentFS \u2014 using their sync service creates an awkward dependency; the embedded library is fine).",
+          "license": "Public domain / MIT.",
+          "verdict": "use \u2014 vanilla SQLite (rusqlite) for v1; treat libsql sync as optional and replaceable."
+        },
+        {
+          "name": "object_store crate + S3/R2",
+          "what_it_is": "Apache Arrow's Rust abstraction over S3/GCS/Azure/R2/local with conditional puts; R2 has zero egress fees.",
+          "how_it_helps": "The cold tier. Conditional-put (If-None-Match) on a manifest pointer gives cheap optimistic concurrency for branch heads without running a coordination service. R2's zero egress is what makes 'mount from any sandbox vendor' economically survivable for a startup.",
+          "maturity": "Production-grade, used across the Rust data ecosystem (DataFusion, Delta-rs, SlateDB).",
+          "license": "MIT/Apache-2.0; S3/R2 are services.",
+          "verdict": "use \u2014 R2 default for egress economics, S3-compatible everywhere."
+        },
+        {
+          "name": "OSTree / casync / bup",
+          "what_it_is": "Linux image/backup CAS systems: OSTree (LGPLv2+, powers Fedora Silverblue/Flatpak), casync (LGPL, effectively dormant since ~2019), bup (LGPL, git-packfile backup).",
+          "how_it_helps": "Prior art only: OSTree's hardlink-farm checkouts are the fast-materialization trick worth copying; bup proves git packfiles can hold chunked big files.",
+          "maturity": "OSTree mature but Linux-only and image-oriented; casync abandoned-ish; bup niche.",
+          "license": "LGPL family \u2014 viral friction for static linking.",
+          "verdict": "avoid as dependencies; mine OSTree's checkout strategy and bup's packfile layout for design."
+        },
+        {
+          "name": "fuser (Rust FUSE)",
+          "what_it_is": "Maintained Rust FUSE bindings, 0.17.0 (Feb 2026).",
+          "how_it_helps": "The Linux mount surface: real POSIX file tree backed by your CAS+git engine inside E2B custom templates, Daytona, Fly machines, and Linux desktops.",
+          "maturity": "Solid and maintained; FUSE itself is decades old. Caveats live in the consumers: Modal (gVisor) cannot FUSE at all; E2B requires a custom template with FUSE installed; macOS needs the macFUSE kext (install friction).",
+          "license": "MIT.",
+          "verdict": "use \u2014 for the Linux/sandbox mount tier in v2; never as the only access path."
+        },
+        {
+          "name": "nfsserve (userspace NFSv3 server)",
+          "what_it_is": "xetdata's Rust NFSv3 server library, 0.11.0 (Apr 1, 2026), BSD-3-Clause: implement one NFSFileSystem trait, get a localhost-mountable server. Built by XetHub to mount multi-TB repos; forked by ZeroFS (zerofs_nfsserve) and the same NFS-not-FUSE trick is how Turso AgentFS mounts on macOS.",
+          "how_it_helps": "THE no-kext mount path: macOS and Linux both mount localhost NFS natively, no kernel extension, no macFUSE, no FSKit. One trait implementation serves laptop and sandbox alike.",
+          "maturity": "Niche but proven in anger by three independent products; NFSv3 protocol is fossilized-stable. Known limits: no file locking in v3, weaker cache-coherence knobs than FUSE, localhost-TCP perf ceiling (fine for agent workloads).",
+          "license": "BSD-3-Clause.",
+          "verdict": "use \u2014 primary mount surface for macOS and the universal fallback; pair with fuser on Linux where FUSE is allowed."
+        },
+        {
+          "name": "macOS FSKit",
+          "what_it_is": "Apple's user-space filesystem framework (macOS 15.4+), the sanctioned no-kext path Archil uses for its macOS app.",
+          "how_it_helps": "Would be the first-class macOS mount \u2014 eventually.",
+          "maturity": "Currently broken for ALL third-party extensions on macOS 26 (confirmed Apple bug affecting even Apple's own FSKitSample, per developer forums and public issue trackers, June 2026), plus DiskArbitration probing limitations that force mount -F workflows.",
+          "license": "Apple platform framework.",
+          "verdict": "avoid for v1 \u2014 re-evaluate when Apple ships the fix; nfsserve covers macOS meanwhile, which is exactly the call Turso made."
+        },
+        {
+          "name": "go-fuse / go-nfs",
+          "what_it_is": "Go equivalents of the mount stack (hanwen/go-fuse BSD; willscott/go-nfs Apache-2.0).",
+          "how_it_helps": "Same surfaces if the core were Go.",
+          "maturity": "Both mature and maintained.",
+          "license": "BSD-3 / Apache-2.0.",
+          "verdict": "avoid \u2014 only relevant in a Go stack, and Rust wins this domain on gitoxide+fastcdc+blake3+nfsserve all being native."
+        },
+        {
+          "name": "APFS clonefile + XFS/btrfs reflink + overlayfs",
+          "what_it_is": "OS-level copy-on-write: `cp -c` on APFS, FICLONE on XFS/btrfs, overlayfs writable layers. Cognition's blockdiff snapshots 20 GB in ~200 ms via XFS reflink.",
+          "how_it_helps": "Instant local branch materialization: a workspace fork becomes a clonefile of the checkout plus a ref \u2014 sub-second worktree forks on dev laptops, the blockdiff trick for sandbox-side env caches.",
+          "maturity": "Kernel/OS facilities; rock solid where present (APFS everywhere on macOS; ext4 lacks reflink \u2014 must degrade to hardlinks).",
+          "license": "OS facilities, no license question.",
+          "verdict": "use \u2014 clonefile/reflink in the local materializer from day one; overlayfs sandbox-side only."
+        },
+        {
+          "name": "Vercel just-bash + bash-tool",
+          "what_it_is": "TypeScript-simulated bash with an in-memory/pluggable virtual filesystem (Apache-2.0 per npm, v3.0.1, 3.7k stars, active \u2014 pushed June 4, 2026); Vercel's bash-tool ships agent context-retrieval on top (Jan 2026).",
+          "how_it_helps": "The zero-infrastructure execution surface: plug the workspace SDK in as the fs backing and an agent gets `grep/sed/cat` over a lazily-materialized branch with no container, no mount, no sandbox vendor. Mesa already validates exactly this pairing \u2014 it is table stakes, not differentiation.",
+          "maturity": "Young but Vercel-backed and moving fast; command coverage broad but simulated (no real binaries).",
+          "license": "Apache-2.0 (npm metadata; repo LICENSE file not detected by GitHub API \u2014 pin the npm release and keep a copy of the license assertion).",
+          "verdict": "use \u2014 as the day-one 'try it in 30 seconds' surface for Node harnesses."
+        },
+        {
+          "name": "MCP SDKs (TypeScript/Python) + official registry",
+          "what_it_is": "MIT-licensed official SDKs; the MCP Registry (registry.modelcontextprotocol.io) hit API freeze v0.1 with reverse-DNS namespacing and standardized install metadata; harnesses install servers via `claude mcp add`, project-level .mcp.json, and registry discovery.",
+          "how_it_helps": "Distribution \u2014 the scarcest resource for a 1-dev company. A workspace MCP server (fork/checkpoint/diff/exec/token tools + file resources) rides into Claude Code, Cursor, and Codex-class harnesses through an existing channel none of Archil/Mesa/Pierre owns as their wedge. Anthropic's own code-execution-with-MCP guidance pushes state into the filesystem, which is precisely the product.",
+          "maturity": "SDKs production-grade; registry in preview but API-frozen and multi-vendor-backed (Anthropic, GitHub, Microsoft).",
+          "license": "MIT.",
+          "verdict": "use \u2014 this is the go-to-market layer; the MCP server IS the v1 product."
+        },
+        {
+          "name": "Exec delegation: E2B / Daytona / Modal / Fly Sprites / local Docker",
+          "what_it_is": "Sandbox SDKs as compute consumers of the workspace. Verified surface differences: E2B supports FUSE via custom templates; Daytona has first-class FUSE-based volume mounts of object storage; Modal runs gVisor and cannot FUSE (SDK/sync path only); Fly Sprites/Machines are full VMs (anything mounts, 1\u20132 s create, sleep-without-metering).",
+          "how_it_helps": "Delivers 'compute is a verb' without operating compute: ws.exec() = pick substrate, materialize branch (mount where possible, push-pull sync where not, local subprocess for the laptop case), run, commit results. Local Docker + subprocess covers the free tier.",
+          "maturity": "All GA and venture-scaled (E2B hundreds of millions of sessions; Modal 1B+ sandboxes).",
+          "license": "Proprietary services with permissive SDKs.",
+          "verdict": "use \u2014 integrate two in v1 (local subprocess + Fly or E2B); the non-uniform mount story is exactly why the workspace, not the sandbox, must own state."
+        },
+        {
+          "name": "Turso AgentFS",
+          "what_it_is": "MIT, beta v0.6.4 (Mar 2026), 3.2k stars: each agent's files+KV+toolcall audit in one SQLite file; CoW branches; FUSE mount on Linux, NFS on macOS; TS/Python/Rust SDKs.",
+          "how_it_helps": "Primarily a collision and a validation: it proves demand for the local branchable workspace and proves the NFS-on-macOS trick. Its gaps define the differentiation: no object-storage durability (disaggregated design is a published research direction, not shipped), no git interop (SQLite file, not a repo \u2014 invisible to GitHub/CI/diff tooling), no exec attachment, single-box.",
+          "maturity": "Beta, explicitly so; fast-moving with Turso's distribution behind it.",
+          "license": "MIT.",
+          "verdict": "avoid as a dependency (coupling your core to a competitor's beta engine), and avoid replicating its local-SQLite shape \u2014 build the durable, git-interoperable, sandbox-mountable layer it conspicuously lacks, and ship before their disaggregation lands."
+        },
+        {
+          "name": "Dagger / BuildKit caching model",
+          "what_it_is": "Apache-2.0 content-addressed DAG cache for build operations (LLB graph, per-op caching, lazy refs).",
+          "how_it_helps": "Design lesson only: their cache treats environments as deterministic functions of inputs \u2014 the report's 'machine image as memoization of lockfiles.' Copy the idea for env-derivation (lockfile hash \u2192 cached snapshot); do not adopt the machinery, it is build-graph-shaped, not workspace-shaped.",
+          "maturity": "Production-grade (BuildKit underpins Docker).",
+          "license": "Apache-2.0.",
+          "verdict": "avoid as dependency, learn from for the derived-env cache feature."
+        },
+        {
+          "name": "Devcontainers spec + git worktrees (as conventions)",
+          "what_it_is": "devcontainer.json as the de-facto environment definition; worktrees as the existing human convention for parallel branches.",
+          "how_it_helps": "Free interop: read devcontainer.json to derive exec environments; present forks as worktree-like directories so humans and existing tools (IDEs, harness worktree features) understand the layout natively.",
+          "maturity": "Both ubiquitous conventions.",
+          "license": "Open spec / git.",
+          "verdict": "use \u2014 as compatibility surfaces, not components."
+        },
+        {
+          "name": "ZeroFS",
+          "what_it_is": "AGPL-3.0 Rust project (1.9k stars, active \u2014 pushed today): NFS/9P/NBD served directly over S3 via SlateDB, encryption + compression, built largely by one person.",
+          "how_it_helps": "Existence proof that the exact architecture of the recommended stack \u2014 userspace NFS over object storage in Rust \u2014 is one-developer-feasible; its BSD-3 nfsserve fork carries useful protocol fixes upstreamable to your copy.",
+          "maturity": "Young but real (packaged in FreeBSD ports, GitHub Action for CI volumes).",
+          "license": "AGPL-3.0 \u2014 disqualifying as a dependency for a commercial product.",
+          "verdict": "avoid as code, study as the closest open-source analogue of the storage layer (minus versioning \u2014 which is exactly your differentiation)."
+        }
+      ],
+      "stack_options": [
+        {
+          "stack": "A. 'agentspaced' \u2014 local-first Rust workspace daemon, git-native core, MCP-first distribution (RECOMMENDED)",
+          "components": [
+            "Rust daemon + CLI (single static binary, brew/curl install)",
+            "Engine v0: plain git plumbing via subprocess (synthetic commits per write-batch, refs as forks, worktree+APFS clonefile/reflink materialization); engine v1: gitoxide (gix) in-process behind the same Workspace trait",
+            "Large-file tier: fastcdc + blake3 + rusqlite manifest, git tracks pointers (LFS-compatible at the edge)",
+            "Cold/durable tier: object_store \u2192 Cloudflare R2 (conditional-put on branch heads for concurrency), git push interop to GitHub as the trust anchor",
+            "Surface 1 (v1 product): TypeScript MCP server exposing fork/checkpoint/diff/promote/exec/token + file tools; .mcp.json + MCP registry distribution",
+            "Surface 2: just-bash fs-backend adapter for in-process Node sandboxes",
+            "Surface 3 (v2): nfsserve localhost NFSv3 mount (macOS + universal fallback) and fuser FUSE (Linux/E2B/Daytona)",
+            "Exec delegation: local subprocess/Docker first, then Fly Machines or E2B mounting the workspace; Modal via sync-in/commit-out"
+          ],
+          "effort": "8\u201312 weeks to production v1 (CLI + MCP server + CAS + R2 sync + git interop + local exec \u2014 no network mount); +4\u20136 weeks for the NFS/FUSE mount tier as v2. Week 2 should already demo 'agent forks workspace, runs tests in 3 parallel branches, you review diffs and promote one' inside Claude Code.",
+          "risk": "The mount layer is the single riskiest component \u2014 POSIX edge cases, cache coherence between mount and CLI views, and NFSv3's missing locking; mitigated by making it v2 and never the only path. Second-order risk: per-write commit granularity bloating the git odb (mitigate by write-batching + periodic repack).",
+          "verdict": "Commit to this. It is the only stack where every component is permissive, proven, and 1-dev-sized; git-native means Pierre-grade interop for free and a story incumbents' SQLite-file and proprietary-protocol approaches cannot match; local-first means no fleet to operate before revenue; MCP means distribution without a partnerships team. It occupies precisely the seam Turso has published intentions toward but not shipped."
+        },
+        {
+          "stack": "B. TypeScript-only 'workspace SDK + cloud git backbone' (Mesa-shape, lighter)",
+          "components": [
+            "TS SDK with pluggable VFS (lazy materialization over HTTP range reads)",
+            "just-bash as the execution surface; memfs for tests",
+            "Backbone: plain bare git repos on a single Fly volume (or Hetzner) fronted by a thin Node/Bun API; isomorphic-git only for edge cases",
+            "R2 for large objects (LFS-style pointers)",
+            "MCP TS server sharing the SDK",
+            "E2B/Vercel Sandbox for delegated exec via sync-in/push-out"
+          ],
+          "effort": "5\u20138 weeks to production v1 \u2014 fastest credible path; one language, no Rust, no mount layer ever.",
+          "risk": "No real-mount path is the riskiest 'component' (an absence): the moment a customer's agent needs `npm install` or a real toolchain against the workspace, you are sync-shipping file trees into sandboxes and have rebuilt rsync; also lands you on Mesa's exact roadmap with less engine underneath.",
+          "verdict": "Take only if shipping in June matters more than defensibility \u2014 or fold it into Stack A as the MCP/SDK front-end (the recommended plan effectively contains this stack as its first deliverable)."
+        },
+        {
+          "stack": "C. jj-lib semantic engine over object storage (the 'out-Mesa Mesa' play)",
+          "components": [
+            "Rust core embedding jj-lib 0.42 with its git backend (jj semantics, git storage)",
+            "Custom jj backend targeting object_store/R2 for lazy tree reads",
+            "nfsserve/fuser mount tier as in Stack A",
+            "MCP + CLI surfaces as in Stack A"
+          ],
+          "effort": "12\u201318 weeks to production v1, plus permanent tax tracking pre-1.0 jj-lib API and on-disk format breaks across its monthly releases.",
+          "risk": "jj-lib instability is the riskiest component \u2014 the project explicitly promises backward-incompatible format changes before 1.0, and a custom storage backend sits on its least-stable internal trait surface; strategically you also fight Mesa on the ground they chose with $5M and a head start.",
+          "verdict": "Avoid as the v1 engine; correct as a v3 evolution \u2014 Stack A's Workspace trait should be designed so jj-grade change semantics (stable change IDs, fork-on-first-write, non-blocking conflicts) can be layered over git refs without adopting jj's storage."
+        },
+        {
+          "stack": "D. Assemble-on-vendors: wrap Archil or code.storage (or AgentFS) and build only the workspace UX",
+          "components": [
+            "Archil disks (branches + disk.exec) or code.storage repos (ephemeral branches, commit-from-diff) as the engine",
+            "Thin MCP server + CLI + policy/approval layer on top",
+            "Harness integrations and token scoping as the entire product"
+          ],
+          "effort": "2\u20134 weeks to a working v1 \u2014 almost all glue.",
+          "risk": "Platform dependency is existential, not a component risk: the report itself predicts each vendor is 'one feature launch away' from shipping your wrapper as a feature (Archil already sells exec; Pierre already sells tokens); margins are theirs, roadmap is theirs.",
+          "verdict": "Avoid as the company; use as the competitive benchmark and possibly as an optional 'bring your own backend' enterprise adapter behind Stack A's interface once the native engine is the default."
+        }
+      ],
+      "competitor_updates": [
+        "Turso AgentFS is further along than the report's passing mention: MIT-licensed, 3.2k stars, beta v0.6.4 (Mar 2026), 58 releases \u2014 single-SQLite-file agent workspaces with filesystem+KV+toolcall-audit, CoW branches, FUSE mount on Linux and NFS mount on macOS, TS/Python/Rust SDKs. It is the closest open-source collision with a local-first wedge \u2014 but it is local/single-box, not git-interoperable, and has no durable cloud tier.",
+        "Turso's S3 ambition is public but unshipped: Penberg's 'Towards a Disaggregated Agent Filesystem on Object Storage' (Jan 11, 2026) sketches SQLite-WAL-to-S3 sync with a coordinator and explicitly calls it 'a direction, not a finished system,' with open questions on write concurrency and large files. The durable/cloud-synced/git-interoperable seam is still open \u2014 for now.",
+        "macOS FSKit is currently broken for ALL third-party filesystem extensions on macOS 26 (confirmed Apple bug, reproduced even with Apple's own FSKitSample; plus standing DiskArbitration probing limitations). Practical consequence: the no-kext macOS mount path in 2026 is a localhost userspace NFSv3 server \u2014 the approach XetHub pioneered (nfsserve, BSD-3, v0.11.0 Apr 2026, actively maintained) and that both ZeroFS and Turso AgentFS independently adopted. macFUSE is also growing an FSKit backend as a hedge.",
+        "'Mount into any sandbox' is not uniform across exec vendors: Modal's gVisor sandboxes cannot use FUSE at all (SDK/sync paths only); E2B supports FUSE but only via custom templates; Daytona now ships first-class FUSE-based volume mounts of object storage; Fly Sprites/Machines are full VMs where anything mounts. Any workspace product must degrade gracefully from mount \u2192 in-process VFS \u2192 sync, which favors architectures where the mount is one surface among several rather than the core interface.",
+        "Vercel's just-bash has become real infrastructure: Apache-2.0 (npm v3.0.1), 3.7k stars, active through June 2026, with Vercel's bash-tool for filesystem-based context retrieval launched on top (Jan 2026, InfoQ coverage). Mesa pairing its VFS with just-bash is now table stakes \u2014 an in-process VFS adapter is mandatory, not differentiating. Caveat: the GitHub repo lacks a detected LICENSE file; the npm metadata asserts Apache-2.0 \u2014 pin versions.",
+        "The official MCP Registry reached API freeze (v0.1) with reverse-DNS namespacing, standardized install metadata, and backing from Anthropic, GitHub, and Microsoft \u2014 making MCP a stable, ownable distribution channel for a workspace product into Claude Code/Cursor-class harnesses; none of Archil/Mesa/Pierre currently leads with this channel.",
+        "Freestyle has sharpened into a direct messaging competitor: now positioned as 'VMs and Git for AI agents' with an explicit 'The best filesystem for AI agents is Git' engineering blog and a multi-tenant API-first git platform (scoped permissions, agent workspaces, GitHub sync) \u2014 crowding the git-as-agent-filesystem narrative from the platform side, though still sandbox-bundled rather than local-first/harness-native.",
+        "ZeroFS (AGPL-3.0, 1.9k stars, active daily) is a one-person-built NFS/9P/NBD-over-S3 filesystem on SlateDB with encryption and compression \u2014 an existence proof that the userspace-NFS-over-object-storage architecture is solo-feasible, and a license-incompatible neighbor whose nfsserve fork (zerofs_nfsserve) carries protocol fixes worth tracking.",
+        "Library freshness verified June 10, 2026: jj-lib 0.42.0 (Jun 4) still pre-1.0 with promised on-disk format breaks; gitoxide gix 0.84.0 (May 26) actively maturing with merge landed and write/server paths younger; fuser 0.17.0 (MIT), fastcdc 4.0.1 (MIT), nfsserve 0.11.0 (BSD-3) all maintained in 2026 \u2014 the entire recommended Rust bill of materials is permissive and alive."
+      ]
+    }
+  }
+}
