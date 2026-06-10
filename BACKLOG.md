@@ -109,7 +109,7 @@
 - [x] T8.1 Dogfood: asp init on this repo (52 files, 255ms); managing remaining development
 - [x] T8.2 Fresh-machine walkthrough: clean clone → release build → full README loop (init/checkpoint/fork/forks/undo/race/discard/doctor) — PASS 2026-06-11
 - [x] T8.3 Adversarial review: 28 agents / 5 dimensions / 0 refuted → 4 unique criticals + 12 majors + 17 minors confirmed (docs/design/review-findings-v0.1.json); ALL criticals+majors fixed in 2 waves with regression tests (shrink data-loss, promote .asp leak, store path traversal, doctor rm -rf safety via Pending intent journaling, undo ping-pong, status big-file blindness, journal read/heal race, CAS TOCTOU, non-UTF8 filenames, musl static builds, git 2.32 gate, .env docs honesty, +more)
-- [~] T8.4 Final gate: full suite + torture green locally; awaiting CI; then tag v0.1.0
+- [x] T8.4 Final gate PASSED: full suite + torture green locally and in CI (incl. btrfs reflink assert); **v0.1.0 tagged and released** — 4 targets built (macOS arm64/x86_64, Linux x86_64/aarch64 musl static), checksums verified, downloaded artifact smoke-tested end-to-end
 
 ---
 

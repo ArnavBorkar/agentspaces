@@ -11,7 +11,7 @@
 - [x] Positioning docs: why-not-worktrees, why-not-agentfs, FAQ
 - [x] LICENSE-MIT + LICENSE-APACHE, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT
 - [x] install.sh (checksum-verified) + release workflow (4 targets)
-- [ ] Tag v0.1.0 → verify release artifacts download & run on a clean machine
+- [x] Tag v0.1.0 → release artifacts built (4 targets, musl static on Linux), checksum-verified, downloaded + smoke-tested
 - [ ] Demo GIF/asciinema in README (record `asp race` on a real repo)
 - [ ] (Arnav) Repo visibility flip private → public — exposes full history
 - [ ] (Arnav) Decide crates.io publish (`asp` name availability) — `cargo install --git` works meanwhile
