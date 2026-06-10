@@ -108,12 +108,16 @@
 
 - [x] T8.1 Dogfood: asp init on this repo (52 files, 255ms); managing remaining development
 - [x] T8.2 Fresh-machine walkthrough: clean clone → release build → full README loop (init/checkpoint/fork/forks/undo/race/discard/doctor) — PASS 2026-06-11
-- [~] T8.3 Multi-agent adversarial review (5 dimensions, adversarial verification) — running
-- [ ] T8.4 Final benchmark + torture run; tag v0.1.0
+- [x] T8.3 Adversarial review: 28 agents / 5 dimensions / 0 refuted → 4 unique criticals + 12 majors + 17 minors confirmed (docs/design/review-findings-v0.1.json); ALL criticals+majors fixed in 2 waves with regression tests (shrink data-loss, promote .asp leak, store path traversal, doctor rm -rf safety via Pending intent journaling, undo ping-pong, status big-file blindness, journal read/heal race, CAS TOCTOU, non-UTF8 filenames, musl static builds, git 2.32 gate, .env docs honesty, +more)
+- [~] T8.4 Final gate: full suite + torture green locally; awaiting CI; then tag v0.1.0
 
 ---
 
 ## Decision log (newest first)
+
+- 2026-06-11 · Doctor never deletes directories it can't prove asp created — fork() registers Pending intent entries before cloning; cleanup is registry-driven, heuristics are info-only. (From review: rm -rf of `cp -r proj proj@backup` was possible.)
+- 2026-06-11 · Gitignored files are excluded from checkpoints BY DESIGN (secrets stay out of the store) and the docs say so honestly; forks carry everything physically.
+- 2026-06-11 · Linux releases are musl static; macOS releases are the two Apple targets.
 
 - 2026-06-11 · Single binary `asp` contains CLI + MCP server (`asp mcp`) — one artifact to install, per first-five-minutes PM goal.
 - 2026-06-11 · Journal = append-only JSONL w/ per-line CRC, not SQLite — simpler crash-safety story, greppable, zero deps. Revisit if query needs grow.
