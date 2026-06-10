@@ -1,0 +1,400 @@
+//! End-to-end engine tests: the full life of a workspace.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use asp_core::journal::Op;
+use asp_core::store::ForkStatus;
+use asp_core::workspace::CheckpointOpts;
+use asp_core::{ErrorCode, Workspace};
+
+fn write(root: &Path, rel: &str, content: &str) {
+    let p = root.join(rel);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(p, content).unwrap();
+}
+
+fn read(root: &Path, rel: &str) -> String {
+    std::fs::read_to_string(root.join(rel)).unwrap()
+}
+
+/// Project dir with a few files, inside a fresh tempdir.
+fn project() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("proj");
+    std::fs::create_dir_all(&root).unwrap();
+    write(&root, "src/main.rs", "fn main() {}\n");
+    write(&root, "README.md", "# proj\n");
+    write(&root, ".env", "SECRET=1\n");
+    (tmp, root)
+}
+
+fn cp(ws: &Workspace, msg: &str) -> Option<asp_core::workspace::CheckpointInfo> {
+    ws.checkpoint(CheckpointOpts {
+        message: Some(msg.into()),
+        ..Default::default()
+    })
+    .unwrap()
+}
+
+#[test]
+fn init_checkpoint_log_roundtrip() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+
+    let c1 = cp(&ws, "first").expect("first checkpoint captures everything");
+    assert_eq!(c1.seq, 1);
+    assert!(c1.files_changed >= 3, "captures untracked files incl .env");
+
+    // No-op capture creates no checkpoint.
+    assert!(cp(&ws, "noop").is_none());
+
+    write(&root, "src/main.rs", "fn main() { println!(\"hi\"); }\n");
+    let c2 = cp(&ws, "second").unwrap();
+    assert_eq!(c2.seq, 2);
+    assert_eq!(c2.files_changed, 1);
+
+    let log = ws.log(10).unwrap();
+    assert_eq!(log[0].op, Op::Checkpoint);
+    assert_eq!(log[0].seq, Some(2));
+
+    let status = ws.status().unwrap();
+    assert_eq!(status.last_checkpoint.as_ref().unwrap().seq, 2);
+    assert_eq!(status.dirty_files + status.untracked_files, 0);
+}
+
+#[test]
+fn init_is_guarded() {
+    let (_tmp, root) = project();
+    Workspace::init(&root, None).unwrap();
+    let err = Workspace::init(&root, None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::AlreadyInitialized);
+
+    let nested = root.join("src");
+    let err = Workspace::init(&nested, None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::AlreadyInitialized);
+
+    let err = Workspace::open(Path::new("/")).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotAWorkspace);
+    assert!(err.hint.unwrap().contains("asp init"));
+}
+
+#[test]
+fn restore_full_brings_back_deleted_and_removes_new() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    // Mutate: edit one, delete one, add one.
+    write(&root, "src/main.rs", "broken\n");
+    std::fs::remove_file(root.join("README.md")).unwrap();
+    write(&root, "junk/garbage.tmp", "agent damage\n");
+    let c2 = cp(&ws, "damage").unwrap();
+    assert_eq!(c2.seq, 2);
+
+    let report = ws.restore("1", &[], None).unwrap();
+    assert_eq!(report.target_seq, 1);
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+    assert_eq!(read(&root, "README.md"), "# proj\n");
+    assert!(
+        !root.join("junk/garbage.tmp").exists(),
+        "added file removed"
+    );
+    assert!(!root.join("junk").exists(), "empty dir pruned");
+
+    // Restore is itself undoable: the damage state was safety-checkpointed.
+    assert!(
+        report.safety_seq.is_none(),
+        "tree was clean at restore time"
+    );
+}
+
+#[test]
+fn restore_takes_safety_checkpoint_when_dirty() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    write(&root, "src/main.rs", "uncommitted mess\n");
+    let report = ws.restore("1", &[], None).unwrap();
+    let safety = report.safety_seq.expect("dirty tree → safety checkpoint");
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+
+    // The mess is recoverable.
+    ws.restore(&safety.to_string(), &[], None).unwrap();
+    assert_eq!(read(&root, "src/main.rs"), "uncommitted mess\n");
+}
+
+#[test]
+fn restore_targeted_paths_only() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    write(&root, "src/main.rs", "v2\n");
+    write(&root, "README.md", "# v2\n");
+    cp(&ws, "v2").unwrap();
+
+    ws.restore("1", &["src/main.rs".into()], None).unwrap();
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+    assert_eq!(
+        read(&root, "README.md"),
+        "# v2\n",
+        "untargeted path untouched"
+    );
+}
+
+#[test]
+fn undo_dirty_then_clean() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "one").unwrap();
+    write(&root, "src/main.rs", "v2\n");
+    cp(&ws, "two").unwrap();
+
+    // Clean tree: undo steps back one checkpoint.
+    ws.undo(None).unwrap();
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+
+    // Dirty tree: undo reverts to last checkpoint... which is the restore
+    // point we are at; make a fresh edit on top.
+    write(&root, "src/main.rs", "scribble\n");
+    ws.undo(None).unwrap();
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+
+    let err = Workspace::init(&root, None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::AlreadyInitialized);
+}
+
+#[test]
+fn undo_with_no_checkpoints_errors_helpfully() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    let err = ws.undo(None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NothingToDo);
+    assert!(err.hint.unwrap().contains("asp checkpoint"));
+}
+
+#[test]
+fn fork_is_independent_and_compared() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    let f1 = ws.fork(Some("attempt-1".into()), None).unwrap();
+    let f2 = ws.fork(Some("attempt-2".into()), None).unwrap();
+    assert!(f1.path.exists() && f2.path.exists());
+    assert_eq!(f1.name, "attempt-1");
+
+    // Forks carry EVERYTHING, including dotfiles outside git.
+    assert_eq!(read(&f1.path, ".env"), "SECRET=1\n");
+
+    // CoW independence.
+    write(&f1.path, "src/main.rs", "fork one wins\n");
+    write(&f2.path, "src/lib.rs", "fork two adds a file\n");
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+
+    let rows = ws.fork_compare().unwrap();
+    assert_eq!(rows.len(), 2);
+    let r1 = rows.iter().find(|r| r.name == "attempt-1").unwrap();
+    let r2 = rows.iter().find(|r| r.name == "attempt-2").unwrap();
+    assert_eq!(r1.files_changed, 1);
+    assert_eq!(r2.files_changed, 1);
+    assert!(r2.insertions >= 1);
+
+    // Duplicate active fork name is refused.
+    let err = ws.fork(Some("attempt-1".into()), None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::ForkExists);
+}
+
+#[test]
+fn fork_inside_fork_works() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let f1 = ws.fork(Some("a".into()), None).unwrap();
+    let fork_ws = Workspace::open(&f1.path).unwrap();
+    assert!(fork_ws.meta.parent.is_some());
+    write(&f1.path, "x.txt", "deep\n");
+    let nested = fork_ws.fork(Some("b".into()), None).unwrap();
+    assert!(nested.path.exists());
+    assert_eq!(read(&nested.path, "x.txt"), "deep\n");
+}
+
+#[test]
+fn diff_between_checkpoints_and_worktree() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    write(&root, "src/main.rs", "fn main() { /* changed */ }\n");
+    write(&root, "new.txt", "added\n");
+    std::fs::remove_file(root.join("README.md")).unwrap();
+    cp(&ws, "changes").unwrap();
+
+    let report = ws.diff("1", Some("2")).unwrap();
+    let by_path: std::collections::HashMap<_, _> =
+        report.rows.iter().map(|r| (r.path.as_str(), r)).collect();
+    assert_eq!(by_path["src/main.rs"].status, "M");
+    assert_eq!(by_path["new.txt"].status, "A");
+    assert_eq!(by_path["README.md"].status, "D");
+
+    // Diff against the working tree.
+    write(&root, "wip.txt", "work in progress\n");
+    let report = ws.diff("2", None).unwrap();
+    assert!(report.rows.iter().any(|r| r.path == "wip.txt"));
+    assert_eq!(report.to, "working tree");
+}
+
+#[test]
+fn promote_lands_branch_in_user_repo() {
+    let (_tmp, root) = project();
+    // Make the project a real git repo first (like most users).
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "u@example.com"]);
+    git(&["config", "user.name", "U"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "init"]);
+
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(
+        &fork.path,
+        "src/main.rs",
+        "fn main() { /* the good version */ }\n",
+    );
+    write(&fork.path, "src/new_module.rs", "pub fn add() {}\n");
+
+    let report = ws.promote("winner", None).unwrap();
+    assert_eq!(report.branch, "asp/winner");
+
+    // The branch exists in the ORIGINAL repo with the fork's content,
+    // and the user's HEAD/worktree were not touched.
+    let tree = git(&["ls-tree", "-r", "--name-only", "asp/winner"]);
+    assert!(tree.contains("src/new_module.rs"));
+    assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
+    let show = git(&["show", "asp/winner:src/main.rs"]);
+    assert!(show.contains("the good version"));
+
+    // Promoted fork can now be discarded without force.
+    ws.discard("winner", false).unwrap();
+    assert!(!fork.path.exists());
+
+    // Promoting again: branch exists error.
+    let f2 = ws.fork(Some("winner".into()), None).unwrap();
+    write(&f2.path, "z.txt", "z\n");
+    let err = ws.promote("winner", None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::BranchExists);
+    let ok = ws.promote("winner", Some("asp/winner-2".into())).unwrap();
+    assert_eq!(ok.branch, "asp/winner-2");
+}
+
+#[test]
+fn promote_without_user_git_errors_helpfully() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    ws.fork(Some("f".into()), None).unwrap();
+    let err = ws.promote("f", None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NoUserGitRepo);
+    assert!(err.hint.unwrap().contains("git init"));
+}
+
+#[test]
+fn discard_guards_unpromoted_work() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("risky".into()), None).unwrap();
+    write(&fork.path, "src/main.rs", "unsaved work\n");
+
+    let err = ws.discard("risky", false).unwrap_err();
+    assert_eq!(err.code, ErrorCode::ForkHasUnpromotedWork);
+    assert!(fork.path.exists(), "fork not deleted on refusal");
+
+    ws.discard("risky", true).unwrap();
+    assert!(!fork.path.exists());
+    let registry = ws.fork_registry().unwrap();
+    assert_eq!(registry.forks[0].status, ForkStatus::Discarded);
+}
+
+#[test]
+fn excludes_keep_derived_state_out_of_checkpoints() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    write(&root, "node_modules/dep/index.js", "x\n");
+    write(&root, "target/debug/binary", "x\n");
+    let c = cp(&ws, "with noise").unwrap();
+    let listed = ws
+        .shadow()
+        .run(&["ls-tree", "-r", "--name-only", &c.commit])
+        .unwrap();
+    assert!(!listed.contains("node_modules"));
+    assert!(!listed.contains("target/"));
+    assert!(listed.contains("src/main.rs"));
+}
+
+#[test]
+fn user_git_dir_never_captured() {
+    let (_tmp, root) = project();
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["init", "-q"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let ws = Workspace::init(&root, None).unwrap();
+    let c = cp(&ws, "base").unwrap();
+    let listed = ws
+        .shadow()
+        .run(&["ls-tree", "-r", "--name-only", &c.commit])
+        .unwrap();
+    assert!(!listed.contains(".git/"));
+    assert!(!listed.contains(".asp"));
+}
+
+#[test]
+fn stock_git_recovery_runbook_works() {
+    // The trust model, executed literally as documented in format.md.
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    let c = cp(&ws, "precious").unwrap();
+
+    let out_dir = root.parent().unwrap().join("recovered");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let idx = root.parent().unwrap().join("tmp.index");
+    let run = |args: &[&str]| {
+        let out = Command::new("git")
+            .env("GIT_DIR", root.join(".asp/shadow.git"))
+            .env("GIT_WORK_TREE", &out_dir)
+            .env("GIT_INDEX_FILE", &idx)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    run(&["read-tree", &c.commit]);
+    run(&["checkout-index", "-a", "-f"]);
+    assert_eq!(read(&out_dir, "src/main.rs"), "fn main() {}\n");
+    assert_eq!(read(&out_dir, ".env"), "SECRET=1\n");
+}
