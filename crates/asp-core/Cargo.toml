@@ -1,0 +1,23 @@
+[package]
+name = "asp-core"
+description = "Engine for agentspaces: durable, branchable agent workspaces over real directories"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+crc32fast.workspace = true
+fs2.workspace = true
+walkdir.workspace = true
+libc.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

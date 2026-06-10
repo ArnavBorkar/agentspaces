@@ -12,14 +12,14 @@
 **Done when:** `cargo build` works from a fresh clone, CI runs fmt+clippy+tests on macOS+Linux, licenses and contributor docs exist.
 
 - **S0.1 Toolchain & scaffold**
-  - [~] T0.1.1 Install Rust stable toolchain
-  - [ ] T0.1.2 Cargo workspace: `crates/asp-core` (engine lib), `crates/asp` (binary: CLI + `asp mcp` stdio server in one static binary)
-  - [ ] T0.1.3 rustfmt + clippy config, .gitignore, editorconfig
-  - [ ] T0.1.4 Dual-license MIT/Apache-2.0 files + per-crate license fields
-  - [ ] T0.1.5 CLAUDE.md: build/test commands, conventions, gh-account note
+  - [x] T0.1.1 Install Rust stable toolchain (1.96.0)
+  - [x] T0.1.2 Cargo workspace: `crates/asp-core` (engine lib), `crates/asp` (binary: CLI + `asp mcp` stdio server in one static binary)
+  - [x] T0.1.3 rustfmt + clippy config, .gitignore
+  - [x] T0.1.4 Dual-license MIT/Apache-2.0 files + per-crate license fields
+  - [x] T0.1.5 CLAUDE.md: build/test commands, conventions, gh-account note
 - **S0.2 CI**
-  - [ ] T0.2.1 GitHub Actions: fmt + clippy -D warnings + test on macos-latest & ubuntu-latest
-  - [ ] T0.2.2 CI badge in README
+  - [~] T0.2.1 GitHub Actions: fmt + clippy -D warnings + test on macos-latest & ubuntu-latest (pushed; verifying first run)
+  - [ ] T0.2.2 CI badge in README (with README rewrite, EPIC 7)
 
 ## EPIC 1 — De-risk spikes (existential — nothing else proceeds if these fail)
 
