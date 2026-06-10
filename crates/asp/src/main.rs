@@ -4,6 +4,7 @@
 //! Agents are first-class users: every command supports `--json`, and every
 //! error states the corrective next action.
 
+mod mcp;
 mod race;
 mod ui;
 
@@ -131,6 +132,10 @@ enum Cmd {
         #[arg(long)]
         fix: bool,
     },
+    /// Run the MCP stdio server (for agent harnesses like Claude Code).
+    ///
+    /// Register it with: claude mcp add agentspaces -- asp mcp
+    Mcp,
 }
 
 /// Provenance flags used by hooks/MCP to attribute checkpoints to sessions.
@@ -534,6 +539,18 @@ fn run(cli: Cli) -> Result<(), Error> {
             name,
             command,
         } => race::run(&open(&cli.dir)?, count, &name, &command, json),
+        Cmd::Mcp => {
+            if let Some(dir) = &cli.dir {
+                std::env::set_current_dir(dir).map_err(|e| {
+                    Error::new(
+                        ErrorCode::Io,
+                        format!("cannot enter {}: {e}", dir.display()),
+                    )
+                })?;
+            }
+            mcp::serve()
+                .map_err(|e| Error::new(ErrorCode::Io, format!("mcp server I/O error: {e}")))
+        }
         Cmd::Doctor { fix } => {
             let ws = open(&cli.dir)?;
             let findings = ws.doctor(fix)?;
