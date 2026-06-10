@@ -4,6 +4,7 @@
 //! Agents are first-class users: every command supports `--json`, and every
 //! error states the corrective next action.
 
+mod hooks;
 mod mcp;
 mod race;
 mod ui;
@@ -136,6 +137,28 @@ enum Cmd {
     ///
     /// Register it with: claude mcp add agentspaces -- asp mcp
     Mcp,
+    /// Wire this workspace into an agent harness (hooks + MCP registration).
+    Setup {
+        /// The harness to integrate with.
+        #[command(subcommand)]
+        harness: SetupHarness,
+    },
+    /// (internal) Invoked by harness hooks; reads the event from stdin.
+    #[command(hide = true, name = "hook-event")]
+    HookEvent,
+}
+
+#[derive(Subcommand)]
+enum SetupHarness {
+    /// Claude Code: auto-checkpoint hooks (file edits + bash) and .mcp.json.
+    Claude {
+        /// Install hooks user-wide (~/.claude) instead of per-project.
+        #[arg(long)]
+        user: bool,
+        /// Remove the integration instead of installing it.
+        #[arg(long)]
+        remove: bool,
+    },
 }
 
 /// Provenance flags used by hooks/MCP to attribute checkpoints to sessions.
@@ -550,6 +573,62 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             mcp::serve()
                 .map_err(|e| Error::new(ErrorCode::Io, format!("mcp server I/O error: {e}")))
+        }
+        Cmd::Setup { harness } => match harness {
+            SetupHarness::Claude { user, remove } => {
+                // Setting up implies the directory should be a workspace.
+                let dir = cwd(&cli.dir)?;
+                let root = match Workspace::open(&dir) {
+                    Ok(ws) => ws.root().to_path_buf(),
+                    Err(_) if !remove => {
+                        let ws = Workspace::init(&dir, None)?;
+                        if !json {
+                            println!(
+                                "{} initialized asp workspace at {}",
+                                ui::green("✓"),
+                                ws.root().display()
+                            );
+                        }
+                        ws.root().to_path_buf()
+                    }
+                    Err(e) => return Err(e),
+                };
+                let report = hooks::setup_claude(&root, user, remove)?;
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                if remove {
+                    println!("{} Claude Code integration removed", ui::green("✓"));
+                    return Ok(());
+                }
+                println!(
+                    "{} auto-checkpoint hooks installed → {}",
+                    ui::green("✓"),
+                    report.settings_file.display()
+                );
+                if let Some(m) = &report.mcp_file {
+                    println!("{} MCP server registered → {}", ui::green("✓"), m.display());
+                }
+                println!(
+                    "\nEvery file edit and bash command in Claude Code sessions is now \
+                     checkpointed.\nTry it: make some changes in a session, then {} or ask the \
+                     agent to call {}.",
+                    ui::cyan("asp log"),
+                    ui::cyan("workspace_undo")
+                );
+                println!(
+                    "{}",
+                    ui::dim(
+                        "note: `asp` must be on PATH for hooks to fire (restart Claude Code after install)"
+                    )
+                );
+                Ok(())
+            }
+        },
+        Cmd::HookEvent => {
+            hooks::handle_hook_event();
+            Ok(())
         }
         Cmd::Doctor { fix } => {
             let ws = open(&cli.dir)?;

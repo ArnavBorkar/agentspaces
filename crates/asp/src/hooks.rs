@@ -1,0 +1,265 @@
+//! Claude Code integration: hook event handling + one-command setup.
+//!
+//! `asp setup claude` wires the project into Claude Code:
+//!   - PostToolUse hooks on file-editing tools and Bash → auto-checkpoint
+//!     after every change (the /rewind-for-everything experience, including
+//!     bash side-effects)
+//!   - PreToolUse hook on Bash → checkpoint manual edits before commands run
+//!   - `.mcp.json` registration of the `asp mcp` server
+//!
+//! `asp hook-event` (hidden) is the command those hooks invoke: it reads the
+//! hook JSON from stdin and takes a provenance-stamped checkpoint. It NEVER
+//! fails the session: any error exits 0 with a note on stderr.
+
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
+use asp_core::journal::Source;
+use asp_core::workspace::CheckpointOpts;
+use asp_core::{Error, ErrorCode, Workspace};
+use serde_json::{json, Value};
+
+/// Tools whose completion should snapshot the tree.
+const FILE_TOOLS: &str = "Write|Edit|MultiEdit|NotebookEdit";
+
+/// Entry point for `asp hook-event`. Reads Claude Code's hook payload from
+/// stdin. Exit code is always 0 — a state layer must never break the session.
+pub fn handle_hook_event() {
+    if let Err(e) = try_handle_hook_event() {
+        eprintln!("asp hook-event: {e} (session unaffected)");
+    }
+}
+
+fn try_handle_hook_event() -> Result<(), Error> {
+    let mut input = String::new();
+    std::io::stdin()
+        .read_to_string(&mut input)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("stdin: {e}")))?;
+    let payload: Value = serde_json::from_str(&input)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("hook payload not JSON: {e}")))?;
+
+    let event = payload
+        .get("hook_event_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tool = payload
+        .get("tool_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let session_id = payload
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let cwd = payload
+        .get("cwd")
+        .and_then(|v| v.as_str())
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .ok_or_else(|| Error::new(ErrorCode::Io, "no cwd in hook payload"))?;
+
+    // Not an asp workspace → silently do nothing (user-scope hooks fire in
+    // every project; that must be free of noise and side effects).
+    let Ok(ws) = Workspace::open(&cwd) else {
+        return Ok(());
+    };
+
+    let message = match event {
+        "PreToolUse" => format!("auto: before {tool}"),
+        _ => format!("auto: after {tool}"),
+    };
+    ws.checkpoint(CheckpointOpts {
+        message: Some(message),
+        source: Some(Source::Hook),
+        session_id,
+        tool: Some(tool.to_string()),
+    })?;
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct SetupReport {
+    pub settings_file: PathBuf,
+    pub mcp_file: Option<PathBuf>,
+    pub hooks_installed: bool,
+    pub mcp_registered: bool,
+    pub removed: bool,
+}
+
+/// Install (or remove) the Claude Code integration.
+pub fn setup_claude(root: &Path, user_scope: bool, remove: bool) -> Result<SetupReport, Error> {
+    let settings_file = if user_scope {
+        home_dir()?.join(".claude").join("settings.json")
+    } else {
+        root.join(".claude").join("settings.json")
+    };
+
+    let mut settings = read_json_file(&settings_file)?.unwrap_or_else(|| json!({}));
+    if remove {
+        remove_our_hooks(&mut settings);
+    } else {
+        install_our_hooks(&mut settings);
+    }
+    write_json_file(&settings_file, &settings)?;
+
+    // MCP registration is project-level (.mcp.json at the workspace root).
+    let mut mcp_file = None;
+    if !user_scope {
+        let path = root.join(".mcp.json");
+        let mut mcp = read_json_file(&path)?.unwrap_or_else(|| json!({}));
+        if remove {
+            if let Some(servers) = mcp.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+                servers.remove("agentspaces");
+            }
+        } else {
+            mcp["mcpServers"]["agentspaces"] = json!({
+                "command": "asp",
+                "args": ["mcp"],
+            });
+        }
+        write_json_file(&path, &mcp)?;
+        mcp_file = Some(path);
+    }
+
+    Ok(SetupReport {
+        settings_file,
+        mcp_registered: mcp_file.is_some() && !remove,
+        mcp_file,
+        hooks_installed: !remove,
+        removed: remove,
+    })
+}
+
+fn hook_command() -> Value {
+    json!({ "type": "command", "command": "asp hook-event", "timeout": 60 })
+}
+
+fn our_groups() -> Vec<(&'static str, Value)> {
+    vec![
+        (
+            "PostToolUse",
+            json!({ "matcher": FILE_TOOLS, "hooks": [hook_command()] }),
+        ),
+        (
+            "PostToolUse",
+            json!({ "matcher": "Bash", "hooks": [hook_command()] }),
+        ),
+        (
+            "PreToolUse",
+            json!({ "matcher": "Bash", "hooks": [hook_command()] }),
+        ),
+    ]
+}
+
+fn is_ours(group: &Value) -> bool {
+    group
+        .get("hooks")
+        .and_then(|h| h.as_array())
+        .map(|hooks| {
+            hooks.iter().any(|h| {
+                h.get("command")
+                    .and_then(|c| c.as_str())
+                    .is_some_and(|c| c.contains("asp hook-event"))
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn install_our_hooks(settings: &mut Value) {
+    if !settings.is_object() {
+        *settings = json!({});
+    }
+    if settings
+        .get("hooks")
+        .map(|h| !h.is_object())
+        .unwrap_or(true)
+    {
+        settings["hooks"] = json!({});
+    }
+    for (event, group) in our_groups() {
+        let arr = settings["hooks"]
+            .as_object_mut()
+            .expect("hooks is object")
+            .entry(event)
+            .or_insert_with(|| json!([]));
+        if !arr.is_array() {
+            *arr = json!([]);
+        }
+        let groups = arr.as_array_mut().expect("event list is array");
+        let same_matcher_ours = |g: &Value| is_ours(g) && g.get("matcher") == group.get("matcher");
+        if !groups.iter().any(same_matcher_ours) {
+            groups.push(group);
+        }
+    }
+}
+
+fn remove_our_hooks(settings: &mut Value) {
+    let Some(hooks) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) else {
+        return;
+    };
+    for (_, list) in hooks.iter_mut() {
+        if let Some(arr) = list.as_array_mut() {
+            arr.retain(|g| !is_ours(g));
+        }
+    }
+    hooks.retain(|_, list| list.as_array().map(|a| !a.is_empty()).unwrap_or(true));
+}
+
+fn read_json_file(path: &Path) -> Result<Option<Value>, Error> {
+    match std::fs::read_to_string(path) {
+        Ok(text) if text.trim().is_empty() => Ok(None),
+        Ok(text) => serde_json::from_str(&text).map(Some).map_err(|e| {
+            Error::new(
+                ErrorCode::Io,
+                format!("{} is not valid JSON: {e}", path.display()),
+            )
+            .with_hint("fix or remove the file, then re-run `asp setup claude`")
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn write_json_file(path: &Path, value: &Value) -> Result<(), Error> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = serde_json::to_string_pretty(value)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("encode: {e}")))?;
+    asp_core::store::atomic_write(path, format!("{text}\n").as_bytes())
+}
+
+fn home_dir() -> Result<PathBuf, Error> {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| Error::new(ErrorCode::Io, "HOME is not set"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_is_idempotent_and_preserves_existing() {
+        let mut settings = json!({
+            "model": "opus",
+            "hooks": {
+                "PostToolUse": [
+                    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "my-linter" }] }
+                ]
+            }
+        });
+        install_our_hooks(&mut settings);
+        install_our_hooks(&mut settings); // twice: no duplicates
+        assert_eq!(settings["model"], "opus", "unrelated keys preserved");
+        let post = settings["hooks"]["PostToolUse"].as_array().unwrap();
+        // user's linter group + our file-tools group + our bash group
+        assert_eq!(post.len(), 3, "{post:?}");
+        assert_eq!(settings["hooks"]["PreToolUse"].as_array().unwrap().len(), 1);
+
+        remove_our_hooks(&mut settings);
+        let post = settings["hooks"]["PostToolUse"].as_array().unwrap();
+        assert_eq!(post.len(), 1, "only the user's own hook remains");
+        assert_eq!(post[0]["hooks"][0]["command"], "my-linter");
+        assert!(settings["hooks"].get("PreToolUse").is_none());
+    }
+}
