@@ -42,34 +42,15 @@
 **PM intent:** The trust-bearing layer. Boring, correct, crash-safe. Everything recoverable with stock git is the product's one-sentence trust model.
 **Done when:** all engine ops have unit+integration tests, crash-recovery test passes, format doc matches implementation.
 
-- **S2.1 Store layout & format doc**
-  - [ ] T2.1.1 `.asp/` sidecar layout: shadow.git, journal, config, format-version; written format doc (docs/design/format.md), sync-ready (content-addressed, conditional-write friendly)
-  - [ ] T2.1.2 Workspace trait: engine ops behind an interface so git-plumbing backend can be swapped (gitoxide/custom CAS later)
-- **S2.2 init / adopt**
-  - [ ] T2.2.1 `init` adopts any dir or existing git repo; never rewrites user history; idempotent; clear errors
-  - [ ] T2.2.2 Ignore semantics: respect .gitignore for *noise* but capture untracked source; `.asp/` and configurable excludes (node_modules, target) — decisions in format doc
-- **S2.3 Checkpoint engine**
-  - [ ] T2.3.1 Snapshot via shadow git (add -A → write-tree → commit-tree), batched, with mtime-index fast path
-  - [ ] T2.3.2 Checkpoint metadata: message, source (manual/hook/mcp), session id, tool, prompt hash
-  - [ ] T2.3.3 Auto-checkpoint debouncing/coalescing (hook storms must not melt the store)
-- **S2.4 Journal**
-  - [ ] T2.4.1 Append-only JSONL journal with per-line checksum + fsync discipline; recovery-on-open (truncate torn tail)
-  - [ ] T2.4.2 Journal ↔ shadow-git cross-reference integrity check (`asp doctor`)
-- **S2.5 Fork**
-  - [ ] T2.5.1 Whole-dir CoW fork (clonefile on macOS; reflink on Linux; copy fallback w/ warning); fork registry; naming scheme
-  - [ ] T2.5.2 Fork metadata: parent checkpoint, created-by, purpose label
-- **S2.6 Timeline: log / undo / restore**
-  - [ ] T2.6.1 Cross-session timeline (journal + shadow log merged view)
-  - [ ] T2.6.2 `undo` / `restore <checkpoint>` with safety checkpoint-before-restore
-- **S2.7 Diff**
-  - [ ] T2.7.1 Checkpoint↔checkpoint and fork↔fork diff (file-level summary + unified text diff)
-  - [ ] T2.7.2 Cross-fork comparison data model (N-way table: files changed, +/-, tests passed marker, duration)
-- **S2.8 Promote / discard**
-  - [ ] T2.8.1 `promote`: land winning fork as ordinary git branch in user repo (or export patch in non-git dirs); never force-push
-  - [ ] T2.8.2 `discard`: delete fork safely (refuse if unpromoted unique work unless --force)
-- **S2.9 Crash safety**
-  - [ ] T2.9.1 Locking (concurrent asp processes), atomic renames for all store mutations
-  - [ ] T2.9.2 Recovery-on-open: detect torn state, self-heal, `asp doctor` repairs
+- **S2.1 Store layout & format doc** ✅ (format.md authoritative; ops behind Workspace API — backend swap = internal refactor)
+- **S2.2 init / adopt** ✅ (guarded, never touches user .git; default derived-state excludes + config overrides)
+- **S2.3 Checkpoint engine** ✅ (no-op skip handles hook storms; provenance metadata: source/session/tool; large-blob CAS sidecar w/ pointer manifests at refs/asp/meta/<seq>)
+- **S2.4 Journal** ✅ (CRC lines, fsync, torn-tail self-heal; mid-file corruption surfaced via doctor, never dropped)
+- **S2.5 Fork** ✅ (clonefile/FICLONE/copy-fallback; registry; fork-of-fork works; CoW independence tested)
+- **S2.6 Timeline** ✅ (linear undo-stack semantics: restore appends safety + post checkpoints; dirty-undo vs clean-undo)
+- **S2.7 Diff** ✅ (checkpoint↔checkpoint, checkpoint↔worktree, N-way fork compare; duration/test markers land with `asp race`, EPIC 3)
+- **S2.8 Promote / discard** ✅ (plumbing-only commit + local fetch; no HEAD moves, no user hooks, no force-push; unpromoted-work guard)
+- **S2.9 Crash safety** ✅ (advisory lock, atomic renames everywhere, doctor detects/repairs torn forks, tampered head, missing CAS blobs — kill -9 torture matrix lands in EPIC 6)
 
 ## EPIC 3 — CLI (`asp`)
 
