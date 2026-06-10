@@ -20,12 +20,19 @@ pub fn serve() -> std::io::Result<()> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    for line in stdin.lock().lines() {
-        let line = line?;
+    let mut reader = stdin.lock();
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        // Byte-level reads: one bad UTF-8 byte must not kill the server.
+        if reader.read_until(b'\n', &mut buf)? == 0 {
+            break;
+        }
+        let line = String::from_utf8_lossy(&buf);
         if line.trim().is_empty() {
             continue;
         }
-        let msg: Value = match serde_json::from_str(&line) {
+        let msg: Value = match serde_json::from_str(line.trim_end()) {
             Ok(v) => v,
             Err(e) => {
                 let resp = json!({

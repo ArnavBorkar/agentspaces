@@ -94,9 +94,33 @@ pub struct ForkRecord {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ForkStatus {
+    /// Registered before the clone starts; flipped to Active after the
+    /// post-clone identity fixup. A Pending entry that persists marks a torn
+    /// clone — deterministic, so doctor can clean it without heuristics.
+    Pending,
     Active,
     Promoted,
     Discarded,
+}
+
+/// Validate a store-supplied relative path before joining it onto the
+/// workspace root. Rejects absolute paths and any non-normal component
+/// (`..`, `.`, prefixes) — a corrupt or malicious `.asp` store must never
+/// be able to direct writes or deletes outside the workspace.
+pub fn safe_rel_path(root: &Path, rel: &str) -> Result<PathBuf> {
+    use std::path::Component;
+    let p = Path::new(rel);
+    let valid = !rel.is_empty()
+        && !p.is_absolute()
+        && p.components().all(|c| matches!(c, Component::Normal(_)));
+    if !valid {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("unsafe path in workspace store: {rel:?}"),
+        )
+        .with_hint("the .asp store may be corrupt or tampered with; run `asp doctor`"));
+    }
+    Ok(root.join(p))
 }
 
 /// Walk up from `start` to find a workspace root (a dir containing `.asp`).
@@ -162,6 +186,22 @@ pub struct StoreLock {
 }
 
 impl StoreLock {
+    /// Acquire with a short retry — auto-checkpoint hooks race each other
+    /// and must not silently drop work on transient contention.
+    pub fn acquire_with_retry(layout: &Layout) -> Result<Self> {
+        let mut last = None;
+        for _ in 0..5 {
+            match Self::acquire(layout) {
+                Ok(lock) => return Ok(lock),
+                Err(e) => {
+                    last = Some(e);
+                    std::thread::sleep(std::time::Duration::from_millis(120));
+                }
+            }
+        }
+        Err(last.expect("at least one attempt"))
+    }
+
     pub fn acquire(layout: &Layout) -> Result<Self> {
         let file = File::options()
             .create(true)

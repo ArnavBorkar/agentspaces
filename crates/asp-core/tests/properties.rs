@@ -34,16 +34,23 @@ proptest! {
         std::fs::write(journal.path(), &bytes[..cut]).unwrap();
 
         let report = journal.read().unwrap();
-        prop_assert!(report.corrupt_lines.is_empty(), "tail damage must self-heal");
+        prop_assert!(
+            report.corrupt_lines.is_empty(),
+            "tail damage is torn_tail, never corrupt_lines"
+        );
         // The recovered entries are exactly a prefix of what was written.
         let recovered: Vec<u64> = report.entries.iter().filter_map(|e| e.seq).collect();
         prop_assert!(recovered.len() <= seqs.len());
         prop_assert_eq!(&seqs[..recovered.len()], &recovered[..]);
-        // And the journal accepts appends afterwards.
+        // heal() repairs the tail; the journal accepts appends afterwards
+        // and reads back clean.
+        journal.heal().unwrap();
         let mut e = Entry::new(Op::Checkpoint);
         e.seq = Some(9999);
         journal.append(&e).unwrap();
         let again = journal.read().unwrap();
+        prop_assert!(!again.torn_tail);
+        prop_assert!(again.corrupt_lines.is_empty());
         prop_assert_eq!(again.entries.last().unwrap().seq, Some(9999));
     }
 

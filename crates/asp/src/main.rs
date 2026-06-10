@@ -541,7 +541,7 @@ fn run(cli: Cli) -> Result<(), Error> {
                 );
                 println!(
                     "  review it: {}   merge it: {}",
-                    ui::cyan(&format!("git diff main...{}", report.branch)),
+                    ui::cyan(&format!("git diff HEAD...{}", report.branch)),
                     ui::cyan(&format!("git merge {}", report.branch))
                 );
             }
@@ -656,9 +656,16 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             if !fix && findings.iter().any(|f| !f.fixed) {
                 println!(
-                    "\nrun {} to apply safe repairs",
+                    "\nrun {} to apply safe repairs (not every finding is auto-repairable)",
                     ui::cyan("asp doctor --fix")
                 );
+            }
+            // Unrepaired error-severity findings: nonzero exit for scripts/CI.
+            if findings
+                .iter()
+                .any(|f| f.severity == Severity::Error && !f.fixed)
+            {
+                std::process::exit(1);
             }
             Ok(())
         }

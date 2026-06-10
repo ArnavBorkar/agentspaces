@@ -93,30 +93,40 @@ pub fn setup_claude(root: &Path, user_scope: bool, remove: bool) -> Result<Setup
         root.join(".claude").join("settings.json")
     };
 
-    let mut settings = read_json_file(&settings_file)?.unwrap_or_else(|| json!({}));
-    if remove {
-        remove_our_hooks(&mut settings);
+    let existing_settings = read_json_file(&settings_file)?;
+    if remove && existing_settings.is_none() {
+        // Nothing to remove; do not create files in untouched projects.
     } else {
-        install_our_hooks(&mut settings);
+        let mut settings = existing_settings.unwrap_or_else(|| json!({}));
+        if remove {
+            remove_our_hooks(&mut settings);
+        } else {
+            install_our_hooks(&mut settings);
+        }
+        write_json_file(&settings_file, &settings)?;
     }
-    write_json_file(&settings_file, &settings)?;
 
     // MCP registration is project-level (.mcp.json at the workspace root).
     let mut mcp_file = None;
     if !user_scope {
         let path = root.join(".mcp.json");
-        let mut mcp = read_json_file(&path)?.unwrap_or_else(|| json!({}));
-        if remove {
-            if let Some(servers) = mcp.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
-                servers.remove("agentspaces");
-            }
+        let existing_mcp = read_json_file(&path)?;
+        if remove && existing_mcp.is_none() {
+            // Nothing to remove; leave the project untouched.
         } else {
-            mcp["mcpServers"]["agentspaces"] = json!({
-                "command": "asp",
-                "args": ["mcp"],
-            });
+            let mut mcp = existing_mcp.unwrap_or_else(|| json!({}));
+            if remove {
+                if let Some(servers) = mcp.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+                    servers.remove("agentspaces");
+                }
+            } else {
+                mcp["mcpServers"]["agentspaces"] = json!({
+                    "command": "asp",
+                    "args": ["mcp"],
+                });
+            }
+            write_json_file(&path, &mcp)?;
         }
-        write_json_file(&path, &mcp)?;
         mcp_file = Some(path);
     }
 

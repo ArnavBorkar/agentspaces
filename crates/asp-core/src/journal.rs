@@ -86,9 +86,12 @@ pub struct Journal {
 #[derive(Debug, Default)]
 pub struct ReadReport {
     pub entries: Vec<Entry>,
-    /// Lines that failed CRC/parse, with 1-based line numbers (tail-torn lines
-    /// are auto-truncated on open and do NOT appear here).
+    /// Lines that failed CRC/parse, with 1-based line numbers. A torn tail
+    /// (crash mid-append) is reported via `torn_tail`, not here.
     pub corrupt_lines: Vec<usize>,
+    /// A final invalid region consistent with a crash mid-append. Repaired
+    /// by `heal()` — which must only run while holding the store lock.
+    pub torn_tail: bool,
 }
 
 impl Journal {
@@ -117,7 +120,8 @@ impl Journal {
         Ok(())
     }
 
-    /// Read all entries, auto-truncating a torn tail line (crash recovery).
+    /// Read all entries. Side-effect free: a torn tail is reported, not
+    /// repaired (see `heal`), so lock-free readers can never race a writer.
     pub fn read(&self) -> Result<ReadReport> {
         let bytes = match std::fs::read(&self.path) {
             Ok(b) => b,
@@ -151,17 +155,50 @@ impl Journal {
             offset = end + 1;
         }
 
-        // A single bad region at the very end = torn tail from a crash:
-        // self-heal by truncating to the last valid prefix.
-        let tail_torn = bad.len() == 1 && bad[0].1 >= valid_prefix_len;
-        if tail_torn && bad[0].1 == valid_prefix_len {
-            let f = OpenOptions::new().write(true).open(&self.path)?;
-            f.set_len(valid_prefix_len as u64)?;
-            f.sync_data()?;
+        // A single bad region at the very end = torn tail from a crash.
+        let tail_torn = bad.len() == 1 && bad[0].1 == valid_prefix_len;
+        if tail_torn {
+            report.torn_tail = true;
         } else {
             report.corrupt_lines = bad.into_iter().map(|(n, _)| n).collect();
         }
         Ok(report)
+    }
+
+    /// Truncate a torn tail back to the last valid prefix. Callers MUST hold
+    /// the workspace store lock — truncating concurrently with a writer's
+    /// append could destroy a valid in-flight entry.
+    pub fn heal(&self) -> Result<()> {
+        let bytes = match std::fs::read(&self.path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut valid_prefix_len = 0usize;
+        let mut offset = 0usize;
+        while offset < bytes.len() {
+            let Some(rel) = bytes[offset..].iter().position(|&b| b == b'\n') else {
+                break;
+            };
+            let end = offset + rel;
+            if parse_line(&bytes[offset..end]).is_some() {
+                valid_prefix_len = end + 1;
+                offset = end + 1;
+            } else {
+                break;
+            }
+        }
+        if valid_prefix_len < bytes.len() {
+            // Only truncate when everything past the valid prefix is a single
+            // torn region (no later valid lines — those need doctor, not us).
+            let report = self.read()?;
+            if report.torn_tail {
+                let f = OpenOptions::new().write(true).open(&self.path)?;
+                f.set_len(valid_prefix_len as u64)?;
+                f.sync_data()?;
+            }
+        }
+        Ok(())
     }
 
     /// Highest checkpoint seq recorded, if any.
@@ -215,8 +252,12 @@ mod tests {
         }
         let r = j.read().unwrap();
         assert_eq!(r.entries.len(), 2);
-        assert!(r.corrupt_lines.is_empty(), "torn tail should self-heal");
-        // File is truncated back to the valid prefix; a new append works.
+        assert!(r.corrupt_lines.is_empty());
+        assert!(r.torn_tail, "torn tail reported, not silently dropped");
+        // read() is side-effect free; heal() repairs under the store lock.
+        j.heal().unwrap();
+        let r = j.read().unwrap();
+        assert!(!r.torn_tail);
         j.append(&Entry::new(Op::Checkpoint)).unwrap();
         assert_eq!(j.read().unwrap().entries.len(), 3);
     }

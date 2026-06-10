@@ -97,20 +97,42 @@ pub fn mtime_ms(md: &std::fs::Metadata) -> i64 {
 }
 
 /// Ensure `file` exists in the CAS dir; returns its hash. Dedupes by content.
+/// Clone FIRST, then hash the clone: a concurrent writer can never poison an
+/// immutable CAS entry (the clone is an atomic content snapshot on CoW
+/// filesystems, and on plain copy the hash still matches what was stored).
 pub fn store_in_cas(cas_dir: &Path, file: &Path) -> Result<BigFileEntry> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+    // Quick-check stamp from BEFORE the snapshot: if the file is mutated
+    // around now, a later stat pass sees a mismatch and re-stores.
     let md = file.metadata()?;
-    let hash = hash_file(file)?;
-    let dst = cas_dir.join(&hash);
-    if !dst.exists() {
-        std::fs::create_dir_all(cas_dir)?;
-        clone_file(file, &dst)?;
+    std::fs::create_dir_all(cas_dir)?;
+    let tmp = cas_dir.join(format!(
+        ".tmp-{}-{}",
+        std::process::id(),
+        TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    clone_file(file, &tmp)?;
+    let result = (|| -> Result<BigFileEntry> {
+        let hash = hash_file(&tmp)?;
+        let size = tmp.metadata()?.len();
+        let dst = cas_dir.join(&hash);
+        if dst.exists() {
+            std::fs::remove_file(&tmp)?;
+        } else {
+            std::fs::rename(&tmp, &dst)?;
+        }
+        Ok(BigFileEntry {
+            blake3: hash,
+            size,
+            mtime_ms: mtime_ms(&md),
+            pointer_oid: None,
+        })
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
-    Ok(BigFileEntry {
-        blake3: hash,
-        size: md.len(),
-        mtime_ms: mtime_ms(&md),
-        pointer_oid: None,
-    })
+    result
 }
 
 /// Materialize a CAS entry at `dst` (replacing whatever is there).

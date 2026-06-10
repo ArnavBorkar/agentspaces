@@ -287,6 +287,10 @@ fn promote_lands_branch_in_user_repo() {
     // and the user's HEAD/worktree were not touched.
     let tree = git(&["ls-tree", "-r", "--name-only", "asp/winner"]);
     assert!(tree.contains("src/new_module.rs"));
+    assert!(
+        !tree.contains(".asp"),
+        "promote must never leak the .asp store into the branch:\n{tree}"
+    );
     assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
     let show = git(&["show", "asp/winner:src/main.rs"]);
     assert!(show.contains("the good version"));
@@ -480,7 +484,8 @@ fn doctor_detects_and_repairs() {
     ws.shadow()
         .run(&["update-ref", "refs/asp/head", &c1_commit])
         .unwrap();
-    // Damage 3: torn fork clone (dir with our id, never fixed up).
+    // Damage 3: an unregistered look-alike directory (e.g. the user's own
+    // `cp -r proj proj@torn`). Doctor must REPORT it and never delete it.
     let torn = root.parent().unwrap().join("proj@torn");
     asp_core::fork::clone_tree(&root, &torn).unwrap();
 
@@ -490,16 +495,213 @@ fn doctor_detects_and_repairs() {
 
     let findings = ws.doctor(true).unwrap();
     assert!(
-        findings.iter().filter(|f| f.fixed).count() >= 3,
+        findings.iter().filter(|f| f.fixed).count() >= 2,
         "{findings:?}"
     );
+    assert!(
+        torn.exists(),
+        "doctor must never delete a directory it can't prove it created"
+    );
 
-    // Repairs hold: clean on re-run.
+    // Repairs hold: only the info-level look-alike note remains.
     let after = ws.doctor(false).unwrap();
-    assert!(after.is_empty(), "{after:?}");
-    assert!(!torn.exists());
+    assert!(
+        after.iter().all(|f| f.severity == Severity::Info),
+        "{after:?}"
+    );
     let _ = c2;
     assert!(!findings
         .iter()
         .any(|f| f.severity == Severity::Error && !f.fixed));
+}
+
+#[test]
+fn big_file_shrink_below_threshold_round_trip() {
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let big: Vec<u8> = (0..2 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+    write_bytes(&root, "data.log", &big);
+    let c1 = cp(&ws, "big").unwrap();
+
+    // Shrink below the threshold — an ordinary, everyday operation.
+    std::fs::write(root.join("data.log"), b"tiny now\n").unwrap();
+    let c2 = cp(&ws, "shrunk").expect("shrink is a real change");
+
+    // The shrunken file must be IN the checkpoint tree with its new content.
+    let listed = ws
+        .shadow()
+        .run(&["ls-tree", "-r", "--name-only", &c2.commit])
+        .unwrap();
+    assert!(
+        listed.contains("data.log"),
+        "shrunken file recorded as deleted!"
+    );
+    let content = ws
+        .shadow()
+        .run(&["cat-file", "-p", &format!("{}:data.log", c2.commit)])
+        .unwrap();
+    assert_eq!(content, "tiny now");
+
+    // Restoring the shrink checkpoint must keep the file on disk...
+    ws.restore(&c2.seq.to_string(), &[], None).unwrap();
+    assert_eq!(read(&root, "data.log"), "tiny now\n");
+    // ...and restoring the big version brings the bytes back.
+    ws.restore(&c1.seq.to_string(), &[], None).unwrap();
+    assert_eq!(std::fs::read(root.join("data.log")).unwrap(), big);
+}
+
+#[test]
+fn restore_rejects_unsafe_store_paths() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    let c1 = cp(&ws, "base").unwrap();
+
+    // Tamper: a malicious pointer manifest aiming outside the workspace.
+    let evil = serde_json::json!({
+        "v": 1,
+        "pointers": [{ "path": "../escape.txt", "blake3": "ab".repeat(32), "size": 4 }]
+    })
+    .to_string();
+    let oid = ws
+        .shadow()
+        .run_with_stdin(&["hash-object", "-w", "--stdin"], &evil)
+        .unwrap();
+    ws.shadow()
+        .run(&["update-ref", &format!("refs/asp/meta/{}", c1.seq), &oid])
+        .unwrap();
+
+    let err = ws.restore(&c1.seq.to_string(), &[], None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::StoreCorrupt, "{err}");
+    assert!(!root.parent().unwrap().join("escape.txt").exists());
+}
+
+#[test]
+fn undo_walks_back_through_history() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    write(&root, "src/main.rs", "v1\n");
+    cp(&ws, "one").unwrap();
+    write(&root, "src/main.rs", "v2\n");
+    cp(&ws, "two").unwrap();
+    write(&root, "src/main.rs", "v3\n");
+    cp(&ws, "three").unwrap();
+
+    ws.undo(None).unwrap();
+    assert_eq!(read(&root, "src/main.rs"), "v2\n", "first undo → v2");
+    ws.undo(None).unwrap();
+    assert_eq!(
+        read(&root, "src/main.rs"),
+        "v1\n",
+        "second undo walks to v1, not back to v3"
+    );
+    let err = ws.undo(None).unwrap_err();
+    assert_eq!(
+        err.code,
+        ErrorCode::NothingToDo,
+        "bottom of history reached"
+    );
+}
+
+#[test]
+fn status_reports_big_file_edits() {
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    write_bytes(&root, "model.bin", &vec![9u8; 2 * 1024 * 1024]);
+    cp(&ws, "big").unwrap();
+    let st = ws.status().unwrap();
+    assert_eq!(st.dirty_files + st.untracked_files + st.deleted_files, 0);
+
+    // Edit the big file: status must notice even though git can't see it.
+    write_bytes(&root, "model.bin", &vec![8u8; 3 * 1024 * 1024]);
+    let st = ws.status().unwrap();
+    assert!(st.dirty_files >= 1, "{st:?}");
+}
+
+#[test]
+fn pointer_residue_self_heals() {
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    let big: Vec<u8> = (0..2 * 1024 * 1024u32).map(|i| (i % 13) as u8).collect();
+    write_bytes(&root, "asset.bin", &big);
+    cp(&ws, "big").unwrap();
+
+    // Simulate crash residue: the real file replaced by its pointer JSON.
+    let bf = asp_core::blobs::load_bigfiles(&root.join(".asp/bigfiles.json")).unwrap();
+    let entry = bf.files.get("asset.bin").unwrap();
+    std::fs::write(root.join("asset.bin"), asp_core::blobs::pointer_json(entry)).unwrap();
+
+    // The next capture heals the file from the CAS instead of recording
+    // 104 bytes of JSON as the asset.
+    assert!(
+        cp(&ws, "noop-after-heal").is_none(),
+        "healed → no content change"
+    );
+    assert_eq!(std::fs::read(root.join("asset.bin")).unwrap(), big);
+}
+
+#[test]
+fn doctor_cleans_pending_forks_only() {
+    use asp_core::store::{ForkRegistry, ForkStatus};
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("real".into()), None).unwrap();
+
+    // Simulate a torn clone: flip the record back to Pending.
+    let reg_path = root.join(".asp/forks.json");
+    let mut reg: ForkRegistry = serde_json::from_slice(&std::fs::read(&reg_path).unwrap()).unwrap();
+    reg.forks[0].status = ForkStatus::Pending;
+    std::fs::write(&reg_path, serde_json::to_vec(&reg).unwrap()).unwrap();
+
+    // A user's innocent look-alike directory next door.
+    let innocent = root.parent().unwrap().join("proj@backup");
+    std::fs::create_dir_all(innocent.join(".asp")).unwrap();
+    std::fs::write(innocent.join("precious.txt"), "do not delete\n").unwrap();
+
+    let findings = ws.doctor(true).unwrap();
+    assert!(findings.iter().any(|f| f.fixed), "{findings:?}");
+    assert!(!fork.path.exists(), "torn (pending) clone removed");
+    assert!(
+        innocent.join("precious.txt").exists(),
+        "doctor must NEVER delete directories it can't prove it created"
+    );
+    let reg: ForkRegistry = serde_json::from_slice(&std::fs::read(&reg_path).unwrap()).unwrap();
+    assert!(reg.forks.iter().all(|f| f.status != ForkStatus::Pending));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn non_utf8_filenames_are_captured() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    let weird = OsString::from_vec(b"caf\xe9.txt".to_vec());
+    std::fs::write(root.join(&weird), "latin-1 name\n").unwrap();
+    let c = cp(&ws, "non-utf8").expect("non-UTF-8 names must not break capture");
+    assert!(c.files_changed >= 1);
+    // And subsequent checkpoints still work.
+    write(&root, "src/main.rs", "after\n");
+    cp(&ws, "after").unwrap();
 }

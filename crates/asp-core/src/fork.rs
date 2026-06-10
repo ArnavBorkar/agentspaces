@@ -84,9 +84,6 @@ fn platform_clone(src: &Path, dst: &Path) -> Result<CloneMethod> {
 fn reflink_walk(src: &Path, dst: &Path, any_copied: &mut bool) -> Result<()> {
     use std::os::fd::AsRawFd;
     std::fs::create_dir(dst)?;
-    if let Ok(md) = std::fs::metadata(src) {
-        let _ = std::fs::set_permissions(dst, md.permissions());
-    }
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let s = entry.path();
@@ -112,6 +109,11 @@ fn reflink_walk(src: &Path, dst: &Path, any_copied: &mut bool) -> Result<()> {
         }
         // Sockets/FIFOs are skipped: they are runtime state, not files.
     }
+    // Directory permissions are applied AFTER populating children — a
+    // read-only source dir must not block writes into its clone mid-walk.
+    if let Ok(md) = std::fs::metadata(src) {
+        let _ = std::fs::set_permissions(dst, md.permissions());
+    }
     Ok(())
 }
 
@@ -123,9 +125,6 @@ fn platform_clone(src: &Path, dst: &Path) -> Result<CloneMethod> {
 #[allow(dead_code)]
 fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir(dst)?;
-    if let Ok(md) = std::fs::metadata(src) {
-        let _ = std::fs::set_permissions(dst, md.permissions());
-    }
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let s = entry.path();
@@ -142,6 +141,9 @@ fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
         } else if ft.is_file() {
             std::fs::copy(&s, &d)?;
         }
+    }
+    if let Ok(md) = std::fs::metadata(src) {
+        let _ = std::fs::set_permissions(dst, md.permissions());
     }
     Ok(())
 }

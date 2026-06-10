@@ -121,6 +121,9 @@ struct ScanResult {
     /// staged deletions after a restore's read-tree — need no `git add`).
     changed: Vec<(String, bool)>,
     bigfiles: BigFiles,
+    /// Paths with non-UTF-8 names exist (legal on Linux): they cannot ride
+    /// a UTF-8 pathspec, so staging falls back to a full `git add -A .`.
+    force_full_scan: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -136,6 +139,16 @@ impl Workspace {
 
     /// Open the workspace containing `start` (walks up like git does).
     pub fn open(start: &Path) -> Result<Self> {
+        // Relative starts (-C dir, MCP `directory`) must become absolute:
+        // the shadow git env requires cwd-independent paths.
+        let canonical;
+        let start = match start.canonicalize() {
+            Ok(c) => {
+                canonical = c;
+                canonical.as_path()
+            }
+            Err(_) => start,
+        };
         let root = find_root(start).ok_or_else(|| {
             Error::new(
                 ErrorCode::NotAWorkspace,
@@ -181,6 +194,7 @@ impl Workspace {
 
     /// Initialize a new workspace in `root` (adopts existing content as-is).
     pub fn init(root: &Path, label: Option<String>) -> Result<Self> {
+        crate::gitx::ensure_git_version()?;
         let root = root.canonicalize().map_err(|e| {
             Error::new(
                 ErrorCode::Io,
@@ -301,6 +315,18 @@ impl Workspace {
                 modified += 1;
             }
         }
+        // Managed big files are invisible to git status — stat-check them so
+        // an edited 2GB asset still reads as a dirty workspace.
+        for (path, rec) in &bigfiles.files {
+            match self.layout.root.join(path).metadata() {
+                Ok(md) if md.is_file() => {
+                    if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+                        modified += 1;
+                    }
+                }
+                _ => deleted += 1,
+            }
+        }
         let last = self.last_checkpoint()?;
         let registry = self.fork_registry()?;
         Ok(StatusReport {
@@ -339,7 +365,9 @@ impl Workspace {
     /// Capture the current state. Returns Ok(None) when nothing changed
     /// (no empty checkpoints — hook storms stay cheap).
     pub fn checkpoint(&self, opts: CheckpointOpts) -> Result<Option<CheckpointInfo>> {
-        let _lock = StoreLock::acquire(&self.layout)?;
+        // Retry: concurrent auto-checkpoint hooks must not drop work.
+        let _lock = StoreLock::acquire_with_retry(&self.layout)?;
+        self.journal.heal()?;
         self.checkpoint_locked(opts)
     }
 
@@ -431,7 +459,11 @@ impl Workspace {
     /// paths are removed from the index afterwards so the next capture skips
     /// them (untracked + excluded). Returns the tree oid + big-file set.
     fn stage_tree(&self) -> Result<(String, BigFiles)> {
-        let ScanResult { changed, bigfiles } = self.scan_changes()?;
+        let ScanResult {
+            changed,
+            bigfiles,
+            force_full_scan,
+        } = self.scan_changes()?;
 
         let mut excludes = self.config.shadow_excludes();
         excludes.push("# --- asp generated: large-blob sidecar ---".to_string());
@@ -444,7 +476,7 @@ impl Workspace {
         // working state exactly (the index deliberately lacks pointer paths,
         // so we must not write-tree here).
         let head = self.shadow.rev_parse(HEAD_REF)?;
-        if changed.is_empty() {
+        if changed.is_empty() && !force_full_scan {
             if let Some(ref h) = head {
                 return Ok((self.shadow.tree_of(h)?, bigfiles));
             }
@@ -458,7 +490,7 @@ impl Workspace {
             .filter(|(p, needs_add)| *needs_add && !bigfiles.files.contains_key(p.as_str()))
             .map(|(p, _)| p.as_str())
             .collect();
-        if changed.len() > FULL_SCAN_THRESHOLD {
+        if force_full_scan || changed.len() > FULL_SCAN_THRESHOLD {
             self.shadow.run(&["add", "-A", "."])?;
         } else if !to_add.is_empty() {
             self.shadow.run_with_stdin(
@@ -534,6 +566,7 @@ impl Workspace {
             .shadow
             .run_raw(&["status", "--porcelain", "-z", "-uall"])?;
         let mut changed: Vec<(String, bool)> = Vec::new();
+        let mut force_full_scan = false;
         let mut iter = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
         while let Some(entry) = iter.next() {
             if entry.len() < 4 {
@@ -543,7 +576,15 @@ impl Workspace {
             // Y != ' ' means the worktree differs from the index; '??' is
             // untracked. Everything else is already staged in the index.
             let needs_add = xy == b"??" || xy[1] != b' ';
-            let path = String::from_utf8_lossy(&entry[3..]).to_string();
+            let Ok(path) = std::str::from_utf8(&entry[3..]).map(str::to_string) else {
+                // Non-UTF-8 filename: git itself handles the raw bytes via a
+                // full-tree add; it just can't ride our pathspec.
+                force_full_scan = true;
+                if xy.contains(&b'R') || xy.contains(&b'C') {
+                    iter.next();
+                }
+                continue;
+            };
             if xy.contains(&b'R') || xy.contains(&b'C') {
                 // Rename/copy: the following record is the source path; its
                 // staged deletion is already in the index.
@@ -582,7 +623,7 @@ impl Workspace {
             // those is a real change that must defeat the no-op fast path.
             let known: Vec<String> = bf.files.keys().cloned().collect();
             for path in known {
-                let abs = self.layout.root.join(&path);
+                let abs = crate::store::safe_rel_path(&self.layout.root, &path)?;
                 match abs.metadata() {
                     Ok(md) if md.is_file() && md.len() >= threshold => {
                         let rec = &bf.files[&path];
@@ -592,6 +633,39 @@ impl Workspace {
                             bf_changed = true;
                             changed.push((path, false));
                         }
+                    }
+                    Ok(md) if md.is_file() => {
+                        // Small file where a big one should be. If it is a
+                        // pointer JSON left by a crash between checkout and
+                        // CAS materialization, self-heal from the CAS.
+                        if md.len() < 4096 {
+                            if let Ok(bytes) = std::fs::read(&abs) {
+                                if let Some(ptr) = blobs::parse_pointer(&bytes) {
+                                    if self.layout.blobs().join(&ptr.blake3).exists() {
+                                        blobs::restore_from_cas(
+                                            &self.layout.blobs(),
+                                            &ptr.blake3,
+                                            &abs,
+                                        )?;
+                                        let md2 = abs.metadata()?;
+                                        if let Some(rec) = bf.files.get_mut(&path) {
+                                            rec.blake3 = ptr.blake3;
+                                            rec.size = ptr.size;
+                                            rec.mtime_ms = blobs::mtime_ms(&md2);
+                                            rec.pointer_oid = None;
+                                        }
+                                        bf_changed = true;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        // Genuinely shrunk below the threshold: it goes back
+                        // to being an ordinary git blob — STAGE it, or the
+                        // checkpoint would record a deletion of a live file.
+                        bf.files.remove(&path);
+                        bf_changed = true;
+                        changed.push((path, true));
                     }
                     _ => {
                         bf.files.remove(&path);
@@ -608,6 +682,7 @@ impl Workspace {
         Ok(ScanResult {
             changed,
             bigfiles: bf,
+            force_full_scan,
         })
     }
 
@@ -715,7 +790,24 @@ impl Workspace {
         source: Option<Source>,
     ) -> Result<RestoreReport> {
         let _lock = StoreLock::acquire(&self.layout)?;
+        self.journal.heal()?;
         let (target_seq, target_commit) = self.resolve_checkpoint(spec)?;
+
+        // Validate targeted paths up front — a friendly error beats raw git.
+        for p in paths {
+            let listed = self
+                .shadow
+                .run(&["ls-tree", "--name-only", &target_commit, "--", p])?;
+            if listed.is_empty() {
+                return Err(Error::new(
+                    ErrorCode::CheckpointNotFound,
+                    format!("path '{p}' does not exist in checkpoint #{target_seq}"),
+                )
+                .with_hint(format!(
+                    "see what that checkpoint contains: asp diff {target_seq}"
+                )));
+            }
+        }
 
         let safety = self.checkpoint_locked(CheckpointOpts {
             message: Some(format!("auto: before restore to #{target_seq}")),
@@ -750,10 +842,11 @@ impl Workspace {
             let mut deleted = 0u64;
             let mut parts = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
             while let (Some(_status), Some(path)) = (parts.next(), parts.next()) {
-                let p = self
-                    .layout
-                    .root
-                    .join(String::from_utf8_lossy(path).as_ref());
+                // Store-supplied path: never let it escape the workspace.
+                let p = crate::store::safe_rel_path(
+                    &self.layout.root,
+                    String::from_utf8_lossy(path).as_ref(),
+                )?;
                 if std::fs::remove_file(&p).is_ok() {
                     deleted += 1;
                     // Prune now-empty parent dirs up to the root.
@@ -775,7 +868,7 @@ impl Workspace {
                     files: Default::default(),
                 };
                 for ptr in &manifest.pointers {
-                    let abs = self.layout.root.join(&ptr.path);
+                    let abs = crate::store::safe_rel_path(&self.layout.root, &ptr.path)?;
                     blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
                     self.shadow
                         .run(&["update-index", "--force-remove", "--", &ptr.path])?;
@@ -821,15 +914,17 @@ impl Workspace {
                 let bf_path = blobs::bigfiles_path(&self.layout.asp);
                 let mut bf = blobs::load_bigfiles(&bf_path)?;
                 for ptr in manifest.pointers.iter().filter(|p| paths.contains(&p.path)) {
-                    let abs = self.layout.root.join(&ptr.path);
+                    let abs = crate::store::safe_rel_path(&self.layout.root, &ptr.path)?;
                     blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
-                    let md = abs.metadata()?;
+                    // mtime_ms: 0 marks the entry stale so the next capture
+                    // re-stats it and recomputes the pointer — otherwise the
+                    // no-op fast path could record the wrong tree.
                     bf.files.insert(
                         ptr.path.clone(),
                         crate::blobs::BigFileEntry {
                             blake3: ptr.blake3.clone(),
                             size: ptr.size,
-                            mtime_ms: blobs::mtime_ms(&md),
+                            mtime_ms: 0,
                             pointer_oid: None,
                         },
                     );
@@ -843,12 +938,23 @@ impl Workspace {
 
         // Append a checkpoint recording the restored state, keeping the
         // timeline linear (undo-stack semantics: "where we are now" is
-        // always the latest checkpoint).
-        let post = self.checkpoint_locked(CheckpointOpts {
-            message: Some(format!("auto: state after restore to #{target_seq}")),
-            source: source.clone(),
-            ..Default::default()
-        })?;
+        // always the latest checkpoint). Full restores commit the TARGET's
+        // tree deterministically — scanning could miss big-file-only deltas
+        // (their paths are excluded from git status by design).
+        let post = if paths.is_empty() {
+            self.checkpoint_from_commit(
+                &target_commit,
+                target_seq,
+                format!("auto: state after restore to #{target_seq}"),
+                source.clone(),
+            )?
+        } else {
+            self.checkpoint_locked(CheckpointOpts {
+                message: Some(format!("auto: state after restore to #{target_seq}")),
+                source: source.clone(),
+                ..Default::default()
+            })?
+        };
 
         let mut entry = Entry::new(Op::Restore);
         entry.source = source;
@@ -870,21 +976,101 @@ impl Workspace {
         })
     }
 
-    /// Undo: if the tree is dirty, revert to the last checkpoint; if clean,
-    /// step back one checkpoint.
+    /// Record a checkpoint whose tree is exactly `source_commit`'s tree
+    /// (no scanning). Copies the source checkpoint's pointer manifest so
+    /// restores of the new checkpoint materialize big files correctly.
+    fn checkpoint_from_commit(
+        &self,
+        source_commit: &str,
+        source_seq: u64,
+        message: String,
+        source: Option<Source>,
+    ) -> Result<Option<CheckpointInfo>> {
+        let t0 = Instant::now();
+        let tree = self.shadow.tree_of(source_commit)?;
+        let parent = self.shadow.rev_parse(HEAD_REF)?;
+        if let Some(ref p) = parent {
+            if self.shadow.tree_of(p)? == tree {
+                return Ok(None);
+            }
+        }
+        let commit = self
+            .shadow
+            .commit_tree(&tree, parent.as_deref(), &message)?;
+        let seq = self.next_seq()?;
+        self.shadow
+            .update_ref(&format!("{CHECKPOINT_REF_PREFIX}{seq}"), &commit)?;
+        if let Some(manifest_oid) = self
+            .shadow
+            .rev_parse_any(&format!("{META_REF_PREFIX}{source_seq}"))?
+        {
+            self.shadow
+                .update_ref(&format!("{META_REF_PREFIX}{seq}"), &manifest_oid)?;
+        }
+        let files_changed = match parent {
+            Some(ref p) => self.count_changed(p, &commit)?,
+            None => 0,
+        };
+        let mut entry = Entry::new(Op::Checkpoint);
+        entry.seq = Some(seq);
+        entry.commit = Some(commit.clone());
+        entry.source = source;
+        entry.message = Some(message.clone());
+        entry.files_changed = Some(files_changed);
+        entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
+        self.journal.append(&entry)?;
+        self.shadow.update_ref(HEAD_REF, &commit)?;
+        Ok(Some(CheckpointInfo {
+            seq,
+            commit,
+            files_changed,
+            duration_ms: t0.elapsed().as_millis() as u64,
+            message,
+        }))
+    }
+
+    /// Undo: if the tree is dirty, revert to the current position; if clean,
+    /// step back one checkpoint from the current position. The position
+    /// follows restores — repeated undo WALKS BACK through history instead
+    /// of ping-ponging between the last two states.
     pub fn undo(&self, source: Option<Source>) -> Result<RestoreReport> {
         let refs = self.checkpoint_refs()?;
         let latest = *refs.keys().next_back().ok_or_else(|| {
             Error::new(ErrorCode::NothingToDo, "no checkpoints exist yet")
                 .with_hint("run `asp checkpoint` first — undo needs a point to return to")
         })?;
+
+        // Current position: normally the latest checkpoint, but if the most
+        // recent state change was a restore (e.g. a previous undo), we are
+        // AT its target — stepping back must continue from there.
+        let mut position = latest;
+        let entries = self.journal.read()?.entries;
+        if let Some(last_restore) = entries.iter().rev().find(|e| e.op == Op::Restore) {
+            let post_seq = last_restore
+                .detail
+                .as_ref()
+                .and_then(|d| d.get("post_seq"))
+                .and_then(|v| v.as_u64());
+            let target_seq = last_restore
+                .detail
+                .as_ref()
+                .and_then(|d| d.get("target_seq"))
+                .and_then(|v| v.as_u64());
+            if let (Some(post), Some(target)) = (post_seq, target_seq) {
+                // No checkpoints after the restore's post marker → still there.
+                if latest <= post {
+                    position = target;
+                }
+            }
+        }
+
         let st = self.status()?;
         let dirty = st.dirty_files + st.untracked_files + st.deleted_files > 0;
         if dirty {
-            self.restore(&latest.to_string(), &[], source)
+            self.restore(&position.to_string(), &[], source)
         } else {
             let prev = refs
-                .range(..latest)
+                .range(..position)
                 .next_back()
                 .map(|(s, _)| *s)
                 .ok_or_else(|| {
@@ -936,7 +1122,7 @@ impl Workspace {
                 ErrorCode::ForkExists,
                 format!("an active fork named '{name}' already exists"),
             )
-            .with_hint("pick another name, or `asp discard {name}` first"));
+            .with_hint(format!("pick another name, or `asp discard {name}` first")));
         }
 
         let dir_name = self
@@ -951,7 +1137,31 @@ impl Workspace {
             })?;
         let dst = parent_dir.join(format!("{dir_name}@{name}"));
 
-        let method = clone_tree(&self.layout.root, &dst)?;
+        // Intent journaling: register the fork as Pending BEFORE the clone.
+        // If we die mid-clone, doctor sees a Pending entry — deterministic
+        // torn-state detection, no heuristics over look-alike directories.
+        registry.forks.push(ForkRecord {
+            name: name.clone(),
+            path: dst.clone(),
+            created_at: crate::now_rfc3339(),
+            fork_point_seq,
+            label: label.clone(),
+            status: ForkStatus::Pending,
+        });
+        atomic_write_json(&self.layout.forks_json(), &registry)?;
+
+        let method = match clone_tree(&self.layout.root, &dst) {
+            Ok(m) => m,
+            Err(e) => {
+                // Clean up best-effort and withdraw the pending record.
+                let _ = std::fs::remove_dir_all(&dst);
+                registry
+                    .forks
+                    .retain(|f| !(f.name == name && f.status == ForkStatus::Pending));
+                let _ = atomic_write_json(&self.layout.forks_json(), &registry);
+                return Err(e);
+            }
+        };
 
         // Fix up the fork's identity: it is a new workspace with a parent.
         let fork_layout = Layout::new(dst.clone());
@@ -982,15 +1192,14 @@ impl Workspace {
         }));
         fork_journal.append(&fe)?;
 
-        // Record in the parent registry + journal.
-        registry.forks.push(ForkRecord {
-            name: name.clone(),
-            path: dst.clone(),
-            created_at: crate::now_rfc3339(),
-            fork_point_seq,
-            label,
-            status: ForkStatus::Active,
-        });
+        // Clone + fixup complete: flip Pending → Active.
+        if let Some(rec) = registry
+            .forks
+            .iter_mut()
+            .find(|f| f.name == name && f.status == ForkStatus::Pending)
+        {
+            rec.status = ForkStatus::Active;
+        }
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Fork);
         entry.source = source;
@@ -1043,6 +1252,8 @@ impl Workspace {
                 continue;
             }
             let fork_ws = Workspace::open_root(&rec.path)?;
+            // Staging mutates the fork's index — take ITS lock, not ours.
+            let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
             let base = fork_ws
                 .checkpoint_refs()?
                 .get(&rec.fork_point_seq)
@@ -1248,6 +1459,7 @@ impl Workspace {
         // Promoted forks need no guard — their work already landed as a branch.
         if rec.status == ForkStatus::Active && rec.path.exists() && !force {
             let fork_ws = Workspace::open_root(&rec.path)?;
+            let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
             let base = fork_ws.checkpoint_refs()?.get(&rec.fork_point_seq).cloned();
             if let Some(base) = base {
                 let (tree, _) = fork_ws.stage_tree()?;
@@ -1256,7 +1468,9 @@ impl Workspace {
                         ErrorCode::ForkHasUnpromotedWork,
                         format!("fork '{fork_name}' has changes that were never promoted"),
                     )
-                    .with_hint("promote it first (`asp promote {fork_name}`) or pass --force to delete the work"));
+                    .with_hint(format!(
+                        "promote it first (`asp promote {fork_name}`) or pass --force to delete the work"
+                    )));
                 }
             }
         }
@@ -1299,8 +1513,28 @@ impl Workspace {
             })
         };
 
-        // 1. Journal integrity (torn tails self-heal on read already).
+        // Repairs mutate the store — hold the lock for a --fix run.
+        let _lock = if fix {
+            Some(StoreLock::acquire_with_retry(&self.layout)?)
+        } else {
+            None
+        };
+
+        // 1. Journal integrity.
         let report = self.journal.read()?;
+        if report.torn_tail {
+            let fixed = if fix {
+                self.journal.heal()?;
+                true
+            } else {
+                false
+            };
+            add(
+                Severity::Warning,
+                "journal has a torn tail from a crash mid-append".to_string(),
+                fixed,
+            );
+        }
         for line in &report.corrupt_lines {
             add(
                 Severity::Error,
@@ -1350,35 +1584,72 @@ impl Workspace {
             }
         }
 
-        // 4. Fork registry vs reality.
+        // 4. Fork registry vs reality. Pending entries are deterministic
+        //    torn-clone markers (intent journaling in fork()), so cleanup
+        //    never has to guess about directories asp didn't create.
         let mut registry = self.fork_registry()?;
         let mut registry_changed = false;
+        let mut drop_pending: Vec<String> = Vec::new();
         for rec in registry.forks.iter_mut() {
-            if rec.status == ForkStatus::Active && !rec.path.exists() {
-                let fixed = fix;
-                if fix {
-                    rec.status = ForkStatus::Discarded;
-                    registry_changed = true;
+            match rec.status {
+                ForkStatus::Active if !rec.path.exists() => {
+                    let fixed = fix;
+                    if fix {
+                        rec.status = ForkStatus::Discarded;
+                        registry_changed = true;
+                    }
+                    add(
+                        Severity::Warning,
+                        format!(
+                            "fork '{}' is registered active but its directory is gone ({})",
+                            rec.name,
+                            rec.path.display()
+                        ),
+                        fixed,
+                    );
                 }
-                add(
-                    Severity::Warning,
-                    format!(
-                        "fork '{}' is registered active but its directory is gone ({})",
-                        rec.name,
-                        rec.path.display()
-                    ),
-                    fixed,
-                );
+                ForkStatus::Pending => {
+                    let exists = rec.path.exists();
+                    let fixed = if fix {
+                        if exists {
+                            std::fs::remove_dir_all(&rec.path)?;
+                        }
+                        drop_pending.push(rec.name.clone());
+                        registry_changed = true;
+                        true
+                    } else {
+                        false
+                    };
+                    add(
+                        Severity::Warning,
+                        format!(
+                            "fork '{}' is a torn clone (creation crashed mid-flight{})",
+                            rec.name,
+                            if exists {
+                                "; directory removed by --fix"
+                            } else {
+                                ""
+                            }
+                        ),
+                        fixed,
+                    );
+                }
+                _ => {}
             }
+        }
+        if !drop_pending.is_empty() {
+            registry
+                .forks
+                .retain(|f| !(f.status == ForkStatus::Pending && drop_pending.contains(&f.name)));
         }
         if registry_changed {
             atomic_write_json(&self.layout.forks_json(), &registry)?;
         }
 
-        // 5. Torn fork clones: sibling dirs matching our fork naming pattern
-        //    that have an .asp dir but no readable identity (clone died
-        //    mid-flight, before workspace.json was rewritten — they share our
-        //    workspace id).
+        // 5. Unregistered fork-looking sibling dirs: REPORT ONLY. asp never
+        //    deletes a directory it cannot prove it created (a user's manual
+        //    `cp -r proj proj@backup` is indistinguishable from a torn clone
+        //    by inspection — the Pending registry above is the proof).
         if let (Some(parent_dir), Some(dir_name)) = (
             self.layout.root.parent(),
             self.layout
@@ -1393,39 +1664,18 @@ impl Workspace {
                     if !name.starts_with(&prefix) || !entry.path().is_dir() {
                         continue;
                     }
-                    let candidate = Layout::new(entry.path());
-                    if !candidate.asp.exists() {
+                    if !Layout::new(entry.path()).asp.exists() {
                         continue;
                     }
-                    let identity: Option<WorkspaceMeta> =
-                        read_json(&candidate.workspace_json()).ok();
-                    let torn = match identity {
-                        None => true,
-                        // Clone completed copying but fixup never ran: the
-                        // clone still carries OUR id without a parent link.
-                        Some(m) => m.id == self.meta.id,
-                    };
-                    let registered = registry.forks.iter().any(|f| f.path == entry.path());
-                    if torn {
-                        let fixed = if fix {
-                            std::fs::remove_dir_all(entry.path())?;
-                            true
-                        } else {
-                            false
-                        };
-                        add(
-                            Severity::Warning,
-                            format!(
-                                "torn fork clone at {} (fork creation crashed mid-flight)",
-                                entry.path().display()
-                            ),
-                            fixed,
-                        );
-                    } else if !registered {
+                    let registered = registry
+                        .forks
+                        .iter()
+                        .any(|f| f.path == entry.path() && f.status != ForkStatus::Discarded);
+                    if !registered {
                         add(
                             Severity::Info,
                             format!(
-                                "directory {} looks like a fork of this workspace but is not in the registry",
+                                "directory {} looks like a fork of this workspace but is not in the registry; remove it manually if unwanted",
                                 entry.path().display()
                             ),
                             false,
@@ -1489,8 +1739,14 @@ fn sanitize_name(label: &str) -> String {
 }
 
 /// Run git in the USER repo (their config applies; we only add safety flags).
+/// Repo-location env vars are scrubbed: a user shell exporting GIT_DIR must
+/// not redirect promote's writes into an unrelated repository.
 fn run_user_git(repo_dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
         .arg("-C")
         .arg(repo_dir)
         .args(args)
@@ -1514,6 +1770,8 @@ fn run_user_git(repo_dir: &Path, args: &[&str]) -> Result<String> {
 
 fn user_git_ref_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
     let output = Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
         .arg("-C")
         .arg(repo_dir)
         .args([
@@ -1537,7 +1795,10 @@ fn build_user_commit(fork_dir: &Path, fork_name: &str) -> Result<String> {
     let tmp_index = tmp_dir.path().join("index");
     let run = |args: &[&str], with_identity_fallback: bool| -> Result<String> {
         let mut cmd = Command::new("git");
-        cmd.arg("-C")
+        cmd.env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_OBJECT_DIRECTORY")
+            .arg("-C")
             .arg(fork_dir)
             .env("GIT_INDEX_FILE", &tmp_index)
             .args(args);
@@ -1563,7 +1824,9 @@ fn build_user_commit(fork_dir: &Path, fork_name: &str) -> Result<String> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     };
 
-    run(&["add", "-A", "."], false)?;
+    // Stage the fork's tree EXCLUDING the .asp store — promote must land
+    // the work, not the sidecar (shadow objects, journal, CAS blobs).
+    run(&["add", "-A", "--", ".", ":(exclude).asp"], false)?;
     let tree = run(&["write-tree"], false)?;
     let head = Command::new("git")
         .arg("-C")
