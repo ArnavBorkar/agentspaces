@@ -6,7 +6,7 @@
 //!   1. checkpointed data is never lost (byte-identical restores),
 //!   2. the store always opens (torn journal tails self-heal),
 //!   3. torn forks are detectable and `asp doctor --fix` repairs them,
-//! and that the workspace remains fully functional afterwards.
+//!      and that the workspace remains fully functional afterwards.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
