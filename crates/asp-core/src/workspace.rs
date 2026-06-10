@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 
+use crate::blobs::{self, BigFiles, Manifest, ManifestEntry};
 use crate::config::Config;
 use crate::error::{Error, ErrorCode, Result};
 use crate::fork::{clone_tree, CloneMethod};
@@ -21,6 +22,7 @@ use crate::store::{
 
 pub const CHECKPOINT_REF_PREFIX: &str = "refs/asp/checkpoints/";
 pub const HEAD_REF: &str = "refs/asp/head";
+pub const META_REF_PREFIX: &str = "refs/asp/meta/";
 
 #[derive(Debug)]
 pub struct Workspace {
@@ -260,6 +262,10 @@ impl Workspace {
 
     pub fn status(&self) -> Result<StatusReport> {
         let raw = self.shadow.run_raw(&["status", "--porcelain", "-z"])?;
+        // Managed big files live outside the index by design; their staged-
+        // deletion entries are expected state, not user changes — as long as
+        // the real file is still on disk.
+        let bigfiles = blobs::load_bigfiles(&blobs::bigfiles_path(&self.layout.asp))?;
         let (mut modified, mut untracked, mut deleted) = (0u64, 0u64, 0u64);
         let mut iter = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
         while let Some(entry) = iter.next() {
@@ -269,6 +275,15 @@ impl Workspace {
             let xy = &entry[..2];
             if xy.contains(&b'R') || xy.contains(&b'C') {
                 iter.next(); // rename/copy carries a second path record
+            }
+            if entry.len() > 3 {
+                let path = String::from_utf8_lossy(&entry[3..]).to_string();
+                if xy.contains(&b'D')
+                    && bigfiles.files.contains_key(&path)
+                    && self.layout.root.join(&path).is_file()
+                {
+                    continue;
+                }
             }
             if xy == b"??" {
                 untracked += 1;
@@ -322,11 +337,8 @@ impl Workspace {
 
     fn checkpoint_locked(&self, opts: CheckpointOpts) -> Result<Option<CheckpointInfo>> {
         let t0 = Instant::now();
-        // Keep excludes in sync with config on every capture.
-        self.shadow.write_excludes(&self.config.shadow_excludes())?;
-
         let parent = self.shadow.rev_parse(HEAD_REF)?;
-        let tree = self.shadow.capture_tree()?;
+        let (tree, bigfiles) = self.stage_tree()?;
         if let Some(ref p) = parent {
             if self.shadow.tree_of(p)? == tree {
                 return Ok(None);
@@ -343,6 +355,30 @@ impl Workspace {
         let seq = self.next_seq()?;
         self.shadow
             .update_ref(&format!("{CHECKPOINT_REF_PREFIX}{seq}"), &commit)?;
+
+        // Pointer manifest for this checkpoint (restore needs it to know
+        // which paths to materialize from the CAS).
+        if !bigfiles.files.is_empty() {
+            let manifest = Manifest {
+                v: 1,
+                pointers: bigfiles
+                    .files
+                    .iter()
+                    .map(|(path, e)| ManifestEntry {
+                        path: path.clone(),
+                        blake3: e.blake3.clone(),
+                        size: e.size,
+                    })
+                    .collect(),
+            };
+            let json = serde_json::to_string(&manifest)
+                .map_err(|e| Error::new(ErrorCode::Io, format!("manifest encode: {e}")))?;
+            let oid = self
+                .shadow
+                .run_with_stdin(&["hash-object", "-w", "--stdin"], &json)?;
+            self.shadow
+                .update_ref(&format!("{META_REF_PREFIX}{seq}"), &oid)?;
+        }
 
         let files_changed = match parent {
             Some(ref p) => self.count_changed(p, &commit)?,
@@ -372,6 +408,133 @@ impl Workspace {
             duration_ms: t0.elapsed().as_millis() as u64,
             message,
         }))
+    }
+
+    /// Pointer-aware staging: detect big files, sync excludes, stage the
+    /// worktree, splice in pointer blobs, and return the resulting tree oid
+    /// plus the current big-file set. The index never holds big-file content,
+    /// and pointer paths are removed from the index afterwards so the next
+    /// `add -A` skips them (untracked + excluded).
+    fn stage_tree(&self) -> Result<(String, BigFiles)> {
+        let bigfiles = self.process_big_files()?;
+        let mut excludes = self.config.shadow_excludes();
+        excludes.push("# --- asp generated: large-blob sidecar ---".to_string());
+        for path in bigfiles.files.keys() {
+            excludes.push(format!("/{path}"));
+        }
+        self.shadow.write_excludes(&excludes)?;
+
+        self.shadow.run(&["add", "-A", "."])?;
+        for (path, entry) in &bigfiles.files {
+            let oid = self.shadow.run_with_stdin(
+                &["hash-object", "-w", "--stdin"],
+                &blobs::pointer_json(entry),
+            )?;
+            self.shadow.run(&[
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                &format!("100644,{oid},{path}"),
+            ])?;
+        }
+        let tree = self.shadow.run(&["write-tree"])?;
+        for path in bigfiles.files.keys() {
+            self.shadow
+                .run(&["update-index", "--force-remove", "--", path])?;
+        }
+        Ok((tree, bigfiles))
+    }
+
+    /// Maintain the big-file cache: scan status-dirty paths for files over
+    /// the threshold, stat-check known entries, store new content in the CAS.
+    fn process_big_files(&self) -> Result<BigFiles> {
+        let threshold = self.config.blob_threshold_bytes();
+        let bf_path = blobs::bigfiles_path(&self.layout.asp);
+        let mut bf = blobs::load_bigfiles(&bf_path)?;
+        let mut changed = false;
+
+        if threshold == 0 {
+            return Ok(bf); // sidecar disabled
+        }
+
+        // New/changed files visible to git (big KNOWN files are excluded from
+        // status, so they are stat-checked separately below). -uall expands
+        // untracked directories into individual files.
+        let raw = self
+            .shadow
+            .run_raw(&["status", "--porcelain", "-z", "-uall"])?;
+        let mut candidates: Vec<String> = Vec::new();
+        let mut iter = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
+        while let Some(entry) = iter.next() {
+            if entry.len() < 4 {
+                continue;
+            }
+            let xy = &entry[..2];
+            let path = String::from_utf8_lossy(&entry[3..]).to_string();
+            if xy.contains(&b'R') || xy.contains(&b'C') {
+                iter.next();
+            }
+            candidates.push(path);
+        }
+
+        for path in candidates {
+            if bf.files.contains_key(&path) {
+                continue; // handled by the stat pass below
+            }
+            let abs = self.layout.root.join(&path);
+            if let Ok(md) = abs.metadata() {
+                if md.is_file() && md.len() >= threshold {
+                    let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
+                    bf.files.insert(path, entry);
+                    changed = true;
+                }
+            }
+        }
+
+        // Stat-check known big files: rehash on change, demote on shrink,
+        // drop when deleted.
+        let known: Vec<String> = bf.files.keys().cloned().collect();
+        for path in known {
+            let abs = self.layout.root.join(&path);
+            match abs.metadata() {
+                Ok(md) if md.is_file() && md.len() >= threshold => {
+                    let rec = &bf.files[&path];
+                    if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+                        let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
+                        bf.files.insert(path, entry);
+                        changed = true;
+                    }
+                }
+                _ => {
+                    bf.files.remove(&path);
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
+            blobs::save_bigfiles(&bf_path, &bf)?;
+        }
+        Ok(bf)
+    }
+
+    /// Pointer manifest of a checkpoint, if it has one.
+    pub fn manifest_for(&self, seq: u64) -> Result<Option<Manifest>> {
+        let refname = format!("{META_REF_PREFIX}{seq}");
+        let out = self.shadow.run_raw(&["cat-file", "-p", &refname]);
+        match out {
+            Ok(bytes) => {
+                let m: Manifest = serde_json::from_slice(&bytes).map_err(|e| {
+                    Error::new(
+                        ErrorCode::StoreCorrupt,
+                        format!("corrupt manifest for #{seq}: {e}"),
+                    )
+                    .with_hint("run `asp doctor`")
+                })?;
+                Ok(Some(m))
+            }
+            Err(_) => Ok(None),
+        }
     }
 
     fn count_changed(&self, from: &str, to: &str) -> Result<u64> {
@@ -510,6 +673,40 @@ impl Workspace {
                     }
                 }
             }
+            // Materialize big files: replace restored pointer files with
+            // their CAS content, and reset the big-file cache + index so the
+            // next capture treats them correctly.
+            if let Some(manifest) = self.manifest_for(target_seq)? {
+                let mut bf = BigFiles {
+                    v: 1,
+                    files: Default::default(),
+                };
+                for ptr in &manifest.pointers {
+                    let abs = self.layout.root.join(&ptr.path);
+                    blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
+                    self.shadow
+                        .run(&["update-index", "--force-remove", "--", &ptr.path])?;
+                    let md = abs.metadata()?;
+                    bf.files.insert(
+                        ptr.path.clone(),
+                        crate::blobs::BigFileEntry {
+                            blake3: ptr.blake3.clone(),
+                            size: ptr.size,
+                            mtime_ms: blobs::mtime_ms(&md),
+                        },
+                    );
+                }
+                blobs::save_bigfiles(&blobs::bigfiles_path(&self.layout.asp), &bf)?;
+            } else {
+                // Target predates any big files: clear the cache.
+                blobs::save_bigfiles(
+                    &blobs::bigfiles_path(&self.layout.asp),
+                    &BigFiles {
+                        v: 1,
+                        files: Default::default(),
+                    },
+                )?;
+            }
             (written, deleted)
         } else {
             // Targeted restore through a temp index; no deletions.
@@ -525,6 +722,25 @@ impl Workspace {
                 args.push(p);
             }
             scoped.run(&args)?;
+            // Materialize any requested big files from the CAS.
+            if let Some(manifest) = self.manifest_for(target_seq)? {
+                let bf_path = blobs::bigfiles_path(&self.layout.asp);
+                let mut bf = blobs::load_bigfiles(&bf_path)?;
+                for ptr in manifest.pointers.iter().filter(|p| paths.contains(&p.path)) {
+                    let abs = self.layout.root.join(&ptr.path);
+                    blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
+                    let md = abs.metadata()?;
+                    bf.files.insert(
+                        ptr.path.clone(),
+                        crate::blobs::BigFileEntry {
+                            blake3: ptr.blake3.clone(),
+                            size: ptr.size,
+                            mtime_ms: blobs::mtime_ms(&md),
+                        },
+                    );
+                }
+                blobs::save_bigfiles(&bf_path, &bf)?;
+            }
             // Re-sync the main index with reality for the next capture.
             self.shadow.run(&["add", "-A", "."])?;
             (paths.len() as u64, 0)
@@ -743,7 +959,7 @@ impl Workspace {
                     )
                     .with_hint("run `asp doctor` inside the fork")
                 })?;
-            let tree = fork_ws.shadow.capture_tree()?;
+            let (tree, _) = fork_ws.stage_tree()?;
             let (files, ins, del) = fork_ws.numstat_totals(&format!("{base}^{{tree}}"), &tree)?;
             let last = fork_ws.journal.read()?.entries.last().map(|e| e.ts.clone());
             rows.push(ForkCompareRow {
@@ -792,7 +1008,7 @@ impl Workspace {
             }
             None => {
                 let _lock = StoreLock::acquire(&self.layout)?;
-                let tree = self.shadow.capture_tree()?;
+                let (tree, _) = self.stage_tree()?;
                 ("working tree".to_string(), tree)
             }
         };
@@ -939,7 +1155,7 @@ impl Workspace {
             let fork_ws = Workspace::open_root(&rec.path)?;
             let base = fork_ws.checkpoint_refs()?.get(&rec.fork_point_seq).cloned();
             if let Some(base) = base {
-                let tree = fork_ws.shadow.capture_tree()?;
+                let (tree, _) = fork_ws.stage_tree()?;
                 if fork_ws.shadow.tree_of(&base)? != tree {
                     return Err(Error::new(
                         ErrorCode::ForkHasUnpromotedWork,
@@ -958,6 +1174,203 @@ impl Workspace {
         entry.detail = Some(serde_json::json!({ "fork": fork_name, "forced": force }));
         self.journal.append(&entry)?;
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Finding {
+    pub severity: Severity,
+    pub message: String,
+    pub fixed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    Error,
+    Warning,
+    Info,
+}
+
+impl Workspace {
+    /// Diagnose (and with `fix`, repair) workspace-store health issues.
+    pub fn doctor(&self, fix: bool) -> Result<Vec<Finding>> {
+        let mut findings = Vec::new();
+        let mut add = |severity: Severity, message: String, fixed: bool| {
+            findings.push(Finding {
+                severity,
+                message,
+                fixed,
+            })
+        };
+
+        // 1. Journal integrity (torn tails self-heal on read already).
+        let report = self.journal.read()?;
+        for line in &report.corrupt_lines {
+            add(
+                Severity::Error,
+                format!("journal line {line} is corrupt (CRC mismatch); provenance for that entry is lost"),
+                false,
+            );
+        }
+
+        // 2. Checkpoint refs resolvable + head consistency.
+        let refs = self.checkpoint_refs()?;
+        for (seq, commit) in &refs {
+            if self.shadow.rev_parse(commit)?.is_none() {
+                add(
+                    Severity::Error,
+                    format!("checkpoint #{seq} points at missing commit {commit}"),
+                    false,
+                );
+            }
+        }
+        if let Some((max_seq, max_commit)) = refs.iter().next_back() {
+            let head = self.shadow.rev_parse(HEAD_REF)?;
+            if head.as_deref() != Some(max_commit.as_str()) {
+                let fixed = if fix {
+                    self.shadow.update_ref(HEAD_REF, max_commit)?;
+                    true
+                } else {
+                    false
+                };
+                add(
+                    Severity::Warning,
+                    format!("head ref does not match latest checkpoint #{max_seq}"),
+                    fixed,
+                );
+            }
+        }
+
+        // 3. Journal entries referencing refs that don't exist (crash window).
+        for e in report.entries.iter().filter(|e| e.op == Op::Checkpoint) {
+            if let Some(seq) = e.seq {
+                if !refs.contains_key(&seq) {
+                    add(
+                        Severity::Warning,
+                        format!("journal records checkpoint #{seq} but its ref is missing"),
+                        false,
+                    );
+                }
+            }
+        }
+
+        // 4. Fork registry vs reality.
+        let mut registry = self.fork_registry()?;
+        let mut registry_changed = false;
+        for rec in registry.forks.iter_mut() {
+            if rec.status == ForkStatus::Active && !rec.path.exists() {
+                let fixed = fix;
+                if fix {
+                    rec.status = ForkStatus::Discarded;
+                    registry_changed = true;
+                }
+                add(
+                    Severity::Warning,
+                    format!(
+                        "fork '{}' is registered active but its directory is gone ({})",
+                        rec.name,
+                        rec.path.display()
+                    ),
+                    fixed,
+                );
+            }
+        }
+        if registry_changed {
+            atomic_write_json(&self.layout.forks_json(), &registry)?;
+        }
+
+        // 5. Torn fork clones: sibling dirs matching our fork naming pattern
+        //    that have an .asp dir but no readable identity (clone died
+        //    mid-flight, before workspace.json was rewritten — they share our
+        //    workspace id).
+        if let (Some(parent_dir), Some(dir_name)) = (
+            self.layout.root.parent(),
+            self.layout
+                .root
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string()),
+        ) {
+            let prefix = format!("{dir_name}@");
+            if let Ok(entries) = std::fs::read_dir(parent_dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.starts_with(&prefix) || !entry.path().is_dir() {
+                        continue;
+                    }
+                    let candidate = Layout::new(entry.path());
+                    if !candidate.asp.exists() {
+                        continue;
+                    }
+                    let identity: Option<WorkspaceMeta> =
+                        read_json(&candidate.workspace_json()).ok();
+                    let torn = match identity {
+                        None => true,
+                        // Clone completed copying but fixup never ran: the
+                        // clone still carries OUR id without a parent link.
+                        Some(m) => m.id == self.meta.id,
+                    };
+                    let registered = registry.forks.iter().any(|f| f.path == entry.path());
+                    if torn {
+                        let fixed = if fix {
+                            std::fs::remove_dir_all(entry.path())?;
+                            true
+                        } else {
+                            false
+                        };
+                        add(
+                            Severity::Warning,
+                            format!(
+                                "torn fork clone at {} (fork creation crashed mid-flight)",
+                                entry.path().display()
+                            ),
+                            fixed,
+                        );
+                    } else if !registered {
+                        add(
+                            Severity::Info,
+                            format!(
+                                "directory {} looks like a fork of this workspace but is not in the registry",
+                                entry.path().display()
+                            ),
+                            false,
+                        );
+                    }
+                }
+            }
+        }
+
+        // 6. Big-file CAS integrity.
+        let bf = blobs::load_bigfiles(&blobs::bigfiles_path(&self.layout.asp))?;
+        for (path, entry) in &bf.files {
+            let cas = self.layout.blobs().join(&entry.blake3);
+            if !cas.exists() {
+                let abs = self.layout.root.join(path);
+                if abs.is_file() {
+                    let fixed = if fix {
+                        blobs::store_in_cas(&self.layout.blobs(), &abs)?;
+                        true
+                    } else {
+                        false
+                    };
+                    add(
+                        Severity::Warning,
+                        format!("CAS blob for {path} missing (re-creatable from the working file)"),
+                        fixed,
+                    );
+                } else {
+                    add(
+                        Severity::Error,
+                        format!(
+                            "CAS blob for {path} is missing and the file is gone — checkpointed versions of it cannot be restored"
+                        ),
+                        false,
+                    );
+                }
+            }
+        }
+
+        Ok(findings)
     }
 }
 

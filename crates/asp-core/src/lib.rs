@@ -4,6 +4,7 @@
 //! model: every checkpoint is recoverable with stock git, and the worst-case
 //! failure mode degrades to a plain git repository.
 
+pub mod blobs;
 pub mod config;
 pub mod error;
 pub mod fork;

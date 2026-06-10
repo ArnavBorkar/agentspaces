@@ -71,6 +71,39 @@ impl Shadow {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    /// Run a git command feeding `input` to stdin, returning trimmed stdout.
+    pub fn run_with_stdin(&self, args: &[&str], input: &str) -> Result<String> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = self
+            .command()
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
+            })?;
+        child
+            .stdin
+            .as_mut()
+            .expect("piped stdin")
+            .write_all(input.as_bytes())?;
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            return Err(Error::new(
+                ErrorCode::GitFailed,
+                format!(
+                    "git {} failed: {}",
+                    args.first().unwrap_or(&""),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
     /// Run a git command, returning raw stdout bytes (for -z output).
     pub fn run_raw(&self, args: &[&str]) -> Result<Vec<u8>> {
         let output = self.command().args(args).output().map_err(|e| {

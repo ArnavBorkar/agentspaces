@@ -398,3 +398,108 @@ fn stock_git_recovery_runbook_works() {
     assert_eq!(read(&out_dir, "src/main.rs"), "fn main() {}\n");
     assert_eq!(read(&out_dir, ".env"), "SECRET=1\n");
 }
+
+#[test]
+fn big_files_go_to_cas_sidecar_and_restore() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    // Lower the threshold to 1 MB for the test.
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap(); // reload config
+
+    let big_v1: Vec<u8> = (0..2 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+    write_bytes(&root, "assets/model.bin", &big_v1);
+    let c1 = cp(&ws, "with big file").unwrap();
+
+    // The committed object at the big path is a small pointer, not 2 MB.
+    let blob_size: u64 = ws
+        .shadow()
+        .run(&["cat-file", "-s", &format!("{}:assets/model.bin", c1.commit)])
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(blob_size < 256, "pointer blob, got {blob_size} bytes");
+    let cas_entries = std::fs::read_dir(root.join(".asp/blobs")).unwrap().count();
+    assert_eq!(cas_entries, 1);
+
+    // Status stays clean (big file is excluded + not in index).
+    let st = ws.status().unwrap();
+    assert_eq!(
+        st.dirty_files + st.untracked_files + st.deleted_files,
+        0,
+        "{st:?}"
+    );
+
+    // Change the big file, checkpoint, then restore v1 — bytes must match.
+    let big_v2: Vec<u8> = (0..3 * 1024 * 1024u32).map(|i| (i % 13) as u8).collect();
+    write_bytes(&root, "assets/model.bin", &big_v2);
+    cp(&ws, "big file v2").unwrap();
+    assert_eq!(
+        std::fs::read_dir(root.join(".asp/blobs")).unwrap().count(),
+        2
+    );
+
+    ws.restore(&c1.seq.to_string(), &[], None).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("assets/model.bin")).unwrap(),
+        big_v1
+    );
+
+    // No-op capture after restore stays a no-op (no churn from pointers).
+    assert!(cp(&ws, "noop").is_none());
+}
+
+fn write_bytes(root: &Path, rel: &str, content: &[u8]) {
+    let p = root.join(rel);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(p, content).unwrap();
+}
+
+#[test]
+fn doctor_detects_and_repairs() {
+    use asp_core::workspace::Severity;
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("gone".into()), None).unwrap();
+
+    // Healthy workspace: no findings.
+    assert!(ws.doctor(false).unwrap().is_empty());
+
+    // Damage 1: fork dir vanishes outside asp's control.
+    std::fs::remove_dir_all(&fork.path).unwrap();
+    // Damage 2: head ref tampered to an older commit.
+    write(&root, "x.txt", "x\n");
+    let c2 = cp(&ws, "two").unwrap();
+    let refs = ws.checkpoint_refs().unwrap();
+    let c1_commit = refs.get(&1).unwrap().clone();
+    ws.shadow()
+        .run(&["update-ref", "refs/asp/head", &c1_commit])
+        .unwrap();
+    // Damage 3: torn fork clone (dir with our id, never fixed up).
+    let torn = root.parent().unwrap().join("proj@torn");
+    asp_core::fork::clone_tree(&root, &torn).unwrap();
+
+    let findings = ws.doctor(false).unwrap();
+    assert!(findings.len() >= 3, "{findings:?}");
+    assert!(findings.iter().all(|f| !f.fixed));
+
+    let findings = ws.doctor(true).unwrap();
+    assert!(
+        findings.iter().filter(|f| f.fixed).count() >= 3,
+        "{findings:?}"
+    );
+
+    // Repairs hold: clean on re-run.
+    let after = ws.doctor(false).unwrap();
+    assert!(after.is_empty(), "{after:?}");
+    assert!(!torn.exists());
+    let _ = c2;
+    assert!(!findings
+        .iter()
+        .any(|f| f.severity == Severity::Error && !f.fixed));
+}
