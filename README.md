@@ -9,6 +9,8 @@
 
 *Fork is control flow. The checkpoint journal is the audit log. Promote is the only way work lands.*
 
+![asp demo: undo agent damage, race 3 forks, promote the winner](docs/assets/demo.gif)
+
 </div>
 
 ---

@@ -12,14 +12,14 @@
 - [x] LICENSE-MIT + LICENSE-APACHE, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT
 - [x] install.sh (checksum-verified) + release workflow (4 targets)
 - [x] Tag v0.1.0 → release artifacts built (4 targets, musl static on Linux), checksum-verified, downloaded + smoke-tested
-- [ ] Demo GIF/asciinema in README (record `asp race` on a real repo)
+- [x] Demo GIF in README (vhs-scripted, reproducible via scripts/make-demo.sh)
 - [ ] (Arnav) Repo visibility flip private → public — exposes full history
 - [ ] (Arnav) Decide crates.io publish (`asp` name availability) — `cargo install --git` works meanwhile
 
 ## Soft launch (week 4–5 per v1-brief)
 
 - [ ] (Arnav) Recruit 5–10 Claude Code power users + 2–3 eval/fleet engineers as design partners
-- [ ] Wire feedback channel (GitHub Discussions on + issue templates)
+- [x] Wire feedback channel (GitHub Discussions enabled + bug/feature issue templates)
 - [ ] (Arnav) X/HN draft: lead with the race demo + the worktree comparison numbers
 - [ ] 90-day metrics instrumented per v1-brief (installs proxy: release download counts; stars; retention via design-partner check-ins)
 
