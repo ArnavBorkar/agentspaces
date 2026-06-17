@@ -67,6 +67,8 @@
   to fork/checkpoint benchmarks.
 - Checkpoints now maintain a rebuildable `.asp/file-state.json` path stamp
   cache with crash-safe atomic writes.
+- Regression coverage now guards no-op checkpoint latency and literal
+  changed-path staging for paths with spaces or leading dashes.
 
 ### Fixed
 

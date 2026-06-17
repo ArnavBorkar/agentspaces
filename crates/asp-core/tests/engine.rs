@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use asp_core::journal::{Entry, Op};
 use asp_core::store::ForkStatus;
@@ -142,6 +143,72 @@ fn checkpoint_maintains_rebuildable_file_state_index() {
     let updated: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
     assert_eq!(updated["head"], c2.commit);
+}
+
+#[test]
+fn noop_checkpoint_latency_stays_bounded_on_many_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("proj");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    for i in 0..1_200 {
+        write(
+            &root,
+            &format!("src/pkg_{:03}/file_{:04}.rs", i / 40, i),
+            &format!("pub fn f_{i}() -> usize {{ {i} }}\n"),
+        );
+    }
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    let started = Instant::now();
+    assert!(cp(&ws, "noop").is_none());
+    let elapsed = started.elapsed();
+    let budget_ms = std::env::var("ASP_NOOP_LATENCY_BUDGET_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(4_000);
+    assert!(
+        elapsed <= Duration::from_millis(budget_ms),
+        "no-op checkpoint took {elapsed:?}, budget {budget_ms}ms"
+    );
+}
+
+#[test]
+fn checkpoint_stages_only_changed_literal_paths() {
+    let (_tmp, root) = project();
+    for i in 0..120 {
+        write(
+            &root,
+            &format!("src/many/file_{i:03}.txt"),
+            &format!("v{i}\n"),
+        );
+    }
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    write(&root, "src/many/file_042.txt", "changed\n");
+    write(&root, "src/path with spaces.txt", "new spaced path\n");
+    write(&root, "src/-leading-dash.txt", "new dash path\n");
+
+    let changed = cp(&ws, "literal paths").unwrap();
+    assert_eq!(changed.files_changed, 3);
+
+    let log = ws.log(1).unwrap();
+    let paths = log[0].detail.as_ref().unwrap()["paths"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        vec![
+            "src/-leading-dash.txt".to_string(),
+            "src/many/file_042.txt".to_string(),
+            "src/path with spaces.txt".to_string()
+        ]
+    );
+    assert!(cp(&ws, "noop after literal paths").is_none());
 }
 
 #[test]

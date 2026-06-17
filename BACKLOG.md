@@ -209,7 +209,7 @@
   - [x] T16.1.3 Add a `asp bench self` command that reports local filesystem capabilities.
 - **S16.2 Optimizations**
   - [x] T16.2.1 Add a persistent file-state index guarded by crash-safe writes.
-  - [ ] T16.2.2 Add regression tests for no-op checkpoint latency and changed-path staging behavior.
+  - [x] T16.2.2 Add regression tests for no-op checkpoint latency and changed-path staging behavior.
 
 ## EPIC 17 — Diff and review excellence
 
