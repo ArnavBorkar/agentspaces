@@ -1,0 +1,40 @@
+# Maintainer label catalog. Apply with the commands in docs/triage.md.
+- name: needs-triage
+  color: d4c5f9
+  description: New issue waiting for maintainer classification.
+- name: needs-info
+  color: d876e3
+  description: Waiting for reporter details or reproduction output.
+- name: crash-safety
+  color: b60205
+  description: Trust-model, recovery, corruption, or data-safety issue.
+- name: performance
+  color: fbca04
+  description: Slow checkpoint, fork, restore, hook, MCP, or install behavior.
+- name: integration
+  color: 1d76db
+  description: Agent harness, editor, CI, MCP client, or setup integration.
+- name: area-filesystem
+  color: 5319e7
+  description: clonefile, reflink, copy fallback, symlinks, permissions, or path behavior.
+- name: area-mcp
+  color: 0e8a16
+  description: MCP server, tool schema, or model-facing output.
+- name: area-hooks
+  color: c2e0c6
+  description: Claude Code hooks or future harness hook integrations.
+- name: area-windows
+  color: c5def5
+  description: Native Windows support, unsupported-platform UX, or WSL guidance.
+- name: area-release
+  color: 0052cc
+  description: Releases, installers, SBOMs, provenance, packages, or checksums.
+- name: priority-high
+  color: b60205
+  description: Needs prompt maintainer attention before the next release.
+- name: priority-normal
+  color: fbca04
+  description: Valid issue in normal backlog order.
+- name: priority-low
+  color: cfd3d7
+  description: Useful but not urgent.

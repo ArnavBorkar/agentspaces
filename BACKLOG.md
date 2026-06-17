@@ -305,7 +305,7 @@
   - [x] T24.1.3 Add a PR checklist aligned with crash safety, JSON output, hints, and docs.
 - **S24.2 Issue flow**
   - [x] T24.2.1 Add issue forms for performance reports, crash-safety bugs, integration requests, and docs fixes.
-  - [ ] T24.2.2 Add labels and triage docs for maintainers.
+  - [x] T24.2.2 Add labels and triage docs for maintainers.
 
 ## EPIC 25 — Config and schema stability
 

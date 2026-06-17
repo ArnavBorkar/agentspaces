@@ -89,6 +89,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **FAQ** — [docs/FAQ.md](docs/FAQ.md)
 - **Architecture** — [docs/architecture.md](docs/architecture.md)
 - **Development** — [docs/development.md](docs/development.md)
+- **Maintainer triage** — [docs/triage.md](docs/triage.md)
 - **Diagnostics** — [docs/diagnostics.md](docs/diagnostics.md)
 - **Filesystem detection** — [docs/filesystems.md](docs/filesystems.md)
 - **Windows status** — [docs/windows.md](docs/windows.md)
