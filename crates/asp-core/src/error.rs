@@ -23,6 +23,7 @@ pub enum ErrorCode {
     CrossVolume,
     StoreCorrupt,
     FormatTooNew,
+    UnsupportedPlatform,
     Locked,
     Io,
 }

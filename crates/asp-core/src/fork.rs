@@ -117,7 +117,13 @@ fn reflink_walk(src: &Path, dst: &Path, any_copied: &mut bool) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(windows)]
+fn platform_clone(_src: &Path, _dst: &Path) -> Result<CloneMethod> {
+    crate::ensure_supported_platform()?;
+    unreachable!("Windows is rejected by ensure_supported_platform")
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 fn platform_clone(src: &Path, dst: &Path) -> Result<CloneMethod> {
     copy_recursive(src, dst).map(|_| CloneMethod::Copy)
 }

@@ -20,6 +20,24 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+pub fn ensure_supported_platform() -> Result<()> {
+    #[cfg(windows)]
+    {
+        return Err(Error::new(
+            ErrorCode::UnsupportedPlatform,
+            "native Windows support is not enabled in this asp release",
+        )
+        .with_hint(
+            "use WSL2, macOS, or Linux for now; track native Windows support at \
+             https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows",
+        ));
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+}
+
 /// Current time as RFC3339 (UTC, second precision).
 pub fn now_rfc3339() -> String {
     time::OffsetDateTime::now_utc()
@@ -40,5 +58,19 @@ mod tests {
     fn now_is_rfc3339() {
         let ts = super::now_rfc3339();
         assert!(ts.ends_with('Z') && ts.contains('T'), "{ts}");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn current_platform_is_supported() {
+        super::ensure_supported_platform().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_fails_with_actionable_hint() {
+        let err = super::ensure_supported_platform().unwrap_err();
+        assert_eq!(err.code, super::ErrorCode::UnsupportedPlatform);
+        assert!(err.hint.unwrap().contains("WSL2"));
     }
 }

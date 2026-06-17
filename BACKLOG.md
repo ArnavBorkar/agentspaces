@@ -288,7 +288,7 @@
 **Done when:** unsupported platforms fail kindly today and Windows has a tested path to support.
 
 - **S23.1 Unsupported-platform UX**
-  - [ ] T23.1.1 Improve Windows error messages with current limitations and tracking issue links.
+  - [x] T23.1.1 Improve Windows error messages with current limitations and tracking issue links.
   - [ ] T23.1.2 Add CI that ensures Windows builds either pass or fail with intentional cfg gates.
   - [ ] T23.1.3 Document filesystem feature detection across APFS, btrfs, XFS, ext4, tmpfs, and network filesystems.
 - **S23.2 Windows plan**

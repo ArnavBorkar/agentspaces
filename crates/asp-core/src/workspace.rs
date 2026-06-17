@@ -276,6 +276,7 @@ impl Workspace {
     }
 
     fn open_root(root: &Path) -> Result<Self> {
+        crate::ensure_supported_platform()?;
         let layout = Layout::new(root.to_path_buf());
         let version_text = std::fs::read_to_string(layout.format_version())?;
         let version: u32 = version_text.trim().parse().map_err(|_| {
@@ -310,6 +311,7 @@ impl Workspace {
 
     /// Initialize a new workspace in `root` (adopts existing content as-is).
     pub fn init(root: &Path, label: Option<String>) -> Result<Self> {
+        crate::ensure_supported_platform()?;
         crate::gitx::ensure_git_version()?;
         let root = root.canonicalize().map_err(|e| {
             Error::new(
