@@ -556,6 +556,38 @@ fn doctor_detects_and_repairs() {
 }
 
 #[test]
+fn doctor_repairs_shadow_git_config_drift() {
+    use asp_core::workspace::Severity;
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    ws.shadow()
+        .run(&["config", "core.compression", "9"])
+        .unwrap();
+    let findings = ws.doctor(false, false).unwrap();
+    assert!(
+        findings.iter().any(|f| {
+            f.severity == Severity::Warning && !f.fixed && f.message.contains("core.compression")
+        }),
+        "{findings:?}"
+    );
+
+    let findings = ws.doctor(true, false).unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.fixed && f.message.contains("core.compression")),
+        "{findings:?}"
+    );
+    let compression = ws
+        .shadow()
+        .run(&["config", "--get", "core.compression"])
+        .unwrap();
+    assert_eq!(compression, "0");
+}
+
+#[test]
 fn big_file_shrink_below_threshold_round_trip() {
     let (_tmp, root) = project();
     let _ = Workspace::init(&root, None).unwrap();

@@ -240,7 +240,7 @@
 **Done when:** `asp doctor` is the trusted first stop for every broken workspace report.
 
 - **S19.1 Detection**
-  - [ ] T19.1.1 Add checks for stale locks, missing git binary, unsupported git versions, and config drift.
+  - [x] T19.1.1 Add checks for git availability/version and shadow-git config drift.
   - [x] T19.1.2 Add optional deep CAS verification that re-hashes sidecar blobs.
   - [x] T19.1.3 Add checks for orphan fork directories and promoted fork cleanup candidates.
 - **S19.2 Repair UX**

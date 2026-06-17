@@ -1523,7 +1523,46 @@ impl Workspace {
             None
         };
 
-        // 1. Journal integrity.
+        // 1. Runtime prerequisites and shadow-git config.
+        if let Err(e) = crate::gitx::ensure_git_version() {
+            add(
+                Severity::Error,
+                match e.hint {
+                    Some(hint) => format!("{} (hint: {hint})", e.message),
+                    None => e.message,
+                },
+                false,
+            );
+        }
+        for (key, expected) in [
+            ("core.compression", "0"),
+            ("pack.compression", "1"),
+            ("gc.auto", "0"),
+            ("core.untrackedCache", "true"),
+        ] {
+            let actual = self
+                .shadow
+                .run(&["config", "--get", key])
+                .unwrap_or_default();
+            if actual.trim() != expected {
+                let fixed = if fix {
+                    self.shadow.run(&["config", key, expected])?;
+                    true
+                } else {
+                    false
+                };
+                add(
+                    Severity::Warning,
+                    format!(
+                        "shadow git config {key} is {:?}, expected {expected:?}",
+                        actual.trim()
+                    ),
+                    fixed,
+                );
+            }
+        }
+
+        // 2. Journal integrity.
         let report = self.journal.read()?;
         if report.torn_tail {
             let fixed = if fix {
@@ -1546,7 +1585,7 @@ impl Workspace {
             );
         }
 
-        // 2. Checkpoint refs resolvable + head consistency.
+        // 3. Checkpoint refs resolvable + head consistency.
         let refs = self.checkpoint_refs()?;
         for (seq, commit) in &refs {
             if self.shadow.rev_parse(commit)?.is_none() {
@@ -1574,7 +1613,7 @@ impl Workspace {
             }
         }
 
-        // 3. Journal entries referencing refs that don't exist (crash window).
+        // 4. Journal entries referencing refs that don't exist (crash window).
         for e in report.entries.iter().filter(|e| e.op == Op::Checkpoint) {
             if let Some(seq) = e.seq {
                 if !refs.contains_key(&seq) {
@@ -1587,7 +1626,7 @@ impl Workspace {
             }
         }
 
-        // 4. Fork registry vs reality. Pending entries are deterministic
+        // 5. Fork registry vs reality. Pending entries are deterministic
         //    torn-clone markers (intent journaling in fork()), so cleanup
         //    never has to guess about directories asp didn't create.
         let mut registry = self.fork_registry()?;
@@ -1661,7 +1700,7 @@ impl Workspace {
             atomic_write_json(&self.layout.forks_json(), &registry)?;
         }
 
-        // 5. Unregistered fork-looking sibling dirs: REPORT ONLY. asp never
+        // 6. Unregistered fork-looking sibling dirs: REPORT ONLY. asp never
         //    deletes a directory it cannot prove it created (a user's manual
         //    `cp -r proj proj@backup` is indistinguishable from a torn clone
         //    by inspection — the Pending registry above is the proof).
@@ -1700,7 +1739,7 @@ impl Workspace {
             }
         }
 
-        // 6. Big-file CAS integrity.
+        // 7. Big-file CAS integrity.
         let bf = blobs::load_bigfiles(&blobs::bigfiles_path(&self.layout.asp))?;
         for (path, entry) in &bf.files {
             let cas = self.layout.blobs().join(&entry.blake3);
