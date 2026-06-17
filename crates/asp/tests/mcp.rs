@@ -138,6 +138,18 @@ fn full_mcp_session() {
         assert!(t["description"].as_str().unwrap().len() > 40);
         assert_eq!(t["inputSchema"]["type"], "object");
     }
+    for risky in [
+        "workspace_undo",
+        "workspace_restore",
+        "workspace_promote",
+        "workspace_discard",
+    ] {
+        let tool = list.iter().find(|t| t["name"] == risky).unwrap();
+        assert!(
+            tool["description"].as_str().unwrap().contains("Do not"),
+            "{risky} should tell models when not to call it"
+        );
+    }
 
     // Calling a tool before init returns a self-correcting error.
     let status = mcp.call_tool("workspace_status", serde_json::json!({}));

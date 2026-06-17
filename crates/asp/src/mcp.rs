@@ -238,14 +238,18 @@ pub fn tool_definitions() -> Vec<Value> {
             "name": "workspace_undo",
             "description": "Step back: if there are uncommitted changes since the last checkpoint \
         (including bash side-effects like deleted or generated files), revert them; if the tree is clean, \
-        go back one checkpoint. The pre-undo state is saved automatically, so undo is always safe.",
+        go back one checkpoint. The pre-undo state is saved automatically, so undo is always safe. Do not \
+        call just to inspect history or compare states; use workspace_log or workspace_diff. If the user \
+        named a checkpoint, call workspace_restore instead.",
             "inputSchema": schema(json!({ "directory": dir_prop() }), &[]),
             "annotations": annotations("Undo workspace", false, true, false),
         }),
         json!({
             "name": "workspace_restore",
             "description": "Restore the working tree (or specific paths) to a checkpoint from \
-        workspace_log. The current state is safety-checkpointed first, so nothing is ever lost.",
+        workspace_log. The current state is safety-checkpointed first, so nothing is ever lost. Do not \
+        call to browse history; use workspace_log or workspace_diff first. Prefer paths when the user \
+        asked to recover only specific files.",
             "inputSchema": schema(
                 json!({
                     "directory": dir_prop(),
@@ -297,7 +301,8 @@ pub fn tool_definitions() -> Vec<Value> {
             "name": "workspace_promote",
             "description": "Land a fork's work as an ordinary git branch in the main repository \
         (never touches HEAD or the user's worktree). Use after workspace_forks shows a winner. The \
-        result names the branch; suggest a PR or merge to the user afterwards.",
+        result names the branch; suggest a PR or merge to the user afterwards. Do not call before \
+        comparing forks or when the user only asked to inspect alternatives.",
             "inputSchema": schema(
                 json!({
                     "directory": dir_prop(),
@@ -311,7 +316,8 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "name": "workspace_discard",
             "description": "Delete a fork. Refuses if the fork has work that was never promoted — \
-        pass force=true only when the user has confirmed the work should be thrown away.",
+        pass force=true only when the user has confirmed the work should be thrown away. Do not force \
+        discard work that may matter; promote it first or ask for confirmation.",
             "inputSchema": schema(
                 json!({
                     "directory": dir_prop(),

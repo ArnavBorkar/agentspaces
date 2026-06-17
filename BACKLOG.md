@@ -172,7 +172,7 @@
   - [x] T13.1.2 Add tests for malformed JSON-RPC, unknown ids, bad params, and partial lines.
   - [x] T13.1.3 Add stable error-code documentation for all MCP tools.
 - **S13.2 Model ergonomics**
-  - [ ] T13.2.1 Add tool descriptions with examples of when not to call destructive operations.
+  - [x] T13.2.1 Add tool descriptions with examples of when not to call destructive operations.
   - [ ] T13.2.2 Add a replayable transcript test that asserts model-facing outputs stay concise and actionable.
 
 ## EPIC 14 — Team policy and governance

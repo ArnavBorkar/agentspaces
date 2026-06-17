@@ -40,6 +40,8 @@
   params with protocol errors while continuing to serve later requests.
 - MCP tool errors now include structured `code`, `message`, and `hint` fields,
   with stable recovery guidance documented in `docs/mcp-error-codes.md`.
+- MCP tool descriptions now tell models when not to call risky state-changing
+  tools such as undo, restore, promote, and discard.
 
 ### Fixed
 
