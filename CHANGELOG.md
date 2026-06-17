@@ -87,6 +87,8 @@
   actionable `invalid_branch` error for unsafe Git refs.
 - `asp promote --push --remote <remote>` now pushes the promoted branch with an
   exact branch refspec and reports the push target in human and JSON output.
+- `asp promote --pr-draft` now attempts `gh pr create --draft` after an
+  explicit push and returns fallback instructions when `gh` cannot create it.
 
 ### Fixed
 
@@ -136,6 +138,9 @@
   when the requested branch name is not a valid Git branch ref.
 - Additive: `asp promote --json --push --remote <remote>` includes a `push`
   object with `pushed`, `remote`, `branch`, `refspec`, and `command`.
+- Additive: `asp promote --json --pr-draft` includes a `pr` object with
+  `attempted`, `created`, optional `url`, `command`, `fallback_command`, and
+  `message`.
 
 ## Automation Contract Rules
 

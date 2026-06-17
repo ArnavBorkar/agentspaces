@@ -340,6 +340,8 @@ pub struct PromoteReport {
     pub cleanup_command: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub push: Option<PromotePushReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr: Option<PromotePrDraftReport>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -349,6 +351,17 @@ pub struct PromotePushReport {
     pub branch: String,
     pub refspec: String,
     pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PromotePrDraftReport {
+    pub attempted: bool,
+    pub created: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    pub command: String,
+    pub fallback_command: String,
+    pub message: String,
 }
 
 struct ScanResult {
@@ -2279,6 +2292,7 @@ impl Workspace {
             commit,
             cleanup_command,
             push: None,
+            pr: None,
         })
     }
 

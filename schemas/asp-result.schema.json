@@ -648,7 +648,8 @@
         "branch": { "type": "string" },
         "commit": { "$ref": "#/$defs/gitOid" },
         "cleanup_command": { "type": "string" },
-        "push": { "$ref": "#/$defs/promotePushReport" }
+        "push": { "$ref": "#/$defs/promotePushReport" },
+        "pr": { "$ref": "#/$defs/promotePrDraftReport" }
       }
     },
     "promotePushReport": {
@@ -661,6 +662,25 @@
         "branch": { "type": "string" },
         "refspec": { "type": "string" },
         "command": { "type": "string" }
+      }
+    },
+    "promotePrDraftReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "created",
+        "command",
+        "fallback_command",
+        "message"
+      ],
+      "properties": {
+        "attempted": { "const": true },
+        "created": { "type": "boolean" },
+        "url": { "type": "string" },
+        "command": { "type": "string" },
+        "fallback_command": { "type": "string" },
+        "message": { "type": "string" }
       }
     },
     "raceLaneResults": {

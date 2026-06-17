@@ -899,6 +899,51 @@ fn promote_via_cli_lands_branch() {
         String::from_utf8_lossy(&remote_show.stdout).trim(),
         "print('pushed')"
     );
+
+    let forks = ok_json(&root, &["fork", "--name", "draft"]);
+    let draft_path = PathBuf::from(forks["result"][0]["path"].as_str().unwrap());
+    std::fs::write(draft_path.join("src/app.py"), "print('draft')\n").unwrap();
+    let out = asp(
+        &root,
+        &[
+            "--json",
+            "promote",
+            "draft",
+            "--branch",
+            "review/proj/draft",
+            "--pr-draft",
+        ],
+    );
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["error"]["code"], "nothing_to_do");
+    assert!(err["error"]["hint"].as_str().unwrap().contains("--push"));
+
+    let draft = ok_json(
+        &root,
+        &[
+            "promote",
+            "draft",
+            "--branch",
+            "review/proj/draft",
+            "--push",
+            "--remote",
+            "origin",
+            "--pr-draft",
+        ],
+    );
+    assert_eq!(draft["result"]["push"]["pushed"], true);
+    assert_eq!(draft["result"]["pr"]["attempted"], true);
+    assert_eq!(draft["result"]["pr"]["created"], false);
+    assert!(draft["result"]["pr"]["fallback_command"]
+        .as_str()
+        .unwrap()
+        .contains("gh pr create --draft"));
+    assert!(!draft["result"]["pr"]["message"]
+        .as_str()
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

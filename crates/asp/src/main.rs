@@ -11,6 +11,7 @@ mod race;
 mod ui;
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
@@ -154,6 +155,9 @@ enum Cmd {
         /// Remote to push to with --push (for example: origin).
         #[arg(long, value_name = "REMOTE")]
         remote: Option<String>,
+        /// Create a draft pull request with gh after pushing; falls back to instructions.
+        #[arg(long)]
+        pr_draft: bool,
     },
     /// Delete a fork (refuses if it has unpromoted work, unless --force).
     Discard {
@@ -977,13 +981,17 @@ fn run(cli: Cli) -> Result<(), Error> {
             branch,
             push,
             remote,
+            pr_draft,
         } => {
-            validate_promote_push(push, remote.as_deref())?;
+            validate_promote_push(push, remote.as_deref(), pr_draft)?;
             let ws = open(&cli.dir)?;
             let mut report = ws.promote(&fork, branch)?;
             if push {
                 let remote = remote.as_deref().expect("validated push remote");
                 report.push = Some(ws.push_promoted_branch(remote, &report.branch)?);
+            }
+            if pr_draft {
+                report.pr = Some(create_draft_pr(ws.root(), &report.branch));
             }
             if json {
                 ui::print_json(true, &report);
@@ -1011,6 +1019,16 @@ fn run(cli: Cli) -> Result<(), Error> {
                         ui::cyan(&push.branch),
                         ui::cyan(&push.command)
                     );
+                }
+                if let Some(pr) = &report.pr {
+                    if pr.created {
+                        if let Some(url) = &pr.url {
+                            println!("  draft PR: {}", ui::cyan(url));
+                        }
+                    } else {
+                        println!("  draft PR not created: {}", pr.message);
+                        println!("  fallback: {}", ui::cyan(&pr.fallback_command));
+                    }
                 }
             }
             Ok(())
@@ -1600,7 +1618,14 @@ fn validate_diff_mode(
     Ok(())
 }
 
-fn validate_promote_push(push: bool, remote: Option<&str>) -> Result<(), Error> {
+fn validate_promote_push(push: bool, remote: Option<&str>, pr_draft: bool) -> Result<(), Error> {
+    if pr_draft && !push {
+        return Err(Error::new(
+            ErrorCode::NothingToDo,
+            "--pr-draft needs --push so the branch exists on a remote",
+        )
+        .with_hint("retry with `--push --remote <remote>`, for example `asp promote <fork> --push --remote origin --pr-draft`"));
+    }
     if push {
         let has_remote = remote.is_some_and(|remote| !remote.trim().is_empty());
         if !has_remote {
@@ -1617,6 +1642,89 @@ fn validate_promote_push(push: bool, remote: Option<&str>) -> Result<(), Error> 
         );
     }
     Ok(())
+}
+
+fn create_draft_pr(root: &Path, branch: &str) -> asp_core::workspace::PromotePrDraftReport {
+    let command_parts = ["gh", "pr", "create", "--draft", "--fill", "--head", branch];
+    let command = command_parts
+        .iter()
+        .map(|part| shell_arg(part))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let output = Command::new("gh")
+        .arg("pr")
+        .arg("create")
+        .arg("--draft")
+        .arg("--fill")
+        .arg("--head")
+        .arg(branch)
+        .env("GH_PROMPT_DISABLED", "1")
+        .env_remove("GH_REPO")
+        .current_dir(root)
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            asp_core::workspace::PromotePrDraftReport {
+                attempted: true,
+                created: true,
+                url: (!url.is_empty()).then_some(url),
+                command: command.clone(),
+                fallback_command: command,
+                message: "draft pull request created".to_string(),
+            }
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let detail = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                "gh pr create exited unsuccessfully".to_string()
+            };
+            asp_core::workspace::PromotePrDraftReport {
+                attempted: true,
+                created: false,
+                url: None,
+                command: command.clone(),
+                fallback_command: command,
+                message: format!("gh could not create a draft PR: {detail}"),
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            asp_core::workspace::PromotePrDraftReport {
+                attempted: true,
+                created: false,
+                url: None,
+                command: command.clone(),
+                fallback_command: command,
+                message: "gh is not installed or not on PATH".to_string(),
+            }
+        }
+        Err(err) => asp_core::workspace::PromotePrDraftReport {
+            attempted: true,
+            created: false,
+            url: None,
+            command: command.clone(),
+            fallback_command: command,
+            message: format!("failed to run gh: {err}"),
+        },
+    }
+}
+
+fn shell_arg(raw: &str) -> String {
+    if raw
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':'))
+    {
+        raw.to_string()
+    } else {
+        format!("'{}'", raw.replace('\'', "'\\''"))
+    }
 }
 
 fn diff_text_mode(patch: bool, stat: bool) -> Option<DiffTextMode> {

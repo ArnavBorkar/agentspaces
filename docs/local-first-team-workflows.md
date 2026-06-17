@@ -164,6 +164,13 @@ To promote and publish in one step, use an explicit remote:
 asp promote <winner> --branch asp/<issue-or-task> --push --remote origin
 ```
 
+If `gh` is installed and authenticated for the pushed repository, create a
+draft PR in the same step:
+
+```bash
+asp promote <winner> --branch asp/<issue-or-task> --push --remote origin --pr-draft
+```
+
 ### Cleanup
 
 ```bash
