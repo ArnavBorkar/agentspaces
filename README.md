@@ -85,6 +85,7 @@ Honest numbers from the stress tree (100k files / 3.3 GiB, including 3 GiB of bi
 - **[Why not git worktrees?](docs/why-not-git-worktrees.md)** — worktrees carry tracked files only, need a clean index dance, and give you no cross-session timeline of agent changes.
 - **[Why not AgentFS / a virtual filesystem?](docs/why-not-agentfs.md)** — asp versions your *real* directory: your editor, your toolchain, and `git` keep working unchanged, and nothing is trapped in a database file.
 - **FAQ** — [docs/FAQ.md](docs/FAQ.md)
+- **Architecture** — [docs/architecture.md](docs/architecture.md)
 
 ## Install
 

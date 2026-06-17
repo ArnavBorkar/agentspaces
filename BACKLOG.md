@@ -122,7 +122,7 @@
 - **S9.1 Public narrative**
   - [x] T9.1.1 Remove or rewrite internal market-research artifacts that make the repo read like a derivative project.
   - [x] T9.1.2 Keep the product brief focused on agentspaces principles, trust boundaries, and v1 scope.
-  - [ ] T9.1.3 Add a one-page architecture overview for first-time contributors.
+  - [x] T9.1.3 Add a one-page architecture overview for first-time contributors.
 - **S9.2 Launch hygiene**
   - [ ] T9.2.1 Verify all README claims map to reproducible docs, tests, or benchmark scripts.
   - [ ] T9.2.2 Add a release-readiness checklist for public visibility flips, package publication, and post-launch triage.
