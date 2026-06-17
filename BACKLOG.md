@@ -205,7 +205,7 @@
 
 - **S16.1 Measurement**
   - [x] T16.1.1 Add benchmark baselines to CI as non-blocking trend artifacts.
-  - [ ] T16.1.2 Add benchmark fixtures for many small files, large binaries, deep trees, and rename-heavy workloads.
+  - [x] T16.1.2 Add benchmark fixtures for many small files, large binaries, deep trees, and rename-heavy workloads.
   - [ ] T16.1.3 Add a `asp bench self` command that reports local filesystem capabilities.
 - **S16.2 Optimizations**
   - [ ] T16.2.1 Add a persistent file-state index guarded by crash-safe writes.

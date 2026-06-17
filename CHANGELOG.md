@@ -61,6 +61,8 @@
   checkpoints even under aggressive `keep_last` policy.
 - CI now publishes a non-blocking lightweight benchmark baseline artifact on
   every run for performance trend review.
+- Benchmark tooling now includes named fixtures for small-file storms, large
+  binary repositories, deep trees, and rename-heavy workloads.
 
 ### Fixed
 

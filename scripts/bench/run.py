@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Reproducible asp benchmark harness.
 
-Generates the synthetic monorepo (scripts/spike/gen_tree.py), then measures
-asp's core operations against cp -R and git-worktree baselines. Emits a
-markdown report to stdout.
+Generates a synthetic fixture (scripts/spike/gen_tree.py), then measures asp's
+core operations against cp -R and git-worktree baselines. Emits a markdown
+report to stdout.
 
-Usage: python3 scripts/bench/run.py [--files 100000] [--blob-gb 3] [--keep]
+Usage: python3 scripts/bench/run.py [--fixture monorepo] [--files 100000] [--blob-gb 3] [--keep]
 Requires: a release build at target/release/asp.
 """
 
@@ -21,6 +21,9 @@ import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ASP = os.path.join(REPO, "target", "release", "asp")
+FIXTURES = ("monorepo", "small-files", "large-binaries", "deep-tree", "rename-heavy")
+SKIP_DIRS = {".asp", ".git"}
+TEXT_EXTS = {".cfg", ".js", ".json", ".md", ".rs", ".toml", ".txt", ".yaml", ".yml"}
 
 
 def run(cmd, cwd=None, env=None):
@@ -45,29 +48,116 @@ def asp(args, cwd):
     return run([ASP, *args], cwd=cwd)
 
 
-def main():
+def safe_join(root, rel):
+    path = os.path.abspath(os.path.join(root, rel))
+    root_abs = os.path.abspath(root)
+    if path != root_abs and not path.startswith(root_abs + os.sep):
+        raise RuntimeError(f"rename plan escapes fixture root: {rel}")
+    return path
+
+
+def text_edit_candidates(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        for filename in sorted(filenames):
+            if filename == "rename-plan.tsv":
+                continue
+            path = os.path.join(dirpath, filename)
+            rel = os.path.relpath(path, root)
+            if rel == "README.md":
+                continue
+            ext = os.path.splitext(filename)[1]
+            if ext in TEXT_EXTS:
+                yield path
+
+
+def append_incremental_edits(root, limit):
+    edited = 0
+    for path in text_edit_candidates(root):
+        with open(path, "a") as f:
+            f.write("// bench edit\n")
+        edited += 1
+        if edited >= limit:
+            break
+    if edited == 0:
+        raise RuntimeError("fixture has no text files available for incremental edits")
+    return edited
+
+
+def apply_rename_workload(root, limit):
+    plan = os.path.join(root, "rename-plan.tsv")
+    if not os.path.exists(plan):
+        raise RuntimeError("rename-heavy fixture is missing rename-plan.tsv")
+
+    renamed = 0
+    with open(plan) as f:
+        for line in f:
+            if renamed >= limit:
+                break
+            src_rel, dst_rel = line.rstrip("\n").split("\t", 1)
+            src = safe_join(root, src_rel)
+            dst = safe_join(root, dst_rel)
+            if not os.path.exists(src):
+                continue
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            os.rename(src, dst)
+            with open(dst, "a") as out:
+                out.write("// bench rename edit\n")
+            renamed += 1
+
+    if renamed == 0:
+        raise RuntimeError("rename-heavy fixture has no rename-plan entries to apply")
+    return renamed
+
+
+def mutate_for_incremental_checkpoint(root, fixture, limit):
+    if fixture == "rename-heavy":
+        renamed = apply_rename_workload(root, limit)
+        return f"incremental checkpoint ({renamed} renames)"
+
+    edited = append_incremental_edits(root, limit)
+    return f"incremental checkpoint ({edited} edits)"
+
+
+def parse_args():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--fixture", choices=FIXTURES, default="monorepo")
     ap.add_argument("--files", type=int, default=100_000)
     ap.add_argument("--blob-gb", type=float, default=3.0)
+    ap.add_argument("--blob-count", type=int, default=24)
+    ap.add_argument("--edit-count", type=int, default=10)
     ap.add_argument("--keep", action="store_true")
     args = ap.parse_args()
+    if args.edit_count < 1:
+        ap.error("--edit-count must be at least 1")
+    return args
+
+
+def main():
+    args = parse_args()
 
     if not os.path.exists(ASP):
         sys.exit("build first: cargo build --release")
 
     base = os.environ.get("ASP_BENCH_BASE") or tempfile.mkdtemp(prefix="asp-bench-")
     tree = os.path.join(base, "bench-tree")
-    for leftover in [tree] + [
-        os.path.join(base, d) for d in os.listdir(base) if d.startswith("bench-tree@")
-    ] if os.path.isdir(base) else []:
-        shutil.rmtree(leftover, ignore_errors=True)
+    if os.path.isdir(base):
+        leftovers = [tree] + [
+            os.path.join(base, d) for d in os.listdir(base) if d.startswith("bench-tree@")
+        ]
+        for leftover in leftovers:
+            shutil.rmtree(leftover, ignore_errors=True)
     os.makedirs(base, exist_ok=True)
 
-    print("generating tree…", file=sys.stderr)
+    print("generating tree...", file=sys.stderr)
     gen = run([
         sys.executable,
         os.path.join(REPO, "scripts", "spike", "gen_tree.py"),
-        "--root", tree, "--files", str(args.files), "--blob-gb", str(args.blob_gb),
+        "--root", tree,
+        "--fixture", args.fixture,
+        "--files", str(args.files),
+        "--blob-gb", str(args.blob_gb),
+        "--blob-count", str(args.blob_count),
     ])
     gen_summary = gen.stdout.strip().splitlines()[-1]
     results = {}
@@ -77,12 +167,8 @@ def main():
         lambda: asp(["checkpoint", "-m", "initial"], tree)
     )
 
-    # Incremental: touch 10 source files.
-    for i in range(10):
-        p = os.path.join(tree, f"packages/pkg{i:03d}/src/mod00/file_00000.rs")
-        with open(p, "a") as f:
-            f.write("// bench edit\n")
-    results["incremental checkpoint (10 edits)"], _ = timed(
+    incremental_label = mutate_for_incremental_checkpoint(tree, args.fixture, args.edit_count)
+    results[incremental_label], _ = timed(
         lambda: asp(["checkpoint", "-m", "incremental"], tree)
     )
     results["no-op checkpoint"], _ = timed(lambda: asp(["checkpoint"], tree))
@@ -118,6 +204,7 @@ def main():
     # Report.
     print(f"# asp benchmarks\n")
     print(f"*{time.strftime('%Y-%m-%d')} · {platform.platform()} · {platform.processor() or platform.machine()}*\n")
+    print(f"Fixture: `{args.fixture}`\n")
     print(f"Tree: {gen_summary}\n")
     print("| Operation | Time |")
     print("|---|---:|")

@@ -177,9 +177,13 @@ asp doctor --fix
 
 # Reproduce benchmark claims
 python3 scripts/bench/run.py
+
+# Explore a targeted benchmark fixture
+python3 scripts/bench/run.py --fixture small-files --files 50000 --blob-gb 0
 ```
 
 CI also runs a small non-blocking benchmark baseline and uploads the markdown
-report as an artifact. Treat it as trend signal only; the published performance
-claims still come from the full benchmark methodology in
+report as an artifact, after smoke-generating the named benchmark fixtures.
+Treat the CI timing as trend signal only; the published performance claims still
+come from the full benchmark methodology in
 [docs/benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).

@@ -104,6 +104,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build release binary
         run: cargo build --release -p asp
+      - name: Validate benchmark fixtures
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          for fixture in monorepo small-files large-binaries deep-tree rename-heavy; do
+            python3 scripts/spike/gen_tree.py \
+              --root "$tmp/$fixture" \
+              --fixture "$fixture" \
+              --files 64 \
+              --blob-gb 0.000001 \
+              --blob-count 2
+          done
       - name: Run lightweight benchmark baseline
         run: |
           python3 scripts/bench/run.py --files 2000 --blob-gb 0.02 > bench-baseline.md
