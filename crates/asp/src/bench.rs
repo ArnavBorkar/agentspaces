@@ -313,7 +313,7 @@ fn filesystem_kind(path: &Path) -> Option<String> {
         return None;
     }
     let stat = unsafe { stat.assume_init() };
-    Some(match stat.f_type as i64 {
+    Some(match stat.f_type {
         0x9123_683e => "btrfs".to_string(),
         0xef53 => "ext2/ext3/ext4".to_string(),
         0x5846_5342 => "xfs".to_string(),
