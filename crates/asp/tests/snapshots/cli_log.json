@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "commit": "<git-oid>",
+      "duration_ms": 0,
+      "files_changed": 2,
+      "message": "base",
+      "op": "checkpoint",
+      "seq": 1,
+      "source": "manual",
+      "ts": "<timestamp>",
+      "v": 1
+    },
+    {
+      "op": "init",
+      "ts": "<timestamp>",
+      "v": 1
+    }
+  ]
+}

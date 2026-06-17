@@ -89,3 +89,9 @@ When a PR changes a serialized field, command result, MCP tool result, or error
 code, update the schemas in the same PR. Additive fields should be documented as
 schema updates. Removing or renaming fields is a breaking automation change and
 needs a changelog entry plus a compatibility note.
+
+The CI snapshot guard for these shapes is:
+
+```bash
+cargo test -p asp --test json_snapshots
+```

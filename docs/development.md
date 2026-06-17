@@ -125,8 +125,8 @@ Use focused tests while iterating, then finish with the full gate.
 | Store layout, path validation, or locks | `cargo test -p asp-core --test engine` | full gate |
 | Journal parsing or corruption recovery | `cargo test -p asp-core journal` and `cargo test -p asp-core --test properties` | full gate |
 | Fork/reflink/copy behavior | `cargo test -p asp-core fork` and `cargo test -p asp --test torture` | full gate |
-| CLI output or JSON envelope | `cargo test -p asp --test cli` | full gate |
-| MCP tools | `cargo test -p asp --test mcp` | full gate |
+| CLI output or JSON envelope | `cargo test -p asp --test cli` and `cargo test -p asp --test json_snapshots` | full gate |
+| MCP tools | `cargo test -p asp --test mcp` and `cargo test -p asp --test json_snapshots` | full gate |
 | Claude hooks | `cargo test -p asp --test hooks` | full gate |
 | Release/dependency policy | `cargo deny check` | full gate |
 

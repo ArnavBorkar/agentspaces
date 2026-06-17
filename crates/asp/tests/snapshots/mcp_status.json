@@ -1,0 +1,23 @@
+{
+  "content": [
+    {
+      "text": "<text>",
+      "type": "text"
+    }
+  ],
+  "isError": false,
+  "structuredContent": {
+    "active_forks": 0,
+    "deleted_files": 0,
+    "dirty_files": 0,
+    "is_fork": false,
+    "last_checkpoint": {
+      "message": "base",
+      "seq": 1,
+      "ts": "<timestamp>"
+    },
+    "root": "<workspace-root>",
+    "untracked_files": 0,
+    "workspace_id": "<workspace-id>"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "not_a_workspace",
+    "hint": "run `asp init` in your project root to create one",
+    "message": "<message>"
+  },
+  "ok": false
+}
