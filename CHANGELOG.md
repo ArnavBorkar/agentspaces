@@ -57,6 +57,8 @@
   `detail.paths`, so `asp audit --path <path>` can find checkpoint events.
 - `asp retention plan` reads local retention policy and prints a dry-run
   checkpoint retention plan without deleting refs or objects.
+- Retention planning retains the latest checkpoint and active fork-point
+  checkpoints even under aggressive `keep_last` policy.
 
 ### Fixed
 

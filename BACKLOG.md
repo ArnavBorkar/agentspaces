@@ -197,7 +197,7 @@
   - [x] T15.1.3 Add checkpoint-to-path attribution for changed files in audit output.
 - **S15.2 Retention**
   - [x] T15.2.1 Add configurable checkpoint retention policies with dry-run output.
-  - [ ] T15.2.2 Add tests proving retention never removes reachable promoted or recovery-required data.
+  - [x] T15.2.2 Add tests proving retention never removes reachable promoted or recovery-required data.
 
 ## EPIC 16 — Large repository performance
 

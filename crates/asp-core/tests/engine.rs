@@ -5,7 +5,7 @@ use std::process::Command;
 
 use asp_core::journal::{Entry, Op};
 use asp_core::store::ForkStatus;
-use asp_core::workspace::CheckpointOpts;
+use asp_core::workspace::{CheckpointOpts, RetentionAction};
 use asp_core::{ErrorCode, Workspace};
 
 fn write(root: &Path, rel: &str, content: &str) {
@@ -110,6 +110,39 @@ fn init_checkpoint_log_roundtrip() {
     let status = ws.status().unwrap();
     assert_eq!(status.last_checkpoint.as_ref().unwrap().seq, 2);
     assert_eq!(status.dirty_files + status.untracked_files, 0);
+}
+
+#[test]
+fn retention_plan_retains_latest_and_active_fork_points() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    write(&root, "src/main.rs", "fn main() { println!(\"v2\"); }\n");
+    cp(&ws, "v2").unwrap();
+    ws.fork(Some("active".into()), None).unwrap();
+    write(&root, "README.md", "# proj\n\nv3\n");
+    cp(&ws, "v3").unwrap();
+
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[retention]\nkeep_last = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    let plan = ws.retention_plan().unwrap();
+    let entry = |seq| {
+        plan.checkpoints
+            .iter()
+            .find(|entry| entry.seq == seq)
+            .unwrap()
+    };
+
+    assert_eq!(entry(1).action, RetentionAction::Delete);
+    assert_eq!(entry(1).reason, "outside_keep_last");
+    assert_eq!(entry(2).action, RetentionAction::Retain);
+    assert_eq!(entry(2).reason, "fork_point");
+    assert_eq!(entry(3).action, RetentionAction::Retain);
+    assert_eq!(entry(3).reason, "latest_checkpoint");
 }
 
 #[test]
