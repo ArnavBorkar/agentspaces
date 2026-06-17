@@ -9,7 +9,7 @@
   .asp/
     format-version                 # ASCII integer, currently "1"
     workspace.json                 # identity: {id, created_at, parent: {workspace_id, fork_point}?, label?}
-    config.toml                    # user-editable settings (excludes, blob threshold)
+    config.toml                    # user-editable settings (capture and promote defaults)
     lock                           # advisory exclusive lock for mutations (fs2)
     shadow.git/                    # bare git dir — the checkpoint store
     shadow.index                   # git index for the shadow repo
@@ -40,7 +40,7 @@ commands.
 - Config: `core.compression=0`, `gc.auto=0`, `core.untrackedCache=true`.
 - `info/exclude` holds: `/.asp/`, the default derived-state excludes
   (`node_modules/`, `target/`, `.venv/`, `__pycache__/`, `build/`, `dist/`, `.next/`),
-  user-configured extras from `config.toml`, and one generated line per known large blob.
+  user-configured capture extras from `config.toml`, and one generated line per known large blob.
 - The user's `.git` is ignored automatically by git itself; we never read or write it except
   during `promote` (which only ever creates ordinary new branches via local fetch).
 - Checkpoints are commits on `refs/asp/checkpoints/<seq>` (one ref per checkpoint,

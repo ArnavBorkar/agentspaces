@@ -79,6 +79,8 @@
   and fork-point comparisons.
 - `asp diff --html --output <file>` writes an offline HTML diff review artifact
   for checkpoint and fork comparisons.
+- `.asp/config.toml` now supports `promote.branch_template` so teams can
+  standardize default branch names created by `asp promote`.
 
 ### Fixed
 

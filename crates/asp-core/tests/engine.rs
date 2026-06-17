@@ -773,6 +773,34 @@ fn promote_lands_branch_in_user_repo() {
 }
 
 #[test]
+fn promote_uses_configured_branch_template_when_branch_is_omitted() {
+    let (_tmp, root) = project();
+    init_user_git(&root);
+
+    Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[promote]\nbranch_template = \"review/{workspace}/{fork}\"\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::open(&root).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(&fork.path, "src/main.rs", "fn main() { /* reviewed */ }\n");
+
+    let report = ws.promote("winner", None).unwrap();
+    assert_eq!(report.branch, "review/proj/winner");
+    let show = git(&root, &["show", "review/proj/winner:src/main.rs"]);
+    assert!(show.contains("reviewed"));
+
+    let fork = ws.fork(Some("manual".into()), None).unwrap();
+    write(&fork.path, "src/main.rs", "fn main() { /* manual */ }\n");
+    let report = ws.promote("manual", Some("manual/branch".into())).unwrap();
+    assert_eq!(report.branch, "manual/branch");
+}
+
+#[test]
 fn promote_without_user_git_errors_helpfully() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();

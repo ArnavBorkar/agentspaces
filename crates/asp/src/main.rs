@@ -145,7 +145,7 @@ enum Cmd {
     Promote {
         /// Fork name (see `asp forks`).
         fork: String,
-        /// Branch name to create (default: asp/<fork>).
+        /// Branch name to create (default: promote.branch_template in .asp/config.toml).
         #[arg(long)]
         branch: Option<String>,
     },

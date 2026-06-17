@@ -240,7 +240,7 @@
       "inputSchema": {
         "properties": {
           "branch": {
-            "description": "Branch name (default asp/<fork>).",
+            "description": "Branch name. Defaults to .asp/config.toml promote.branch_template.",
             "type": "string"
           },
           "directory": {

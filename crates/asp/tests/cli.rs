@@ -783,14 +783,19 @@ fn promote_via_cli_lands_branch() {
     git(&["commit", "-qm", "init"]);
 
     ok(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[promote]\nbranch_template = \"review/{workspace}/{fork}\"\n",
+    )
+    .unwrap();
     ok(&root, &["checkpoint", "-m", "base"]);
     let forks = ok_json(&root, &["fork", "--name", "winner"]);
     let fork_path = PathBuf::from(forks["result"][0]["path"].as_str().unwrap());
     std::fs::write(fork_path.join("src/app.py"), "print('better')\n").unwrap();
 
     let p = ok_json(&root, &["promote", "winner"]);
-    assert_eq!(p["result"]["branch"], "asp/winner");
-    let content = git(&["show", "asp/winner:src/app.py"]);
+    assert_eq!(p["result"]["branch"], "review/proj/winner");
+    let content = git(&["show", "review/proj/winner:src/app.py"]);
     assert_eq!(content, "print('better')");
 }
 

@@ -228,7 +228,7 @@
 **Done when:** a winning fork can become a normal reviewable branch or draft PR with minimal friction and no history surprises.
 
 - **S18.1 Branch polish**
-  - [ ] T18.1.1 Add configurable branch naming templates for promote.
+  - [x] T18.1.1 Add configurable branch naming templates for promote.
   - [ ] T18.1.2 Add promote output that clearly states the fork directory remains on disk and how to clean it.
   - [ ] T18.1.3 Add tests for protected branch-name collisions and unsafe ref names.
 - **S18.2 GitHub flow**

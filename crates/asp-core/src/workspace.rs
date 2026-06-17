@@ -2212,7 +2212,7 @@ impl Workspace {
             .with_hint("run `git init && git add -A && git commit -m init` first, or copy files from the fork manually"));
         }
 
-        let branch = branch.unwrap_or_else(|| format!("asp/{fork_name}"));
+        let branch = branch.unwrap_or_else(|| self.default_promote_branch(fork_name));
         if user_git_ref_exists(&self.layout.root, &branch)? {
             return Err(Error::new(
                 ErrorCode::BranchExists,
@@ -2302,6 +2302,17 @@ impl Workspace {
         entry.detail = Some(serde_json::json!({ "fork": fork_name, "forced": force }));
         self.journal.append(&entry)?;
         Ok(())
+    }
+
+    fn default_promote_branch(&self, fork_name: &str) -> String {
+        let workspace_name = self
+            .layout
+            .root
+            .file_name()
+            .map(|name| sanitize_component(&name.to_string_lossy(), "workspace"))
+            .unwrap_or_else(|| "workspace".to_string());
+        self.config
+            .render_promote_branch(fork_name, &workspace_name, &self.meta.id)
     }
 }
 
@@ -2602,6 +2613,10 @@ impl Workspace {
 }
 
 fn sanitize_name(label: &str) -> String {
+    sanitize_component(label, "fork")
+}
+
+fn sanitize_component(label: &str, fallback: &str) -> String {
     let s: String = label
         .chars()
         .map(|c| {
@@ -2614,7 +2629,7 @@ fn sanitize_name(label: &str) -> String {
         .collect();
     let s = s.trim_matches('-').to_string();
     if s.is_empty() {
-        "fork".to_string()
+        fallback.to_string()
     } else {
         s
     }

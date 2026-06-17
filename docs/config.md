@@ -14,6 +14,9 @@ defaults.
 excludes = ["node_modules/", "target/"]
 extra_excludes = ["data/raw/"]
 blob_threshold_mb = 50
+
+[promote]
+branch_template = "asp/{fork}"
 ```
 
 | TOML path | Type | Default | Meaning |
@@ -21,6 +24,7 @@ blob_threshold_mb = 50
 | `capture.excludes` | array of strings | `["node_modules/", "target/", ".venv/", "venv/", "__pycache__/", "build/", "dist/", ".next/", ".cache/"]` | Derived-state patterns excluded from checkpoints. Setting this replaces the default list. |
 | `capture.extra_excludes` | array of strings | `[]` | Additional checkpoint exclude patterns appended after `capture.excludes`. Use this when you want the defaults plus project-specific generated state. |
 | `capture.blob_threshold_mb` | unsigned integer | `50` | Files larger than this many MiB are stored in the BLAKE3 content-addressed sidecar under `.asp/blobs/` instead of as shadow-git blobs. |
+| `promote.branch_template` | string | `"asp/{fork}"` | Branch template used by `asp promote <fork>` when `--branch` is omitted. |
 
 All exclude patterns are written to the shadow git repo's `info/exclude` file,
 so they use gitignore pattern syntax. `asp` also always excludes `/.asp/`
@@ -39,6 +43,24 @@ already ignores because gitignore rules take precedence over the shadow repo's
 `capture.excludes` replaces the default derived-state list. Prefer
 `capture.extra_excludes` unless you intentionally want to manage the full list
 yourself.
+
+## Promote Branch Templates
+
+`promote.branch_template` controls the default branch created by
+`asp promote <fork>`. Passing `--branch <name>` still takes precedence for a
+single promotion.
+
+Supported placeholders:
+
+- `{fork}`: the sanitized fork name. This placeholder is required so repeated
+  promotions do not collide by default.
+- `{workspace}`: the sanitized workspace directory name.
+- `{workspace_id}`: the workspace UUID from `.asp/workspace.json`.
+
+Templates cannot be empty, cannot contain whitespace, and cannot use unknown
+placeholders. Combine this setting with
+`promote.allowed_branch_prefixes` in `.asp/policy.toml` when a team wants both
+friendly defaults and enforceable branch rules.
 
 ## Examples
 
@@ -64,6 +86,13 @@ Lower the large-file sidecar threshold for media-heavy repositories:
 ```toml
 [capture]
 blob_threshold_mb = 10
+```
+
+Name promoted branches by workspace for multi-repo dashboards:
+
+```toml
+[promote]
+branch_template = "review/{workspace}/{fork}"
 ```
 
 ## Recovery

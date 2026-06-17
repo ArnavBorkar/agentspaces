@@ -307,7 +307,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 json!({
                     "directory": dir_prop(),
                     "fork": { "type": "string", "description": "Fork name from workspace_forks." },
-                    "branch": { "type": "string", "description": "Branch name (default asp/<fork>)." }
+                    "branch": { "type": "string", "description": "Branch name. Defaults to .asp/config.toml promote.branch_template." }
                 }),
                 &["fork"],
             ),
