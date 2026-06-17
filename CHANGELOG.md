@@ -28,6 +28,8 @@
   allowed boundary for optional hosted services.
 - `docs/local-engine-governance.md` gives maintainers a review workflow for
   deciding which future features must remain in the local engine.
+- `docs/control-plane-constraints.md` sets zero-custody, opt-in sync, offline
+  behavior, and exportability requirements for any future hosted control plane.
 
 ### Fixed
 

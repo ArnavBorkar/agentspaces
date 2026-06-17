@@ -350,7 +350,7 @@
 - **S28.1 Boundary contracts**
   - [x] T28.1.1 Write an open-core boundary policy with non-negotiable OSS guarantees.
   - [x] T28.1.2 Add a governance note for features that must remain in the local engine.
-  - [ ] T28.1.3 Add design constraints for any future control plane: zero custody by default, opt-in sync, exportability.
+  - [x] T28.1.3 Add design constraints for any future control plane: zero custody by default, opt-in sync, exportability.
 - **S28.2 Team features on paper**
   - [ ] T28.2.1 Draft team audit, policy, and approval workflows that can run locally first.
   - [ ] T28.2.2 Draft enterprise support/SLA boundaries without adding telemetry or mandatory accounts.
