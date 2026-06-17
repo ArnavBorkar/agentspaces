@@ -245,7 +245,7 @@
   - [x] T19.1.3 Add checks for orphan fork directories and promoted fork cleanup candidates.
 - **S19.2 Repair UX**
   - [x] T19.2.1 Add `asp doctor --explain` with human-readable cause and next action per finding.
-  - [ ] T19.2.2 Add JSON repair plans before applying `--fix`.
+  - [x] T19.2.2 Add JSON repair plans before applying `--fix`.
 
 ## EPIC 20 — BYO-bucket sync foundation
 

@@ -91,6 +91,8 @@
   explicit push and returns fallback instructions when `gh` cannot create it.
 - `asp doctor --explain` prints human-readable cause and next-action guidance
   for every health finding.
+- `asp doctor --json` now previews safe automatic repairs with `repair_plan`
+  metadata before users or agents run `asp doctor --fix`.
 
 ### Fixed
 
@@ -145,6 +147,8 @@
   `message`.
 - Additive: `asp doctor --json` and diagnostics doctor findings include
   `cause` and `next_action` strings for automation and support workflows.
+- Additive: repairable `asp doctor --json` findings may include `repair_plan`
+  with `operation`, `description`, `command`, and `destructive`.
 
 ## Automation Contract Rules
 

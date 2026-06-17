@@ -1107,7 +1107,12 @@ fn doctor_repairs_shadow_git_config_drift() {
     let findings = ws.doctor(false, false).unwrap();
     assert!(
         findings.iter().any(|f| {
-            f.severity == Severity::Warning && !f.fixed && f.message.contains("core.compression")
+            f.severity == Severity::Warning
+                && !f.fixed
+                && f.message.contains("core.compression")
+                && f.repair_plan
+                    .as_ref()
+                    .is_some_and(|plan| plan.operation == "reset_shadow_git_config")
         }),
         "{findings:?}"
     );

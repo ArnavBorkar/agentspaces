@@ -423,8 +423,20 @@
           "message": { "type": "string" },
           "cause": { "type": "string" },
           "next_action": { "type": "string" },
+          "repair_plan": { "$ref": "#/$defs/doctorRepairPlan" },
           "fixed": { "type": "boolean" }
         }
+      }
+    },
+    "doctorRepairPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "description", "command", "destructive"],
+      "properties": {
+        "operation": { "type": "string" },
+        "description": { "type": "string" },
+        "command": { "type": "string" },
+        "destructive": { "type": "boolean" }
       }
     },
     "forkCompareRows": {

@@ -197,6 +197,8 @@ pub struct DiagnosticFinding {
     pub message: String,
     pub cause: String,
     pub next_action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repair_plan: Option<RepairPlan>,
     pub fixed: bool,
 }
 
@@ -783,6 +785,12 @@ impl Workspace {
                 message: redactor.text(&finding.message),
                 cause: redactor.text(&finding.cause),
                 next_action: redactor.text(&finding.next_action),
+                repair_plan: finding.repair_plan.as_ref().map(|plan| RepairPlan {
+                    operation: plan.operation.clone(),
+                    description: redactor.text(&plan.description),
+                    command: redactor.text(&plan.command),
+                    destructive: plan.destructive,
+                }),
                 fixed: finding.fixed,
             })
             .collect();
@@ -2395,7 +2403,17 @@ pub struct Finding {
     pub message: String,
     pub cause: String,
     pub next_action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repair_plan: Option<RepairPlan>,
     pub fixed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RepairPlan {
+    pub operation: String,
+    pub description: String,
+    pub command: String,
+    pub destructive: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -2412,11 +2430,13 @@ impl Workspace {
         let mut findings = Vec::new();
         let mut add = |severity: Severity, message: String, fixed: bool| {
             let (cause, next_action) = doctor_explanation(&message, fixed);
+            let repair_plan = doctor_repair_plan(&message, deep);
             findings.push(Finding {
                 severity,
                 message,
                 cause,
                 next_action,
+                repair_plan,
                 fixed,
             })
         };
@@ -2780,6 +2800,62 @@ fn doctor_explanation(message: &str, fixed: bool) -> (String, String) {
         )
     } else {
         (cause, next_action)
+    }
+}
+
+fn doctor_repair_plan(message: &str, deep: bool) -> Option<RepairPlan> {
+    let command = if deep {
+        "asp doctor --fix --deep"
+    } else {
+        "asp doctor --fix"
+    };
+    let plan = |operation: &str, description: &str, destructive: bool| {
+        Some(RepairPlan {
+            operation: operation.to_string(),
+            description: description.to_string(),
+            command: command.to_string(),
+            destructive,
+        })
+    };
+
+    if message.contains("shadow git config") {
+        plan(
+            "reset_shadow_git_config",
+            "Reset the drifted shadow-git config key to asp's expected value.",
+            false,
+        )
+    } else if message.contains("torn tail") {
+        plan(
+            "truncate_torn_journal_tail",
+            "Truncate the incomplete trailing journal bytes after the last valid record.",
+            true,
+        )
+    } else if message.contains("head ref does not match") {
+        plan(
+            "repoint_shadow_head",
+            "Repoint the shadow HEAD ref to the latest checkpoint ref.",
+            false,
+        )
+    } else if message.contains("registered active but its directory is gone") {
+        plan(
+            "mark_missing_fork_discarded",
+            "Mark the missing active fork as discarded in the fork registry.",
+            false,
+        )
+    } else if message.contains("torn clone") {
+        plan(
+            "remove_pending_fork",
+            "Remove the proven pending fork directory if it exists and delete its pending registry entry.",
+            true,
+        )
+    } else if message.contains("CAS blob") && message.contains("missing (re-creatable") {
+        plan(
+            "recreate_missing_cas_blob",
+            "Recreate the missing large-file CAS blob from the current working file.",
+            false,
+        )
+    } else {
+        None
     }
 }
 

@@ -261,7 +261,39 @@ fn doctor_explain_reports_cause_and_next_action() {
         .as_str()
         .unwrap()
         .contains("asp doctor --fix"));
+    assert_eq!(
+        finding["repair_plan"]["operation"],
+        "reset_shadow_git_config"
+    );
+    assert_eq!(finding["repair_plan"]["command"], "asp doctor --fix");
+    assert_eq!(finding["repair_plan"]["destructive"], false);
     assert_eq!(finding["fixed"], false);
+
+    let fixed_json = ok_json(&root, &["doctor", "--fix"]);
+    let fixed_finding = fixed_json["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["message"]
+                .as_str()
+                .unwrap()
+                .contains("shadow git config core.compression")
+        })
+        .expect("fixed shadow git config finding");
+    assert_eq!(fixed_finding["fixed"], true);
+    assert_eq!(
+        fixed_finding["repair_plan"]["operation"],
+        "reset_shadow_git_config"
+    );
+
+    let drift = Command::new("git")
+        .arg("--git-dir")
+        .arg(root.join(".asp/shadow.git"))
+        .args(["config", "core.compression", "9"])
+        .output()
+        .unwrap();
+    assert!(drift.status.success());
 
     let fixed = ok(&root, &["doctor", "--fix", "--explain"]);
     assert!(fixed.contains("[fixed]"));

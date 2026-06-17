@@ -90,8 +90,11 @@ fork against its fork point. `asp diff --json --html --output review.html`
 returns `diffHtmlOutputResult` after writing an offline HTML review artifact.
 
 `asp doctor --json` finding objects include `severity`, `message`, `cause`,
-`next_action`, and `fixed`. Human output stays compact by default; pass
-`asp doctor --explain` to print the same cause and next-action text.
+`next_action`, and `fixed`. Findings that `asp doctor --fix` can repair also
+include `repair_plan` with a stable `operation`, `description`, exact `command`,
+and conservative `destructive` flag, so automation can preview repairs before
+applying them. Human output stays compact by default; pass `asp doctor --explain`
+to print the same cause and next-action text.
 
 `asp promote --json` returns `promoteReport` with the created branch and
 retained-fork cleanup metadata: `fork_path`, `fork_retained: true`, and
