@@ -125,7 +125,7 @@
   - [x] T9.1.3 Add a one-page architecture overview for first-time contributors.
 - **S9.2 Launch hygiene**
   - [x] T9.2.1 Verify all README claims map to reproducible docs, tests, or benchmark scripts.
-  - [ ] T9.2.2 Add a release-readiness checklist for public visibility flips, package publication, and post-launch triage.
+  - [x] T9.2.2 Add a release-readiness checklist for public visibility flips, package publication, and post-launch triage.
 
 ## EPIC 10 — Supply-chain and release trust
 

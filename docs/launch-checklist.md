@@ -2,6 +2,9 @@
 
 *Working doc. Items marked (Arnav) need the founder; everything else is automatable.*
 
+For repeatable release and public-visibility gates after v0.1.0, use
+[release-readiness.md](release-readiness.md).
+
 ## Before flipping the repo public
 
 - [x] CI green on macOS + Linux + btrfs reflink job
