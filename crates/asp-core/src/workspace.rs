@@ -195,6 +195,8 @@ pub struct DiagnosticFork {
 pub struct DiagnosticFinding {
     pub severity: Severity,
     pub message: String,
+    pub cause: String,
+    pub next_action: String,
     pub fixed: bool,
 }
 
@@ -779,6 +781,8 @@ impl Workspace {
             .map(|finding| DiagnosticFinding {
                 severity: finding.severity,
                 message: redactor.text(&finding.message),
+                cause: redactor.text(&finding.cause),
+                next_action: redactor.text(&finding.next_action),
                 fixed: finding.fixed,
             })
             .collect();
@@ -2389,6 +2393,8 @@ impl Workspace {
 pub struct Finding {
     pub severity: Severity,
     pub message: String,
+    pub cause: String,
+    pub next_action: String,
     pub fixed: bool,
 }
 
@@ -2405,9 +2411,12 @@ impl Workspace {
     pub fn doctor(&self, fix: bool, deep: bool) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
         let mut add = |severity: Severity, message: String, fixed: bool| {
+            let (cause, next_action) = doctor_explanation(&message, fixed);
             findings.push(Finding {
                 severity,
                 message,
+                cause,
+                next_action,
                 fixed,
             })
         };
@@ -2678,6 +2687,99 @@ impl Workspace {
         }
 
         Ok(findings)
+    }
+}
+
+fn doctor_explanation(message: &str, fixed: bool) -> (String, String) {
+    let (cause, next_action) = if message.contains("shadow git config") {
+        (
+            "The shadow git repository has drifted from asp's expected performance and safety settings.".to_string(),
+            "Run `asp doctor --fix` to restore the shadow git config values.".to_string(),
+        )
+    } else if message.contains("torn tail") {
+        (
+            "A process stopped while appending to the journal, leaving a partial trailing record."
+                .to_string(),
+            "Run `asp doctor --fix` to truncate the torn journal tail.".to_string(),
+        )
+    } else if message.contains("CRC mismatch") {
+        (
+            "A journal record failed its checksum, so asp cannot trust that provenance entry.".to_string(),
+            "Preserve the workspace for investigation; restore `.asp/journal.jsonl` from backup if that provenance is required.".to_string(),
+        )
+    } else if message.contains("points at missing commit") {
+        (
+            "A checkpoint ref names a git object that is missing from `.asp/shadow.git`.".to_string(),
+            "Restore `.asp/shadow.git` from backup or use stock git recovery to inspect remaining checkpoint refs.".to_string(),
+        )
+    } else if message.contains("head ref does not match") {
+        (
+            "The shadow HEAD ref is stale relative to the latest checkpoint ref.".to_string(),
+            "Run `asp doctor --fix` to repoint the shadow HEAD to the latest checkpoint."
+                .to_string(),
+        )
+    } else if message.contains("journal records checkpoint") && message.contains("ref is missing") {
+        (
+            "The journal recorded a checkpoint, but the matching checkpoint ref was never created or was removed.".to_string(),
+            "Create a fresh checkpoint after reviewing the current workspace state; keep backups if the missing checkpoint matters.".to_string(),
+        )
+    } else if message.contains("registered active but its directory is gone") {
+        (
+            "The fork registry still lists an active fork whose directory was deleted outside asp."
+                .to_string(),
+            "Run `asp doctor --fix` to mark the missing fork discarded in the registry."
+                .to_string(),
+        )
+    } else if message.contains("torn clone") {
+        (
+            "Fork creation was interrupted after asp wrote a pending fork intent.".to_string(),
+            "Run `asp doctor --fix` to remove the proven torn fork entry and any half-created directory.".to_string(),
+        )
+    } else if message.contains("was promoted but its directory still exists") {
+        (
+            "Promotion keeps the fork directory on disk so the work remains inspectable until you clean it up.".to_string(),
+            "Run the `asp discard <fork>` command shown in the finding after review is complete.".to_string(),
+        )
+    } else if message.contains("looks like a fork of this workspace but is not in the registry") {
+        (
+            "A sibling directory matches asp's fork naming pattern, but asp has no registry proof that it owns it.".to_string(),
+            "Inspect the directory manually; remove it yourself only if it is not needed.".to_string(),
+        )
+    } else if message.contains("CAS blob") && message.contains("missing (re-creatable") {
+        (
+            "A large-file sidecar object is missing, but the current working file still has bytes asp can re-store.".to_string(),
+            "Run `asp doctor --fix` to recreate the missing CAS blob from the working file.".to_string(),
+        )
+    } else if message.contains("CAS blob") && message.contains("is missing and the file is gone") {
+        (
+            "Both the large-file sidecar object and the working file are missing.".to_string(),
+            "Restore `.asp/blobs/` or the working file from backup before relying on checkpoints that reference it.".to_string(),
+        )
+    } else if message.contains("CAS blob") && message.contains("is corrupt") {
+        (
+            "Deep verification re-hashed a large-file sidecar object and found bytes that do not match its content address.".to_string(),
+            "Restore the corrupt blob from backup, then rerun `asp doctor --deep`.".to_string(),
+        )
+    } else if message.contains("hint:") {
+        (
+            "A runtime prerequisite check failed.".to_string(),
+            "Follow the hint embedded in the finding, then rerun `asp doctor`.".to_string(),
+        )
+    } else {
+        (
+            "Doctor found workspace state that may need attention.".to_string(),
+            "Read the finding, keep backups, and rerun `asp doctor --fix` only for repairs asp says are safe.".to_string(),
+        )
+    };
+
+    if fixed {
+        (
+            cause,
+            "Doctor applied the safe repair; no further action is needed for this finding."
+                .to_string(),
+        )
+    } else {
+        (cause, next_action)
     }
 }
 

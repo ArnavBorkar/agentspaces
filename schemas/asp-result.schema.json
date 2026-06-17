@@ -417,10 +417,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["severity", "message", "fixed"],
+        "required": ["severity", "message", "cause", "next_action", "fixed"],
         "properties": {
           "severity": { "$ref": "#/$defs/severity" },
           "message": { "type": "string" },
+          "cause": { "type": "string" },
+          "next_action": { "type": "string" },
           "fixed": { "type": "boolean" }
         }
       }

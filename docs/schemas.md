@@ -89,6 +89,10 @@ the rendered patch or stat text. `asp diff --fork <name>` compares an active
 fork against its fork point. `asp diff --json --html --output review.html`
 returns `diffHtmlOutputResult` after writing an offline HTML review artifact.
 
+`asp doctor --json` finding objects include `severity`, `message`, `cause`,
+`next_action`, and `fixed`. Human output stays compact by default; pass
+`asp doctor --explain` to print the same cause and next-action text.
+
 `asp promote --json` returns `promoteReport` with the created branch and
 retained-fork cleanup metadata: `fork_path`, `fork_retained: true`, and
 `cleanup_command` (`asp discard <fork>`). When `asp promote --push --remote

@@ -217,6 +217,58 @@ fn full_cli_loop() {
 }
 
 #[test]
+fn doctor_explain_reports_cause_and_next_action() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+
+    let drift = Command::new("git")
+        .arg("--git-dir")
+        .arg(root.join(".asp/shadow.git"))
+        .args(["config", "core.compression", "9"])
+        .output()
+        .unwrap();
+    assert!(
+        drift.status.success(),
+        "git config failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&drift.stdout),
+        String::from_utf8_lossy(&drift.stderr)
+    );
+
+    let human = ok(&root, &["doctor", "--explain"]);
+    assert!(human.contains("shadow git config"));
+    assert!(human.contains("  cause:"));
+    assert!(human.contains("  next:"));
+    assert!(human.contains("asp doctor --fix"));
+
+    let json = ok_json(&root, &["doctor"]);
+    let finding = json["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["message"]
+                .as_str()
+                .unwrap()
+                .contains("shadow git config core.compression")
+        })
+        .expect("shadow git config finding");
+    assert_eq!(finding["severity"], "warning");
+    assert!(finding["cause"]
+        .as_str()
+        .unwrap()
+        .contains("shadow git repository"));
+    assert!(finding["next_action"]
+        .as_str()
+        .unwrap()
+        .contains("asp doctor --fix"));
+    assert_eq!(finding["fixed"], false);
+
+    let fixed = ok(&root, &["doctor", "--fix", "--explain"]);
+    assert!(fixed.contains("[fixed]"));
+    assert!(fixed.contains("no further action is needed"));
+}
+
+#[test]
 fn policy_validate_reports_invalid_policy() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

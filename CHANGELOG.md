@@ -89,6 +89,8 @@
   exact branch refspec and reports the push target in human and JSON output.
 - `asp promote --pr-draft` now attempts `gh pr create --draft` after an
   explicit push and returns fallback instructions when `gh` cannot create it.
+- `asp doctor --explain` prints human-readable cause and next-action guidance
+  for every health finding.
 
 ### Fixed
 
@@ -141,6 +143,8 @@
 - Additive: `asp promote --json --pr-draft` includes a `pr` object with
   `attempted`, `created`, optional `url`, `command`, `fallback_command`, and
   `message`.
+- Additive: `asp doctor --json` and diagnostics doctor findings include
+  `cause` and `next_action` strings for automation and support workflows.
 
 ## Automation Contract Rules
 

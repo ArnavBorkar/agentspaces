@@ -177,6 +177,9 @@ enum Cmd {
         /// Re-hash large-file CAS blobs to detect silent corruption.
         #[arg(long)]
         deep: bool,
+        /// Show cause and next action for each finding.
+        #[arg(long)]
+        explain: bool,
     },
     /// Emit a redacted diagnostics bundle for issue reports and support.
     Diagnostics {
@@ -1135,7 +1138,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             hooks::handle_hook_event();
             Ok(())
         }
-        Cmd::Doctor { fix, deep } => {
+        Cmd::Doctor { fix, deep, explain } => {
             let ws = open(&cli.dir)?;
             let findings = ws.doctor(fix, deep)?;
             if json {
@@ -1158,6 +1161,10 @@ fn run(cli: Cli) -> Result<(), Error> {
                     String::new()
                 };
                 println!("{sev}: {}{fixed}", f.message);
+                if explain {
+                    println!("  cause: {}", f.cause);
+                    println!("  next: {}", f.next_action);
+                }
             }
             if !fix && findings.iter().any(|f| !f.fixed) {
                 println!(

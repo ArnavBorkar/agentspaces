@@ -14,14 +14,15 @@ The bundle includes:
 - asp version and workspace format version;
 - workspace health counts from `asp status`;
 - local store counts from `asp stats`;
-- shallow `asp doctor` findings;
+- shallow `asp doctor` findings, including cause and next-action text;
 - fork registry status with redacted paths;
 - the last few journal operations with timing fields.
 
 The bundle does not include source files, checkpoint contents, shell history,
 environment variables, git remotes, or raw config patterns. Checkpoint messages
-and doctor finding text are scanned for common token-shaped secrets such as
-`token=...`, `password=...`, `sk-...`, and GitHub token prefixes.
+and doctor finding text, causes, and next actions are scanned for common
+token-shaped secrets such as `token=...`, `password=...`, `sk-...`, and GitHub
+token prefixes.
 
 If a maintainer explicitly needs full local paths to debug a path-resolution
 bug, run:
