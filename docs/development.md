@@ -38,6 +38,30 @@ Important binary modules:
 | `race.rs` | Fork fan-out, per-lane command execution, and race summaries. |
 | `ui.rs` | Human table and terminal formatting helpers. |
 
+## Ownership Boundaries
+
+Use these boundaries when deciding where a change belongs:
+
+| Code area | Owns | Should not own |
+| --- | --- | --- |
+| `asp-core::workspace` | User-visible workspace behavior, operation ordering, locking, provenance, and returned data structs. | Terminal tables, clap parsing, JSON-RPC protocol shapes, or harness-specific wording. |
+| `asp-core::store` | Durable store layout, atomic writes, path validation, workspace identity, and fork registry state. | UI hints that depend on a specific command surface. |
+| `asp-core::gitx` | Shadow-git setup, config isolation, git version checks, and safe git subprocess calls. | User repository branch naming policy except where `promote` needs a core default. |
+| `asp-core::journal` | Journal entry schema, CRC framing, truncation recovery, and append semantics. | Timeline display ordering or table formatting. |
+| `asp-core::fork` | Platform clone methods, symlink copy semantics, permissions preservation, and copy fallback. | Fork registry lifecycle; that stays in `workspace`. |
+| `asp-core::blobs` | Large-file CAS storage, pointer encoding, blob restore, and blob integrity checks. | Capture policy decisions such as which paths are excluded. |
+| `asp-core::config` | Config schema, defaults, and capture exclude expansion. | CLI defaults that do not affect engine behavior. |
+| `crates/asp/src/main.rs` | CLI command names, clap flags, human/JSON output routing, and process exit behavior. | Storage mutation details or recovery invariants. |
+| `crates/asp/src/mcp.rs` | MCP tool names, JSON-RPC protocol handling, model-facing descriptions, and tool argument schemas. | Engine-only data validation that CLI users also need. |
+| `crates/asp/src/hooks.rs` | Claude Code hook installation, removal, and hook event translation into checkpoint provenance. | General checkpoint semantics. |
+| `crates/asp/src/race.rs` | CLI fan-out workflow, lane process execution, and race result presentation. | Core fork correctness or promote semantics. |
+| `crates/asp/src/ui.rs` | Human terminal tables, colors, widths, and visible length helpers. | JSON output shape. |
+
+Cross-boundary rule: if both CLI and MCP need the behavior, implement it in
+`asp-core` first, then expose it through both surfaces with thin adapters. If an
+error can happen outside the CLI, put the corrective hint in the engine error so
+agents and humans receive the same next action.
+
 ## Command Map
 
 Every user-facing command must support `--json` through the global envelope.
