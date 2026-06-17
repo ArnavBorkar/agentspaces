@@ -352,6 +352,7 @@
         ],
         "properties": {
           "fork": { "type": "string" },
+          "label": { "type": "string" },
           "path": { "type": "string" },
           "exit_code": { "$ref": "#/$defs/nullableI32" },
           "duration_ms": { "$ref": "#/$defs/u64" },

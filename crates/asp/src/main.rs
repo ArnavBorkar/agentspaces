@@ -128,6 +128,12 @@ enum Cmd {
         /// Name prefix for the race forks.
         #[arg(long, default_value = "race")]
         name: String,
+        /// Human label for a lane. Repeat to label lanes in order.
+        #[arg(long = "label", value_name = "LABEL")]
+        labels: Vec<String>,
+        /// Per-lane environment template: KEY=VALUE, with {lane}, {fork}, {label}, {path}, {name}.
+        #[arg(long = "env", value_name = "KEY=VALUE")]
+        env: Vec<String>,
         /// The command to run in each fork (everything after --).
         #[arg(last = true, required = true)]
         command: Vec<String>,
@@ -676,8 +682,18 @@ fn run(cli: Cli) -> Result<(), Error> {
         Cmd::Race {
             count,
             name,
+            labels,
+            env,
             command,
-        } => race::run(&open(&cli.dir)?, count, &name, &command, json),
+        } => race::run(
+            &open(&cli.dir)?,
+            count,
+            &name,
+            &labels,
+            &env,
+            &command,
+            json,
+        ),
         Cmd::Mcp => {
             if let Some(dir) = &cli.dir {
                 std::env::set_current_dir(dir).map_err(|e| {

@@ -156,6 +156,7 @@ fn race_runs_and_compares() {
     assert_eq!(lanes.len(), 2);
     for lane in lanes {
         assert_eq!(lane["exit_code"], 0);
+        assert!(lane["label"].as_str().unwrap().starts_with("lane-"));
         assert_eq!(lane["files_changed"], 1);
         assert!(lane["insertions"].as_u64().unwrap() >= 1);
         // log file exists inside the fork
@@ -167,6 +168,66 @@ fn race_runs_and_compares() {
         std::fs::read_to_string(root.join("src/app.py")).unwrap(),
         "print('v1')\n"
     );
+}
+
+#[test]
+fn race_labels_and_env_templates_reach_lanes() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+
+    let result = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "2",
+            "--name",
+            "variant",
+            "--label",
+            "red",
+            "--label",
+            "blue",
+            "--env",
+            "ASP_VARIANT={label}:{lane}:{fork}",
+            "--",
+            "sh",
+            "-c",
+            "printf '%s' \"$ASP_RACE_LABEL|$ASP_RACE_LANE|$ASP_RACE_FORK|$ASP_VARIANT\" > lane.txt",
+        ],
+    );
+    let lanes = result["result"].as_array().unwrap();
+    assert_eq!(lanes.len(), 2);
+
+    for lane in lanes {
+        let label = lane["label"].as_str().unwrap();
+        let fork = lane["fork"].as_str().unwrap();
+        let path = PathBuf::from(lane["path"].as_str().unwrap());
+        let body = std::fs::read_to_string(path.join("lane.txt")).unwrap();
+        let parts: Vec<_> = body.split('|').collect();
+        assert_eq!(parts.len(), 4);
+        assert_eq!(parts[0], label);
+        assert_eq!(parts[2], fork);
+        assert_eq!(parts[3], format!("{label}:{}:{fork}", parts[1]));
+        match label {
+            "red" => assert_eq!(parts[1], "1"),
+            "blue" => assert_eq!(parts[1], "2"),
+            other => panic!("unexpected label {other}"),
+        }
+    }
+
+    let bad = asp(
+        &root,
+        &[
+            "--json", "race", "-n", "1", "--label", "one", "--label", "two", "--", "true",
+        ],
+    );
+    assert!(!bad.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&bad.stdout)).unwrap();
+    assert_eq!(err["ok"], false);
+    assert_eq!(err["error"]["code"], "nothing_to_do");
+    assert!(err["error"]["hint"].as_str().unwrap().contains("--label"));
 }
 
 #[test]

@@ -55,6 +55,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_status" => include_str!("snapshots/cli_status.json"),
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
         "cli_log" => include_str!("snapshots/cli_log.json"),
+        "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_error" => include_str!("snapshots/cli_error.json"),
         "mcp_status" => include_str!("snapshots/mcp_status.json"),
@@ -146,6 +147,24 @@ fn cli_json_shapes_match_snapshots() {
 
     let log = ok_json(&root, &["log", "-n", "2"]);
     snapshot("cli_log", normalize(log, &root));
+
+    let race = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "1",
+            "--name",
+            "snap",
+            "--label",
+            "primary",
+            "--",
+            "sh",
+            "-c",
+            "echo race >> src/app.py",
+        ],
+    );
+    snapshot("cli_race", normalize(race, &root));
 
     let outside = tempfile::tempdir().unwrap();
     let out = asp(outside.path(), &["--json", "status"]);

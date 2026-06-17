@@ -324,7 +324,7 @@
 **Done when:** `asp race` supports real best-of-N agent work with resumability, clear logs, and safe cleanup.
 
 - **S26.1 Runner controls**
-  - [ ] T26.1.1 Add per-lane environment variable templates and labels.
+  - [x] T26.1.1 Add per-lane environment variable templates and labels.
   - [ ] T26.1.2 Add timeout, retry, and cancellation behavior with tests.
   - [ ] T26.1.3 Add resumable race metadata for interrupted runs.
 - **S26.2 Result quality**

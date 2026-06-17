@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
+  variables for per-lane agent configuration.
+
+### Automation contract
+
+- Additive: `asp race --json` lane result objects include `label` when emitted
+  by this version. Existing lane fields are unchanged.
+
 ## Automation Contract Rules
 
 CLI `--json` envelopes, CLI result payloads, MCP `structuredContent`, MCP tool

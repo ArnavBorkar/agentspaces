@@ -64,6 +64,9 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
 | `asp diagnostics --json --output file.json` | `#/$defs/diagnosticsOutputResult` |
 
+`asp race --json` lane results include `label`, which is the explicit `--label`
+for that lane or the fork name when no label was provided.
+
 MCP tools return the same payloads in `structuredContent`:
 
 | MCP tool | `structuredContent` schema |

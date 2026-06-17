@@ -2,7 +2,7 @@
 //! and render a comparison table — best-of-N as one command. The killer demo
 //! and the daily fan-out workflow.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
@@ -15,6 +15,7 @@ use crate::ui;
 #[derive(Debug, Serialize)]
 pub struct LaneResult {
     pub fork: String,
+    pub label: String,
     pub path: PathBuf,
     pub exit_code: Option<i32>,
     pub duration_ms: u64,
@@ -28,6 +29,8 @@ pub fn run(
     ws: &Workspace,
     count: u32,
     name: &str,
+    labels: &[String],
+    env_templates: &[String],
     command: &[String],
     json: bool,
 ) -> Result<(), Error> {
@@ -38,6 +41,23 @@ pub fn run(
             ),
         );
     }
+    if labels.len() > count as usize {
+        return Err(Error::new(
+            ErrorCode::NothingToDo,
+            format!(
+                "received {} lane labels but race only creates {count} lane(s)",
+                labels.len()
+            ),
+        )
+        .with_hint("pass at most one --label per lane, or increase --count"));
+    }
+    if labels.iter().any(|label| label.trim().is_empty()) {
+        return Err(
+            Error::new(ErrorCode::NothingToDo, "race lane labels cannot be empty")
+                .with_hint("pass a non-empty --label value for each labeled lane"),
+        );
+    }
+    let env_templates = parse_env_templates(env_templates)?;
     let cmd_string = shell_join(command);
 
     // Create the lanes (forks) up front, sequentially — fork creation takes
@@ -45,15 +65,20 @@ pub fn run(
     let mut lanes = Vec::new();
     for i in 1..=count {
         let info = ws.fork(Some(format!("{name}-{i}")), Some(Source::Race))?;
+        let label = labels
+            .get((i - 1) as usize)
+            .cloned()
+            .unwrap_or_else(|| info.name.clone());
         if !json {
             println!(
-                "{} lane {} ready at {}",
+                "{} lane {} → {} ready at {}",
                 ui::green("✓"),
-                ui::bold(&info.name),
+                ui::bold(&label),
+                ui::cyan(&info.name),
                 ui::dim(&info.path.display().to_string())
             );
         }
-        lanes.push(info);
+        lanes.push((i, label, info));
     }
     if !json {
         println!(
@@ -68,9 +93,11 @@ pub fn run(
     // file inside the fork so the working tree stays clean for diffing.
     let handles: Vec<_> = lanes
         .iter()
-        .map(|lane| {
+        .map(|(lane_index, label, lane)| {
             let path = lane.path.clone();
             let lane_name = lane.name.clone();
+            let label = label.clone();
+            let env_vars = lane_env(*lane_index, name, &lane_name, &label, &path, &env_templates);
             let cmd = cmd_string.clone();
             std::thread::spawn(move || -> (String, Option<i32>, u64, PathBuf) {
                 let log_file = path.join(".asp").join("race.log");
@@ -79,6 +106,7 @@ pub fn run(
                     .arg("-c")
                     .arg(&cmd)
                     .current_dir(&path)
+                    .envs(env_vars)
                     .output();
                 let duration = t0.elapsed().as_millis() as u64;
                 match output {
@@ -109,7 +137,7 @@ pub fn run(
     // Compare lanes against their fork points.
     let compare = ws.fork_compare()?;
     let mut results = Vec::new();
-    for lane in &lanes {
+    for (_lane_index, label, lane) in &lanes {
         let (exit_code, duration_ms, log_file) = exit_by_lane.get(&lane.name).cloned().unwrap_or((
             None,
             0,
@@ -118,6 +146,7 @@ pub fn run(
         let row = compare.iter().find(|r| r.name == lane.name);
         results.push(LaneResult {
             fork: lane.name.clone(),
+            label: label.clone(),
             path: lane.path.clone(),
             exit_code,
             duration_ms,
@@ -135,6 +164,7 @@ pub fn run(
 
     let mut table = vec![vec![
         "LANE".to_string(),
+        "LABEL".to_string(),
         "EXIT".to_string(),
         "TIME".to_string(),
         "FILES±".to_string(),
@@ -149,6 +179,7 @@ pub fn run(
         };
         table.push(vec![
             ui::bold(&r.fork),
+            r.label.clone(),
             exit,
             format!("{:.1}s", r.duration_ms as f64 / 1000.0),
             r.files_changed.to_string(),
@@ -165,6 +196,80 @@ pub fn run(
         ui::cyan(&format!("asp discard {name}-N"))
     );
     Ok(())
+}
+
+fn parse_env_templates(raw: &[String]) -> Result<Vec<(String, String)>, Error> {
+    let mut out = Vec::new();
+    for entry in raw {
+        let (key, value) = entry.split_once('=').ok_or_else(|| {
+            Error::new(
+                ErrorCode::NothingToDo,
+                format!("invalid race env template {entry:?}"),
+            )
+            .with_hint(
+                "use --env KEY=VALUE; VALUE may contain {lane}, {fork}, {label}, {path}, {name}",
+            )
+        })?;
+        if !is_env_key(key) {
+            return Err(Error::new(
+                ErrorCode::NothingToDo,
+                format!("invalid race env key {key:?}"),
+            )
+            .with_hint(
+                "env keys must start with a letter or '_' and contain only letters, digits, and '_'",
+            ));
+        }
+        out.push((key.to_string(), value.to_string()));
+    }
+    Ok(out)
+}
+
+fn is_env_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+fn lane_env(
+    lane_index: u32,
+    race_name: &str,
+    fork: &str,
+    label: &str,
+    path: &Path,
+    templates: &[(String, String)],
+) -> Vec<(String, String)> {
+    let path = path.display().to_string();
+    let lane = lane_index.to_string();
+    let mut env = vec![
+        ("ASP_RACE_LANE".to_string(), lane.clone()),
+        ("ASP_RACE_NAME".to_string(), race_name.to_string()),
+        ("ASP_RACE_FORK".to_string(), fork.to_string()),
+        ("ASP_RACE_LABEL".to_string(), label.to_string()),
+        ("ASP_RACE_PATH".to_string(), path.clone()),
+    ];
+    for (key, value) in templates {
+        env.push((
+            key.clone(),
+            render_template(value, &lane, race_name, fork, label, &path),
+        ));
+    }
+    env
+}
+
+fn render_template(
+    template: &str,
+    lane: &str,
+    race_name: &str,
+    fork: &str,
+    label: &str,
+    path: &str,
+) -> String {
+    template
+        .replace("{lane}", lane)
+        .replace("{name}", race_name)
+        .replace("{fork}", fork)
+        .replace("{label}", label)
+        .replace("{path}", path)
 }
 
 /// Join argv into a shell command. Single-token commands are passed through
@@ -190,7 +295,11 @@ fn shell_join(parts: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::shell_join;
+    use std::path::PathBuf;
+
+    use asp_core::ErrorCode;
+
+    use super::{lane_env, parse_env_templates, shell_join};
 
     #[test]
     fn join_quotes_only_when_needed() {
@@ -206,5 +315,43 @@ mod tests {
             shell_join(&["echo".into(), "it's".into()]),
             r"echo 'it'\''s'"
         );
+    }
+
+    #[test]
+    fn env_templates_render_lane_metadata() {
+        let templates = parse_env_templates(&[
+            "ASP_VARIANT={label}:{lane}:{fork}".into(),
+            "ASP_LOCATION={path}".into(),
+            "ASP_SUITE={name}".into(),
+        ])
+        .unwrap();
+        let path = PathBuf::from("/tmp/project@variant-2");
+        let env = lane_env(2, "variant", "variant-2", "blue", &path, &templates);
+        let get = |key: &str| {
+            env.iter()
+                .find(|(candidate, _)| candidate == key)
+                .map(|(_, value)| value.as_str())
+                .unwrap()
+        };
+
+        assert_eq!(get("ASP_RACE_LANE"), "2");
+        assert_eq!(get("ASP_RACE_NAME"), "variant");
+        assert_eq!(get("ASP_RACE_FORK"), "variant-2");
+        assert_eq!(get("ASP_RACE_LABEL"), "blue");
+        assert_eq!(get("ASP_RACE_PATH"), path.display().to_string());
+        assert_eq!(get("ASP_VARIANT"), "blue:2:variant-2");
+        assert_eq!(get("ASP_LOCATION"), path.display().to_string());
+        assert_eq!(get("ASP_SUITE"), "variant");
+    }
+
+    #[test]
+    fn env_template_keys_are_validated() {
+        let err = parse_env_templates(&["1BAD=value".into()]).unwrap_err();
+        assert_eq!(err.code, ErrorCode::NothingToDo);
+        assert!(err.hint.unwrap().contains("env keys"));
+
+        let err = parse_env_templates(&["NO_EQUALS".into()]).unwrap_err();
+        assert_eq!(err.code, ErrorCode::NothingToDo);
+        assert!(err.hint.unwrap().contains("KEY=VALUE"));
     }
 }
