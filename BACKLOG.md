@@ -293,7 +293,7 @@
   - [x] T23.1.3 Document filesystem feature detection across APFS, btrfs, XFS, ext4, tmpfs, and network filesystems.
 - **S23.2 Windows plan**
   - [x] T23.2.1 Spike block cloning and copy fallback behavior on ReFS/NTFS.
-  - [ ] T23.2.2 Write a Windows support design note covering symlinks, permissions, and git behavior.
+  - [x] T23.2.2 Write a Windows support design note covering symlinks, permissions, and git behavior.
 
 ## EPIC 24 — Contributor experience
 

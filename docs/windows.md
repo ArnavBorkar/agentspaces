@@ -23,3 +23,7 @@ The first filesystem spike is documented in
 [docs/design/windows-block-clone-spike.md](design/windows-block-clone-spike.md):
 ReFS is the candidate for block cloning, while NTFS stays on byte-copy fallback
 unless Microsoft documents and CI proves a safe local clone path.
+
+The broader native support gate is documented in
+[docs/design/windows-support-plan.md](design/windows-support-plan.md), covering
+symlinks, permissions, paths, Git for Windows, diagnostics, and release tests.
