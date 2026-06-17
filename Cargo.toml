@@ -22,7 +22,6 @@ uuid = { version = "1", features = ["v4"] }
 blake3 = "1"
 tempfile = "3"
 walkdir = "2"
-rayon = "1"
 libc = "0.2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros", "serde"] }
 

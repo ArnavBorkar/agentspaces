@@ -10,6 +10,18 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  cargo-deny:
+    name: dependency policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: "1.85.0"
+          manifest-path: ./Cargo.toml
+          command: check
+          arguments: --all-features
+
   test:
     name: test (${{ matrix.os }})
     strategy:

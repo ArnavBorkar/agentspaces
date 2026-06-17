@@ -13,7 +13,7 @@ name = "asp"
 path = "src/main.rs"
 
 [dependencies]
-asp-core = { path = "../asp-core" }
+asp-core = { path = "../asp-core", version = "0.1.1" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

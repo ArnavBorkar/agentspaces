@@ -10,6 +10,7 @@ trust model before it asks users to trust the binary.
 - [ ] `cargo test --workspace`
 - [ ] `cargo fmt --all -- --check`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
+- [ ] `cargo deny check`
 - [ ] `git diff --check`
 - [ ] README headline claims are present in [claims.md](claims.md)
 - [ ] New mutation paths have engine, integration, or torture coverage

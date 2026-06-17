@@ -16,9 +16,10 @@ cargo build --workspace
 cargo test --workspace          # includes the kill -9 torture suite (~20s)
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
+cargo deny check                # install with: cargo install --locked cargo-deny
 ```
 
-CI runs all of the above on macOS and Linux, plus the FICLONE reflink path on a real btrfs volume.
+CI runs all of the above on macOS and Linux, plus cargo-deny dependency policy and the FICLONE reflink path on a real btrfs volume.
 
 ## Changing the on-disk format
 
