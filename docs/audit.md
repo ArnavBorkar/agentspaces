@@ -18,9 +18,8 @@ Filters are additive:
 - `--op <operation>` can be repeated for `init`, `checkpoint`, `fork`,
   `restore`, `undo`, `promote`, or `discard`.
 - `--since` and `--until` accept RFC3339 timestamps.
-- `--path <path>` matches path-aware journal entries such as targeted restore
-  operations. Checkpoint-to-path attribution is tracked separately in
-  `BACKLOG.md`.
+- `--path <path>` matches path-aware journal entries, including checkpoints and
+  targeted restore operations.
 
 With global `--json`, the result is the same journal-entry array used by
 `asp log --json`, so existing audit scripts can branch on the stable `op`,
@@ -35,4 +34,5 @@ v,ts,op,seq,commit,source,session_id,tool,message,files_changed,duration_ms,deta
 ```
 
 The `detail` column is compact JSON when an operation has additional structured
-metadata.
+metadata. Checkpoint entries include `detail.paths`, an array of
+workspace-relative paths changed by that checkpoint.

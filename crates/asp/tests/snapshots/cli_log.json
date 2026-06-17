@@ -3,6 +3,12 @@
   "result": [
     {
       "commit": "<git-oid>",
+      "detail": {
+        "paths": [
+          "README.md",
+          "src/app.py"
+        ]
+      },
       "duration_ms": 0,
       "files_changed": 2,
       "message": "base",

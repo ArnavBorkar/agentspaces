@@ -53,6 +53,8 @@
   path, and RFC3339 time range.
 - `asp audit --format jsonl` and `asp audit --format csv` export filtered audit
   events for compliance evidence and downstream review tools.
+- Checkpoint journal entries now include changed-path attribution under
+  `detail.paths`, so `asp audit --path <path>` can find checkpoint events.
 
 ### Fixed
 
@@ -78,6 +80,8 @@
   used by `asp log --json`; clients can opt in by calling the new command.
 - Additive: `asp audit --format jsonl` emits one journal-entry JSON object per
   line, and `asp audit --format csv` emits a fixed-column CSV export.
+- Additive: checkpoint journal entries may include `detail.paths`, an array of
+  workspace-relative changed paths for audit filtering and exports.
 
 ## Automation Contract Rules
 

@@ -102,6 +102,10 @@ fn init_checkpoint_log_roundtrip() {
     let log = ws.log(10).unwrap();
     assert_eq!(log[0].op, Op::Checkpoint);
     assert_eq!(log[0].seq, Some(2));
+    assert_eq!(
+        log[0].detail.as_ref().unwrap()["paths"],
+        serde_json::json!(["src/main.rs"])
+    );
 
     let status = ws.status().unwrap();
     assert_eq!(status.last_checkpoint.as_ref().unwrap().seq, 2);

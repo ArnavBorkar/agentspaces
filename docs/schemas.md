@@ -70,6 +70,9 @@ corrective next step or `null` for unexpected infrastructure failures.
 `asp audit --format jsonl` is a raw export format: each line is one
 `#/$defs/journalEntry` object without the CLI envelope. `asp audit --format csv`
 emits fixed columns documented in [docs/audit.md](audit.md).
+Checkpoint journal entries may include `detail.paths` with workspace-relative
+changed paths; clients should treat unknown `detail` fields as operation-specific
+metadata.
 
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,

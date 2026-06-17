@@ -230,6 +230,24 @@ fn audit_filters_journal_events() {
     assert_eq!(rows[0]["message"], "agent, update");
     assert_eq!(rows[0]["tool"], "claude");
     assert_eq!(rows[0]["session_id"], "session-1");
+    assert_eq!(
+        rows[0]["detail"]["paths"],
+        serde_json::json!(["src/app.py"])
+    );
+
+    let checkpoint_path_audit = ok_json(
+        &root,
+        &[
+            "audit",
+            "--op",
+            "checkpoint",
+            "--tool",
+            "claude",
+            "--path",
+            "src/app.py",
+        ],
+    );
+    assert_eq!(checkpoint_path_audit["result"].as_array().unwrap().len(), 1);
 
     let jsonl = ok(
         &root,

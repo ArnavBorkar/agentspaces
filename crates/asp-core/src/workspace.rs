@@ -688,14 +688,8 @@ impl Workspace {
                 .update_ref(&format!("{META_REF_PREFIX}{seq}"), &oid)?;
         }
 
-        let files_changed = match parent {
-            Some(ref p) => self.count_changed(p, &commit)?,
-            None => self
-                .shadow
-                .run(&["ls-tree", "-r", "--name-only", &commit])?
-                .lines()
-                .count() as u64,
-        };
+        let changed_paths = self.checkpoint_changed_paths(parent.as_deref(), &commit)?;
+        let files_changed = changed_paths.len() as u64;
 
         let mut entry = Entry::new(Op::Checkpoint);
         entry.seq = Some(seq);
@@ -706,6 +700,7 @@ impl Workspace {
         entry.message = Some(message.clone());
         entry.files_changed = Some(files_changed);
         entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
+        entry.detail = Some(serde_json::json!({ "paths": changed_paths }));
         self.journal.append(&entry)?;
         self.shadow.update_ref(HEAD_REF, &commit)?;
 
@@ -996,22 +991,23 @@ impl Workspace {
         }
     }
 
-    fn count_changed(&self, from: &str, to: &str) -> Result<u64> {
-        let raw = self
-            .shadow
-            .run_raw(&["diff-tree", "-r", "-z", "--name-only", from, to])?;
-        Ok(raw.split(|&b| b == 0).filter(|s| !s.is_empty()).count() as u64)
+    fn checkpoint_changed_paths(&self, parent: Option<&str>, commit: &str) -> Result<Vec<String>> {
+        match parent {
+            Some(parent) => self.changed_paths_between(parent, commit),
+            None => {
+                let raw = self
+                    .shadow
+                    .run_raw(&["ls-tree", "-r", "-z", "--name-only", commit])?;
+                Ok(paths_from_nul(&raw))
+            }
+        }
     }
 
     fn changed_paths_between(&self, from: &str, to: &str) -> Result<Vec<String>> {
         let raw = self
             .shadow
             .run_raw(&["diff-tree", "-r", "-z", "--name-only", from, to])?;
-        Ok(raw
-            .split(|&b| b == 0)
-            .filter(|s| !s.is_empty())
-            .map(|path| String::from_utf8_lossy(path).to_string())
-            .collect())
+        Ok(paths_from_nul(&raw))
     }
 
     /// Next checkpoint seq: max(journal, refs) + 1 — robust to a crash
@@ -1461,10 +1457,8 @@ impl Workspace {
             self.shadow
                 .update_ref(&format!("{META_REF_PREFIX}{seq}"), &manifest_oid)?;
         }
-        let files_changed = match parent {
-            Some(ref p) => self.count_changed(p, &commit)?,
-            None => 0,
-        };
+        let changed_paths = self.checkpoint_changed_paths(parent.as_deref(), &commit)?;
+        let files_changed = changed_paths.len() as u64;
         let mut entry = Entry::new(Op::Checkpoint);
         entry.seq = Some(seq);
         entry.commit = Some(commit.clone());
@@ -1472,6 +1466,7 @@ impl Workspace {
         entry.message = Some(message.clone());
         entry.files_changed = Some(files_changed);
         entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
+        entry.detail = Some(serde_json::json!({ "paths": changed_paths }));
         self.journal.append(&entry)?;
         self.shadow.update_ref(HEAD_REF, &commit)?;
         Ok(Some(CheckpointInfo {
@@ -2520,6 +2515,13 @@ fn glob_segment_match(pattern: &str, text: &str) -> bool {
         pi += 1;
     }
     pi == pattern_chars.len()
+}
+
+fn paths_from_nul(raw: &[u8]) -> Vec<String> {
+    raw.split(|&b| b == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| String::from_utf8_lossy(path).to_string())
+        .collect()
 }
 
 /// Run git in the USER repo (their config applies; we only add safety flags).
