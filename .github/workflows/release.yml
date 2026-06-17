@@ -76,6 +76,21 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+      - name: Generate SBOMs
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          cargo cyclonedx \
+            --manifest-path Cargo.toml \
+            --format json \
+            --target all \
+            --all-features \
+            --override-filename "asp-${VERSION}-sbom"
+          mv "crates/asp/asp-${VERSION}-sbom.json" "asp-${VERSION}-asp-sbom.cdx.json"
+          mv "crates/asp-core/asp-${VERSION}-sbom.json" "asp-${VERSION}-asp-core-sbom.cdx.json"
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -86,4 +101,5 @@ jobs:
             asp-*.tar.gz
             asp-*.sha256
             asp-*.sigstore.json
+            asp-*-sbom.cdx.json
           generate_release_notes: true

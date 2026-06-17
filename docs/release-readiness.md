@@ -27,6 +27,7 @@ trust model before it asks users to trust the binary.
 - [ ] Checksums generated for every binary artifact
 - [ ] Sigstore bundles generated for every checksum file
 - [ ] GitHub provenance attestations generated for every release archive
+- [ ] CycloneDX SBOM JSON files generated for `asp` and `asp-core`
 - [ ] Downloaded release artifact smoke-tested outside the build tree
 
 ## Public repo readiness

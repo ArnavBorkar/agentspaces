@@ -9,6 +9,11 @@ Agentspaces release archives are published with three files per target:
 The `.sigstore.json` file is a keyless Sigstore bundle for the checksum file.
 Verify the bundle first, then use the signed checksum to verify the archive.
 
+Each release also includes CycloneDX JSON SBOMs for the two workspace crates:
+
+- `asp-<version>-asp-sbom.cdx.json`
+- `asp-<version>-asp-core-sbom.cdx.json`
+
 ## Prerequisites
 
 Install `cosign` from Sigstore and GitHub CLI:
@@ -52,6 +57,12 @@ gh attestation verify "${ASSET}" \
   --signer-workflow "github.com/ArnavBorkar/agentspaces/.github/workflows/release.yml"
 ```
 
+Inspect the SBOM metadata:
+
+```bash
+jq '.bomFormat, .specVersion, .metadata.component.name' "asp-v0.1.1-asp-sbom.cdx.json"
+```
+
 ## What this proves
 
 - the checksum file was signed by GitHub Actions running the tagged
@@ -60,6 +71,8 @@ gh attestation verify "${ASSET}" \
 - the downloaded archive matches the signed checksum.
 - GitHub has a SLSA provenance attestation linking the archive to this
   repository's release workflow.
+- the SBOM files describe the Cargo workspace crates and their dependencies in
+  CycloneDX JSON.
 
 It does not prove that the source is bug-free or that your machine is trusted.
 It does make tampering with release assets visible.
