@@ -68,7 +68,9 @@ corrective next step or `null` for unexpected infrastructure failures.
 explicit `--label` for that lane or the fork name when no label was provided,
 `attempts` is the number of attempts actually started, and `timed_out` /
 `canceled` report whether the final lane state was killed by a timeout or
-cancel-on-success.
+cancel-on-success. When JUnit ingestion is configured, lane results may also
+include `tests` with aggregate report/test/failure/error/skipped counts and
+reported test runtime.
 
 MCP tools return the same payloads in `structuredContent`:
 

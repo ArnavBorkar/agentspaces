@@ -135,6 +135,9 @@ enum Cmd {
         /// Per-lane environment template: KEY=VALUE, with {lane}, {fork}, {label}, {path}, {name}.
         #[arg(long = "env", value_name = "KEY=VALUE")]
         env: Vec<String>,
+        /// JUnit XML report path template to ingest from each lane. Repeat for multiple reports.
+        #[arg(long = "junit", value_name = "PATH")]
+        junit_reports: Vec<String>,
         /// Per-attempt timeout, such as 500ms, 30s, 2m, or bare seconds.
         #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
         timeout: Option<Duration>,
@@ -697,6 +700,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             name,
             labels,
             env,
+            junit_reports,
             timeout,
             retries,
             cancel_on_success,
@@ -709,6 +713,7 @@ fn run(cli: Cli) -> Result<(), Error> {
                 name: &name,
                 labels: &labels,
                 env_templates: &env,
+                junit_reports: &junit_reports,
                 options: race::RunOptions {
                     timeout,
                     retries,

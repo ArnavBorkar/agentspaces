@@ -396,6 +396,40 @@ fn race_resume_reruns_only_incomplete_lanes() {
 }
 
 #[test]
+fn race_ingests_junit_reports() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+
+    let result = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "1",
+            "--name",
+            "junit",
+            "--label",
+            "unit",
+            "--junit",
+            "{label}.xml",
+            "--",
+            "sh",
+            "-c",
+            "printf '%s\\n' '<testsuite tests=\"4\" failures=\"1\" errors=\"0\" skipped=\"1\" time=\"0.25\" />' > \"$ASP_RACE_LABEL.xml\"",
+        ],
+    );
+    let lane = &result["result"].as_array().unwrap()[0];
+    let tests = &lane["tests"];
+    assert_eq!(tests["reports"], 1);
+    assert_eq!(tests["tests"], 4);
+    assert_eq!(tests["failures"], 1);
+    assert_eq!(tests["errors"], 0);
+    assert_eq!(tests["skipped"], 1);
+    assert_eq!(tests["time_seconds"], 0.25);
+}
+
+#[test]
 fn promote_via_cli_lands_branch() {
     let (_tmp, root) = project();
     let git = |args: &[&str]| {

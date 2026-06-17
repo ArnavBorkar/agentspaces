@@ -16,6 +16,8 @@ use std::os::unix::process::CommandExt;
 use asp_core::journal::Source;
 use asp_core::store::atomic_write;
 use asp_core::{Error, ErrorCode, Workspace};
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
 use serde::{Deserialize, Serialize};
 
 use crate::ui;
@@ -30,10 +32,22 @@ pub struct LaneResult {
     pub attempts: u32,
     pub timed_out: bool,
     pub canceled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tests: Option<TestSummary>,
     pub files_changed: u64,
     pub insertions: u64,
     pub deletions: u64,
     pub log_file: PathBuf,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TestSummary {
+    pub reports: u64,
+    pub tests: u64,
+    pub failures: u64,
+    pub errors: u64,
+    pub skipped: u64,
+    pub time_seconds: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -48,6 +62,7 @@ pub struct RunRequest<'a> {
     pub name: &'a str,
     pub labels: &'a [String],
     pub env_templates: &'a [String],
+    pub junit_reports: &'a [String],
     pub options: RunOptions,
     pub command: &'a [String],
     pub resume: bool,
@@ -69,6 +84,7 @@ struct LaneRun {
     attempts: u32,
     timed_out: bool,
     canceled: bool,
+    tests: Option<TestSummary>,
     log_file: PathBuf,
 }
 
@@ -77,12 +93,24 @@ struct LaneRunRequest<'a> {
     name: &'a str,
     cmd_string: &'a str,
     env_templates: &'a [(String, String)],
+    junit_reports: &'a [String],
     options: RunOptions,
     lanes: &'a [RaceLane],
     metadata: Arc<Mutex<RaceMetadata>>,
     metadata_path: PathBuf,
     exit_by_lane: std::collections::HashMap<String, LaneRun>,
     json: bool,
+}
+
+struct RaceMetadataInit<'a> {
+    name: &'a str,
+    count: u32,
+    command: &'a [String],
+    labels: &'a [String],
+    env_templates: &'a [String],
+    junit_reports: &'a [String],
+    options: RunOptions,
+    lanes: &'a [RaceLane],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +121,8 @@ struct RaceMetadata {
     command: Vec<String>,
     labels: Vec<String>,
     env_templates: Vec<String>,
+    #[serde(default)]
+    junit_reports: Vec<String>,
     options: RaceMetadataOptions,
     lanes: Vec<RaceLaneMetadata>,
 }
@@ -116,6 +146,8 @@ struct RaceLaneMetadata {
     attempts: u32,
     timed_out: bool,
     canceled: bool,
+    #[serde(default)]
+    tests: Option<TestSummary>,
     log_file: PathBuf,
 }
 
@@ -128,24 +160,18 @@ enum RaceLaneStatus {
 }
 
 impl RaceMetadata {
-    fn new(
-        name: &str,
-        count: u32,
-        command: &[String],
-        labels: &[String],
-        env_templates: &[String],
-        options: RunOptions,
-        lanes: &[RaceLane],
-    ) -> Self {
+    fn new(init: RaceMetadataInit<'_>) -> Self {
         Self {
             version: 1,
-            name: name.to_string(),
-            count,
-            command: command.to_vec(),
-            labels: labels.to_vec(),
-            env_templates: env_templates.to_vec(),
-            options: RaceMetadataOptions::from_run_options(options),
-            lanes: lanes
+            name: init.name.to_string(),
+            count: init.count,
+            command: init.command.to_vec(),
+            labels: init.labels.to_vec(),
+            env_templates: init.env_templates.to_vec(),
+            junit_reports: init.junit_reports.to_vec(),
+            options: RaceMetadataOptions::from_run_options(init.options),
+            lanes: init
+                .lanes
                 .iter()
                 .map(|lane| RaceLaneMetadata {
                     index: lane.index,
@@ -158,6 +184,7 @@ impl RaceMetadata {
                     attempts: 0,
                     timed_out: false,
                     canceled: false,
+                    tests: None,
                     log_file: lane.path.join(".asp/race.log"),
                 })
                 .collect(),
@@ -280,6 +307,7 @@ fn mark_lane_complete(metadata: &Arc<Mutex<RaceMetadata>>, path: &Path, fork: &s
             lane.attempts = run.attempts;
             lane.timed_out = run.timed_out;
             lane.canceled = run.canceled;
+            lane.tests = run.tests.clone();
             lane.log_file = run.log_file.clone();
         }
         let _ = save_metadata(path, &metadata);
@@ -292,6 +320,7 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
         name,
         labels,
         env_templates,
+        junit_reports,
         options,
         command,
         resume,
@@ -359,15 +388,16 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
         });
     }
     let metadata_path = race_metadata_path(ws, name);
-    let metadata = Arc::new(Mutex::new(RaceMetadata::new(
+    let metadata = Arc::new(Mutex::new(RaceMetadata::new(RaceMetadataInit {
         name,
         count,
         command,
         labels,
         env_templates,
+        junit_reports,
         options,
-        &lanes,
-    )));
+        lanes: &lanes,
+    })));
     save_metadata_arc(&metadata_path, &metadata)?;
     if !json {
         println!(
@@ -385,6 +415,7 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
         name,
         cmd_string: &cmd_string,
         env_templates: &parsed_env_templates,
+        junit_reports,
         options,
         lanes: &lanes,
         metadata,
@@ -400,6 +431,7 @@ fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
     let race_name = metadata.name.clone();
     let cmd_string = shell_join(&metadata.command);
     let env_templates = parse_env_templates(&metadata.env_templates)?;
+    let junit_reports = metadata.junit_reports.clone();
     let options = metadata.options.to_run_options();
     let lanes: Vec<_> = metadata
         .lanes
@@ -445,6 +477,7 @@ fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
                     attempts: lane.attempts,
                     timed_out: lane.timed_out,
                     canceled: lane.canceled,
+                    tests: lane.tests.clone(),
                     log_file: lane.log_file.clone(),
                 },
             )
@@ -455,6 +488,7 @@ fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
         name: &race_name,
         cmd_string: &cmd_string,
         env_templates: &env_templates,
+        junit_reports: &junit_reports,
         options,
         lanes: &lanes,
         metadata: Arc::new(Mutex::new(metadata)),
@@ -470,6 +504,7 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
         name,
         cmd_string,
         env_templates,
+        junit_reports,
         options,
         lanes,
         metadata,
@@ -486,17 +521,20 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
         .iter()
         .filter(|lane| !exit_by_lane.contains_key(&lane.fork))
         .map(|lane| {
+            let lane_index = lane.index;
             let path = lane.path.clone();
             let lane_name = lane.fork.clone();
             let label = lane.label.clone();
-            let env_vars = lane_env(lane.index, name, &lane_name, &label, &path, env_templates);
+            let env_vars = lane_env(lane_index, name, &lane_name, &label, &path, env_templates);
+            let junit_reports = junit_reports.to_vec();
             let cmd = cmd_string.to_string();
+            let race_name = name.to_string();
             let cancel = Arc::clone(&cancel);
             let metadata = Arc::clone(&metadata);
             let metadata_path = metadata_path.clone();
             std::thread::spawn(move || {
                 mark_lane_running(&metadata, &metadata_path, &lane_name);
-                let run = run_lane(
+                let mut run = run_lane(
                     &path,
                     &lane_name,
                     &cmd,
@@ -504,6 +542,14 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
                     options,
                     max_attempts,
                     cancel,
+                );
+                run.tests = collect_junit_reports(
+                    lane_index,
+                    &race_name,
+                    &lane_name,
+                    &label,
+                    &path,
+                    &junit_reports,
                 );
                 mark_lane_complete(&metadata, &metadata_path, &lane_name, &run);
                 (lane_name, run)
@@ -531,6 +577,7 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
                 attempts: 0,
                 timed_out: false,
                 canceled: true,
+                tests: None,
                 log_file: lane.path.join(".asp/race.log"),
             });
         let row = compare.iter().find(|r| r.name == lane.fork);
@@ -543,6 +590,7 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
             attempts: run.attempts,
             timed_out: run.timed_out,
             canceled: run.canceled,
+            tests: run.tests,
             files_changed: row.map(|r| r.files_changed).unwrap_or(0),
             insertions: row.map(|r| r.insertions).unwrap_or(0),
             deletions: row.map(|r| r.deletions).unwrap_or(0),
@@ -683,7 +731,89 @@ fn run_lane(
         attempts,
         timed_out,
         canceled,
+        tests: None,
         log_file,
+    }
+}
+
+fn collect_junit_reports(
+    lane_index: u32,
+    race_name: &str,
+    fork: &str,
+    label: &str,
+    path: &Path,
+    reports: &[String],
+) -> Option<TestSummary> {
+    if reports.is_empty() {
+        return None;
+    }
+    let lane = lane_index.to_string();
+    let lane_path = path.display().to_string();
+    let mut total = TestSummary::default();
+    for template in reports {
+        let rendered = render_template(template, &lane, race_name, fork, label, &lane_path);
+        let report_path = {
+            let candidate = PathBuf::from(rendered);
+            if candidate.is_absolute() {
+                candidate
+            } else {
+                path.join(candidate)
+            }
+        };
+        if let Some(mut summary) = parse_junit_report(&report_path) {
+            summary.reports = 1;
+            total.reports += summary.reports;
+            total.tests += summary.tests;
+            total.failures += summary.failures;
+            total.errors += summary.errors;
+            total.skipped += summary.skipped;
+            total.time_seconds += summary.time_seconds;
+        }
+    }
+    (total.reports > 0).then_some(total)
+}
+
+fn parse_junit_report(path: &Path) -> Option<TestSummary> {
+    let bytes = std::fs::read(path).ok()?;
+    let mut reader = Reader::from_reader(bytes.as_slice());
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut summary = TestSummary::default();
+    let mut suites = 0u64;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(element)) if element.name().as_ref() == b"testsuite" => {
+                suites += 1;
+                add_testsuite(&mut summary, &element);
+            }
+            Ok(Event::Empty(element)) if element.name().as_ref() == b"testsuite" => {
+                suites += 1;
+                add_testsuite(&mut summary, &element);
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => return None,
+            _ => {}
+        }
+        buf.clear();
+    }
+    (suites > 0).then_some(summary)
+}
+
+fn add_testsuite(summary: &mut TestSummary, element: &BytesStart<'_>) {
+    for attr in element
+        .attributes()
+        .with_checks(false)
+        .filter_map(|a| a.ok())
+    {
+        let value = std::str::from_utf8(attr.value.as_ref()).unwrap_or("");
+        match attr.key.as_ref() {
+            b"tests" => summary.tests += value.parse::<u64>().unwrap_or(0),
+            b"failures" => summary.failures += value.parse::<u64>().unwrap_or(0),
+            b"errors" => summary.errors += value.parse::<u64>().unwrap_or(0),
+            b"skipped" => summary.skipped += value.parse::<u64>().unwrap_or(0),
+            b"time" => summary.time_seconds += value.parse::<f64>().unwrap_or(0.0),
+            _ => {}
+        }
     }
 }
 
@@ -950,7 +1080,7 @@ mod tests {
 
     use asp_core::ErrorCode;
 
-    use super::{lane_env, parse_env_templates, shell_join};
+    use super::{lane_env, parse_env_templates, parse_junit_report, shell_join};
 
     #[test]
     fn join_quotes_only_when_needed() {
@@ -1004,5 +1134,26 @@ mod tests {
         let err = parse_env_templates(&["NO_EQUALS".into()]).unwrap_err();
         assert_eq!(err.code, ErrorCode::NothingToDo);
         assert!(err.hint.unwrap().contains("KEY=VALUE"));
+    }
+
+    #[test]
+    fn junit_report_parser_sums_testsuites() {
+        let tmp = tempfile::tempdir().unwrap();
+        let report = tmp.path().join("junit.xml");
+        std::fs::write(
+            &report,
+            r#"<testsuites>
+  <testsuite tests="3" failures="1" errors="0" skipped="1" time="0.25"/>
+  <testsuite tests="2" failures="0" errors="1" skipped="0" time="0.50"/>
+</testsuites>"#,
+        )
+        .unwrap();
+
+        let summary = parse_junit_report(&report).unwrap();
+        assert_eq!(summary.tests, 5);
+        assert_eq!(summary.failures, 1);
+        assert_eq!(summary.errors, 1);
+        assert_eq!(summary.skipped, 1);
+        assert_eq!(summary.time_seconds, 0.75);
     }
 }

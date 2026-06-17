@@ -328,7 +328,7 @@
   - [x] T26.1.2 Add timeout, retry, and cancellation behavior with tests.
   - [x] T26.1.3 Add resumable race metadata for interrupted runs.
 - **S26.2 Result quality**
-  - [ ] T26.2.1 Add structured per-lane test result ingestion from common formats.
+  - [x] T26.2.1 Add structured per-lane test result ingestion from common formats.
   - [ ] T26.2.2 Add `asp race compare` to re-rank existing lanes after manual inspection.
 
 ## EPIC 27 — Enterprise docs and adoption playbooks

@@ -92,6 +92,21 @@ retry, and cancellation settings. Lanes already marked `complete` are reported
 from metadata and not rerun; lanes left `pending` or `running` are executed in
 their existing fork directories.
 
+## Test Result Ingestion
+
+Use repeated `--junit PATH` flags to ingest JUnit XML reports from each lane
+after the lane command exits. Paths are relative to the lane directory unless
+absolute, and support the same `{lane}`, `{fork}`, `{label}`, `{path}`, and
+`{name}` placeholders as `--env`.
+
+```bash
+asp race -n 3 --junit reports/{label}.xml -- \
+  pytest --junitxml "reports/$ASP_RACE_LABEL.xml"
+```
+
+When a report exists and parses, `asp race --json` includes a `tests` summary
+with report, test, failure, error, skipped, and runtime totals for that lane.
+
 ## Review And Cleanup
 
 Lane logs are written to `<fork>/.asp/race.log`. The parent workspace is not

@@ -10,6 +10,8 @@
   controls for bounded best-of-N agent work.
 - `asp race --resume --name <race>` records and resumes interrupted races from
   `.asp/races/<race>.json`.
+- `asp race --junit <path>` ingests per-lane JUnit XML reports and summarizes
+  test outcomes in JSON results.
 
 ### Fixed
 
@@ -23,6 +25,8 @@
 - Additive: `asp race --json` lane result objects include `attempts`,
   `timed_out`, and `canceled` runner metadata. Existing lane fields are
   unchanged.
+- Additive: `asp race --json` lane result objects may include `tests` when
+  JUnit report ingestion is configured. Existing lane fields are unchanged.
 
 ## Automation Contract Rules
 
