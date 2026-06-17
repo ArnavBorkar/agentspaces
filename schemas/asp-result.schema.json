@@ -1,0 +1,560 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/schemas/asp-result.schema.json",
+  "title": "asp result payloads",
+  "description": "Result payloads emitted as CLI envelope result values and MCP structuredContent values.",
+  "anyOf": [
+    { "$ref": "#/$defs/checkpointInfo" },
+    { "$ref": "#/$defs/diagnosticBundle" },
+    { "$ref": "#/$defs/diagnosticsOutputResult" },
+    { "$ref": "#/$defs/diffReport" },
+    { "$ref": "#/$defs/discardResult" },
+    { "$ref": "#/$defs/forkCompareRows" },
+    { "$ref": "#/$defs/forkInfos" },
+    { "$ref": "#/$defs/initResult" },
+    { "$ref": "#/$defs/journalEntries" },
+    { "$ref": "#/$defs/noChanges" },
+    { "$ref": "#/$defs/promoteReport" },
+    { "$ref": "#/$defs/raceLaneResults" },
+    { "$ref": "#/$defs/restoreReport" },
+    { "$ref": "#/$defs/setupReport" },
+    { "$ref": "#/$defs/statusReport" },
+    { "$ref": "#/$defs/statsReport" },
+    { "$ref": "#/$defs/doctorFindings" }
+  ],
+  "$defs": {
+    "checkpointInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "commit", "files_changed", "duration_ms", "message"],
+      "properties": {
+        "seq": { "$ref": "#/$defs/u64" },
+        "commit": { "$ref": "#/$defs/gitOid" },
+        "files_changed": { "$ref": "#/$defs/u64" },
+        "duration_ms": { "$ref": "#/$defs/u64" },
+        "message": { "type": "string" }
+      }
+    },
+    "diagnosticBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated_at",
+        "asp_version",
+        "format_version",
+        "redaction",
+        "workspace",
+        "status",
+        "stats",
+        "config",
+        "forks",
+        "doctor_findings",
+        "recent_operations"
+      ],
+      "properties": {
+        "generated_at": { "$ref": "#/$defs/dateTime" },
+        "asp_version": { "type": "string" },
+        "format_version": { "$ref": "#/$defs/u64" },
+        "redaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["paths_redacted", "secrets_redacted", "notes"],
+          "properties": {
+            "paths_redacted": { "type": "boolean" },
+            "secrets_redacted": { "type": "boolean" },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "root",
+            "workspace_id",
+            "is_fork",
+            "parent_workspace_id",
+            "parent_fork_name"
+          ],
+          "properties": {
+            "root": { "type": "string" },
+            "workspace_id": { "type": "string" },
+            "is_fork": { "type": "boolean" },
+            "parent_workspace_id": { "$ref": "#/$defs/nullableString" },
+            "parent_fork_name": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dirty_files",
+            "untracked_files",
+            "deleted_files",
+            "active_forks",
+            "last_checkpoint"
+          ],
+          "properties": {
+            "dirty_files": { "$ref": "#/$defs/u64" },
+            "untracked_files": { "$ref": "#/$defs/u64" },
+            "deleted_files": { "$ref": "#/$defs/u64" },
+            "active_forks": { "$ref": "#/$defs/u64" },
+            "last_checkpoint": { "$ref": "#/$defs/nullableLastCheckpoint" }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "checkpoints",
+            "journal_entries",
+            "forks_total",
+            "forks_pending",
+            "forks_active",
+            "forks_promoted",
+            "forks_discarded",
+            "blobs",
+            "blob_bytes",
+            "store_bytes"
+          ],
+          "properties": {
+            "checkpoints": { "$ref": "#/$defs/u64" },
+            "journal_entries": { "$ref": "#/$defs/u64" },
+            "forks_total": { "$ref": "#/$defs/u64" },
+            "forks_pending": { "$ref": "#/$defs/u64" },
+            "forks_active": { "$ref": "#/$defs/u64" },
+            "forks_promoted": { "$ref": "#/$defs/u64" },
+            "forks_discarded": { "$ref": "#/$defs/u64" },
+            "blobs": { "$ref": "#/$defs/u64" },
+            "blob_bytes": { "$ref": "#/$defs/u64" },
+            "store_bytes": { "$ref": "#/$defs/u64" }
+          }
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "blob_threshold_mb",
+            "excludes_count",
+            "extra_excludes_count"
+          ],
+          "properties": {
+            "blob_threshold_mb": { "$ref": "#/$defs/u64" },
+            "excludes_count": { "$ref": "#/$defs/u64" },
+            "extra_excludes_count": { "$ref": "#/$defs/u64" }
+          }
+        },
+        "forks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "status",
+              "fork_point_seq",
+              "path",
+              "missing"
+            ],
+            "properties": {
+              "name": { "type": "string" },
+              "status": { "$ref": "#/$defs/forkStatus" },
+              "fork_point_seq": { "$ref": "#/$defs/u64" },
+              "path": { "type": "string" },
+              "missing": { "type": "boolean" }
+            }
+          }
+        },
+        "doctor_findings": { "$ref": "#/$defs/doctorFindings" },
+        "recent_operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statsOperation" }
+        }
+      }
+    },
+    "diagnosticsOutputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "redacted", "bundle"],
+      "properties": {
+        "path": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "bundle": { "$ref": "#/$defs/diagnosticBundle" }
+      }
+    },
+    "diffReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "rows"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "status", "insertions", "deletions"],
+            "properties": {
+              "path": { "type": "string" },
+              "status": { "type": "string", "minLength": 1 },
+              "insertions": { "$ref": "#/$defs/nullableU64" },
+              "deletions": { "$ref": "#/$defs/nullableU64" }
+            }
+          }
+        }
+      }
+    },
+    "discardResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discarded"],
+      "properties": {
+        "discarded": { "type": "string" }
+      }
+    },
+    "doctorFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "message", "fixed"],
+        "properties": {
+          "severity": { "$ref": "#/$defs/severity" },
+          "message": { "type": "string" },
+          "fixed": { "type": "boolean" }
+        }
+      }
+    },
+    "forkCompareRows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/forkCompareRow" }
+    },
+    "forkCompareRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "fork_point_seq",
+        "files_changed",
+        "insertions",
+        "deletions",
+        "last_activity",
+        "path",
+        "missing"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "$ref": "#/$defs/forkStatus" },
+        "fork_point_seq": { "$ref": "#/$defs/u64" },
+        "files_changed": { "$ref": "#/$defs/u64" },
+        "insertions": { "$ref": "#/$defs/u64" },
+        "deletions": { "$ref": "#/$defs/u64" },
+        "last_activity": {
+          "anyOf": [
+            { "$ref": "#/$defs/dateTime" },
+            { "type": "null" }
+          ]
+        },
+        "path": { "type": "string" },
+        "missing": { "type": "boolean" }
+      }
+    },
+    "forkInfos": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/forkInfo" }
+    },
+    "forkInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "fork_point_seq",
+        "method",
+        "duration_ms"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "fork_point_seq": { "$ref": "#/$defs/u64" },
+        "method": { "$ref": "#/$defs/cloneMethod" },
+        "duration_ms": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "initResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "journalEntries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/journalEntry" }
+    },
+    "journalEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v", "ts", "op"],
+      "properties": {
+        "v": { "const": 1 },
+        "ts": { "$ref": "#/$defs/dateTime" },
+        "op": { "$ref": "#/$defs/op" },
+        "seq": { "$ref": "#/$defs/u64" },
+        "commit": { "$ref": "#/$defs/gitOid" },
+        "source": { "$ref": "#/$defs/source" },
+        "session_id": { "type": "string" },
+        "tool": { "type": "string" },
+        "message": { "type": "string" },
+        "files_changed": { "$ref": "#/$defs/u64" },
+        "duration_ms": { "$ref": "#/$defs/u64" },
+        "detail": true
+      }
+    },
+    "noChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["no_changes"],
+      "properties": {
+        "no_changes": { "const": true },
+        "message": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "promoteReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fork", "branch", "commit"],
+      "properties": {
+        "fork": { "type": "string" },
+        "branch": { "type": "string" },
+        "commit": { "$ref": "#/$defs/gitOid" }
+      }
+    },
+    "raceLaneResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fork",
+          "path",
+          "exit_code",
+          "duration_ms",
+          "files_changed",
+          "insertions",
+          "deletions",
+          "log_file"
+        ],
+        "properties": {
+          "fork": { "type": "string" },
+          "path": { "type": "string" },
+          "exit_code": { "$ref": "#/$defs/nullableI32" },
+          "duration_ms": { "$ref": "#/$defs/u64" },
+          "files_changed": { "$ref": "#/$defs/u64" },
+          "insertions": { "$ref": "#/$defs/u64" },
+          "deletions": { "$ref": "#/$defs/u64" },
+          "log_file": { "type": "string" }
+        }
+      }
+    },
+    "restoreReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_seq",
+        "target_commit",
+        "safety_seq",
+        "files_written",
+        "files_deleted"
+      ],
+      "properties": {
+        "target_seq": { "$ref": "#/$defs/u64" },
+        "target_commit": { "$ref": "#/$defs/gitOid" },
+        "safety_seq": { "$ref": "#/$defs/nullableU64" },
+        "files_written": { "$ref": "#/$defs/u64" },
+        "files_deleted": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "setupReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "settings_file",
+        "mcp_file",
+        "hooks_installed",
+        "mcp_registered",
+        "removed"
+      ],
+      "properties": {
+        "settings_file": { "type": "string" },
+        "mcp_file": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "hooks_installed": { "type": "boolean" },
+        "mcp_registered": { "type": "boolean" },
+        "removed": { "type": "boolean" }
+      }
+    },
+    "statusReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "workspace_id",
+        "dirty_files",
+        "untracked_files",
+        "deleted_files",
+        "last_checkpoint",
+        "active_forks",
+        "is_fork"
+      ],
+      "properties": {
+        "root": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "dirty_files": { "$ref": "#/$defs/u64" },
+        "untracked_files": { "$ref": "#/$defs/u64" },
+        "deleted_files": { "$ref": "#/$defs/u64" },
+        "last_checkpoint": { "$ref": "#/$defs/nullableLastCheckpoint" },
+        "active_forks": { "$ref": "#/$defs/u64" },
+        "is_fork": { "type": "boolean" }
+      }
+    },
+    "statsReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "workspace_id",
+        "checkpoints",
+        "journal_entries",
+        "forks_total",
+        "forks_pending",
+        "forks_active",
+        "forks_promoted",
+        "forks_discarded",
+        "blobs",
+        "blob_bytes",
+        "store_bytes",
+        "last_operation",
+        "recent_operations"
+      ],
+      "properties": {
+        "root": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "checkpoints": { "$ref": "#/$defs/u64" },
+        "journal_entries": { "$ref": "#/$defs/u64" },
+        "forks_total": { "$ref": "#/$defs/u64" },
+        "forks_pending": { "$ref": "#/$defs/u64" },
+        "forks_active": { "$ref": "#/$defs/u64" },
+        "forks_promoted": { "$ref": "#/$defs/u64" },
+        "forks_discarded": { "$ref": "#/$defs/u64" },
+        "blobs": { "$ref": "#/$defs/u64" },
+        "blob_bytes": { "$ref": "#/$defs/u64" },
+        "store_bytes": { "$ref": "#/$defs/u64" },
+        "last_operation": {
+          "anyOf": [
+            { "$ref": "#/$defs/statsOperation" },
+            { "type": "null" }
+          ]
+        },
+        "recent_operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statsOperation" }
+        }
+      }
+    },
+    "statsOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "ts",
+        "seq",
+        "duration_ms",
+        "files_changed",
+        "message"
+      ],
+      "properties": {
+        "op": { "$ref": "#/$defs/op" },
+        "ts": { "$ref": "#/$defs/dateTime" },
+        "seq": { "$ref": "#/$defs/nullableU64" },
+        "duration_ms": { "$ref": "#/$defs/nullableU64" },
+        "files_changed": { "$ref": "#/$defs/nullableU64" },
+        "message": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "lastCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "ts", "message"],
+      "properties": {
+        "seq": { "$ref": "#/$defs/u64" },
+        "ts": { "$ref": "#/$defs/dateTime" },
+        "message": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "nullableLastCheckpoint": {
+      "anyOf": [
+        { "$ref": "#/$defs/lastCheckpoint" },
+        { "type": "null" }
+      ]
+    },
+    "cloneMethod": {
+      "type": "string",
+      "enum": ["clonefile", "reflink", "copy"]
+    },
+    "forkStatus": {
+      "type": "string",
+      "enum": ["pending", "active", "promoted", "discarded"]
+    },
+    "op": {
+      "type": "string",
+      "enum": ["init", "checkpoint", "fork", "restore", "undo", "promote", "discard"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["error", "warning", "info"]
+    },
+    "source": {
+      "type": "string",
+      "enum": ["manual", "hook", "mcp", "race"]
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gitOid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{4,64}$"
+    },
+    "nullableI32": {
+      "anyOf": [
+        { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        { "type": "null" }
+      ]
+    },
+    "nullableString": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "nullableU64": {
+      "anyOf": [
+        { "$ref": "#/$defs/u64" },
+        { "type": "null" }
+      ]
+    },
+    "u64": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

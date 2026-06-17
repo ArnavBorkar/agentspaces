@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/schemas/mcp-tool-result.schema.json",
+  "title": "asp MCP tool result",
+  "description": "The result object returned from JSON-RPC tools/call for asp workspace_* tools.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "structuredContent", "isError"],
+      "properties": {
+        "content": { "$ref": "#/$defs/content" },
+        "structuredContent": { "$ref": "asp-result.schema.json" },
+        "isError": { "const": false }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "isError"],
+      "properties": {
+        "content": { "$ref": "#/$defs/content" },
+        "isError": { "const": true }
+      }
+    }
+  ],
+  "$defs": {
+    "content": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "text"],
+        "properties": {
+          "type": { "const": "text" },
+          "text": { "type": "string" }
+        }
+      }
+    }
+  }
+}

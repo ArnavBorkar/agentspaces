@@ -312,7 +312,7 @@
 **Done when:** config, policy, JSON output, and on-disk data have schemas that automation can trust.
 
 - **S25.1 Schemas**
-  - [ ] T25.1.1 Publish JSON Schemas for CLI JSON envelopes and MCP tool results.
+  - [x] T25.1.1 Publish JSON Schemas for CLI JSON envelopes and MCP tool results.
   - [ ] T25.1.2 Publish TOML schema docs for `.asp/config.toml`.
   - [ ] T25.1.3 Add snapshot tests that prevent accidental JSON shape drift.
 - **S25.2 Versioning**

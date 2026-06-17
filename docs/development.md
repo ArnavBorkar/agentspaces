@@ -65,6 +65,9 @@ agents and humans receive the same next action.
 ## Command Map
 
 Every user-facing command must support `--json` through the global envelope.
+Published JSON Schemas for the envelope, result payloads, and MCP tool results
+live in [docs/schemas.md](schemas.md); update them with any serialized output
+change.
 
 | Command | Core path | MCP tool | Typical tests |
 | --- | --- | --- | --- |
@@ -141,6 +144,8 @@ Before opening a PR or pushing to `main`, verify the same items captured in
   tmp-and-rename behavior.
 - User-facing errors include a corrective `hint`.
 - Any new command has JSON output and tests for both success and failure.
+- Serialized CLI or MCP output changes update [docs/schemas.md](schemas.md) and
+  [schemas/](../schemas/).
 - Storage changes include regression or torture coverage.
 - README performance claims still match measured benchmark docs.
 
