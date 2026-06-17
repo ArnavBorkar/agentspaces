@@ -9,6 +9,11 @@
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner
   controls for bounded best-of-N agent work.
 
+### Fixed
+
+- Shadow-git commands retry transient index-lock collisions left by killed git
+  subprocesses during crash recovery.
+
 ### Automation contract
 
 - Additive: `asp race --json` lane result objects include `label` when emitted

@@ -3,9 +3,13 @@
 //! worst-case failure mode degrades to a plain git repository.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
+use std::time::Duration;
 
 use crate::error::{Error, ErrorCode, Result};
+
+const INDEX_LOCK_RETRY_ATTEMPTS: usize = 25;
+const INDEX_LOCK_RETRY_DELAY: Duration = Duration::from_millis(120);
 
 /// Handle to the shadow repository of one workspace.
 #[derive(Debug, Clone)]
@@ -51,22 +55,10 @@ impl Shadow {
 
     /// Run a git command, returning trimmed stdout. Errors carry stderr.
     pub fn run(&self, args: &[&str]) -> Result<String> {
-        let output = self.command().args(args).output().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                Error::new(ErrorCode::GitMissing, "git is not installed or not on PATH").with_hint(
-                    "install git (https://git-scm.com) — asp uses it as its storage engine",
-                )
-            } else {
-                Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
-            }
-        })?;
+        let output = self.run_with_index_lock_retry(args)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(Error::new(
-                ErrorCode::GitFailed,
-                format!("git {} failed: {stderr}", args.first().unwrap_or(&"")),
-            )
-            .with_hint("run `asp doctor` to check workspace health"));
+            return Err(git_failed(args.first().copied().unwrap_or(""), &stderr));
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
@@ -111,17 +103,37 @@ impl Shadow {
 
     /// Run a git command, returning raw stdout bytes (for -z output).
     pub fn run_raw(&self, args: &[&str]) -> Result<Vec<u8>> {
-        let output = self.command().args(args).output().map_err(|e| {
-            Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
-        })?;
+        let output = self.run_with_index_lock_retry(args)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(Error::new(
-                ErrorCode::GitFailed,
-                format!("git {} failed: {stderr}", args.first().unwrap_or(&"")),
-            ));
+            return Err(git_failed(args.first().copied().unwrap_or(""), &stderr));
         }
         Ok(output.stdout)
+    }
+
+    fn run_with_index_lock_retry(&self, args: &[&str]) -> Result<Output> {
+        let mut last_output = None;
+        for attempt in 0..INDEX_LOCK_RETRY_ATTEMPTS {
+            let output = self.command().args(args).output().map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Error::new(ErrorCode::GitMissing, "git is not installed or not on PATH")
+                        .with_hint(
+                            "install git (https://git-scm.com) — asp uses it as its storage engine",
+                        )
+                } else {
+                    Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}"))
+                        .with_source(e)
+                }
+            })?;
+            if output.status.success() || !is_index_lock_error(&output.stderr) {
+                return Ok(output);
+            }
+            last_output = Some(output);
+            if attempt + 1 < INDEX_LOCK_RETRY_ATTEMPTS {
+                std::thread::sleep(INDEX_LOCK_RETRY_DELAY);
+            }
+        }
+        Ok(last_output.expect("at least one git attempt"))
     }
 
     /// Initialize the bare shadow repo with asp's pinned configuration.
@@ -277,10 +289,44 @@ pub fn ensure_git_version() -> Result<()> {
     Ok(())
 }
 
+fn is_index_lock_error(stderr: &[u8]) -> bool {
+    let stderr = String::from_utf8_lossy(stderr);
+    stderr.contains("index.lock") || stderr.contains("shadow.index.lock")
+}
+
+fn git_failed(command: &str, stderr: &str) -> Error {
+    let hint = if is_index_lock_error(stderr.as_bytes()) {
+        "wait a moment and retry; if the lock persists, run `asp doctor --fix`"
+    } else {
+        "run `asp doctor` to check workspace health"
+    };
+    Error::new(
+        ErrorCode::GitFailed,
+        format!("git {command} failed: {stderr}"),
+    )
+    .with_hint(hint)
+}
+
 fn null_device() -> &'static str {
     if cfg!(windows) {
         "NUL"
     } else {
         "/dev/null"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_index_lock_error;
+
+    #[test]
+    fn detects_git_index_lock_errors() {
+        assert!(is_index_lock_error(
+            b"fatal: Unable to create '/tmp/proj/.asp/shadow.index.lock': File exists."
+        ));
+        assert!(is_index_lock_error(
+            b"fatal: Unable to create '.git/index.lock': File exists."
+        ));
+        assert!(!is_index_lock_error(b"fatal: ambiguous argument 'HEAD'"));
     }
 }
