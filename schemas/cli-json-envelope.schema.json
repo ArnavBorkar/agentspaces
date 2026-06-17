@@ -45,6 +45,7 @@
             "checkpoint_not_found",
             "no_user_git_repo",
             "branch_exists",
+            "invalid_branch",
             "policy_violation",
             "cross_volume",
             "store_corrupt",

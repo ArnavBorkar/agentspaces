@@ -811,6 +811,20 @@ fn promote_via_cli_lands_branch() {
     assert!(out.contains("fork directory remains:"), "{out}");
     assert!(out.contains(human_path.to_string_lossy().as_ref()), "{out}");
     assert!(out.contains("asp discard human"), "{out}");
+
+    let forks = ok_json(&root, &["fork", "--name", "badref"]);
+    let badref_path = PathBuf::from(forks["result"][0]["path"].as_str().unwrap());
+    std::fs::write(badref_path.join("src/app.py"), "print('badref')\n").unwrap();
+    let out = asp(
+        &root,
+        &["--json", "promote", "badref", "--branch", "bad..name"],
+    );
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["ok"], false);
+    assert_eq!(err["error"]["code"], "invalid_branch");
+    assert!(err["error"]["hint"].as_str().unwrap().contains("--branch"));
 }
 
 #[test]

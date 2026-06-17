@@ -20,6 +20,7 @@ pub enum ErrorCode {
     CheckpointNotFound,
     NoUserGitRepo,
     BranchExists,
+    InvalidBranch,
     PolicyViolation,
     CrossVolume,
     StoreCorrupt,

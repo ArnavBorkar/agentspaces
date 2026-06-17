@@ -83,6 +83,8 @@
   standardize default branch names created by `asp promote`.
 - `asp promote` now reports that the fork directory remains on disk and prints
   the exact `asp discard <fork>` cleanup command.
+- `asp promote` now validates target branch names before writing and returns an
+  actionable `invalid_branch` error for unsafe Git refs.
 
 ### Fixed
 
@@ -128,6 +130,8 @@
   `diffHtmlOutputResult` with the written path, byte count, and summary fields.
 - Additive: `asp promote --json` and `workspace_promote` results include
   `fork_path`, `fork_retained`, and `cleanup_command` cleanup metadata.
+- Additive: promote failures may return the new `invalid_branch` error code
+  when the requested branch name is not a valid Git branch ref.
 
 ## Automation Contract Rules
 

@@ -230,7 +230,7 @@
 - **S18.1 Branch polish**
   - [x] T18.1.1 Add configurable branch naming templates for promote.
   - [x] T18.1.2 Add promote output that clearly states the fork directory remains on disk and how to clean it.
-  - [ ] T18.1.3 Add tests for protected branch-name collisions and unsafe ref names.
+  - [x] T18.1.3 Add tests for protected branch-name collisions and unsafe ref names.
 - **S18.2 GitHub flow**
   - [ ] T18.2.1 Add `asp promote --push` with explicit remote/branch confirmation and JSON output.
   - [ ] T18.2.2 Add `asp promote --pr-draft` using gh when available, with graceful fallback instructions.

@@ -807,6 +807,47 @@ fn promote_uses_configured_branch_template_when_branch_is_omitted() {
 }
 
 #[test]
+fn promote_rejects_existing_and_unsafe_branch_names_before_writing() {
+    let (_tmp, root) = project();
+    init_user_git(&root);
+    git(&root, &["branch", "protected/main"]);
+
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(
+        &fork.path,
+        "src/main.rs",
+        "fn main() { /* branch guard */ }\n",
+    );
+
+    let err = ws
+        .promote("winner", Some("protected/main".into()))
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::BranchExists);
+    assert!(err.hint.unwrap().contains("--branch"));
+    assert_eq!(
+        git(&root, &["show", "protected/main:src/main.rs"]),
+        "fn main() {}"
+    );
+
+    for branch in [
+        "bad..name",
+        "bad.lock",
+        "bad branch",
+        "/leading",
+        "trailing/",
+    ] {
+        let err = ws.promote("winner", Some(branch.into())).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidBranch, "{branch}");
+        assert!(err.hint.unwrap().contains("--branch"));
+    }
+
+    let report = ws.promote("winner", Some("safe/winner".into())).unwrap();
+    assert_eq!(report.branch, "safe/winner");
+}
+
+#[test]
 fn promote_without_user_git_errors_helpfully() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();

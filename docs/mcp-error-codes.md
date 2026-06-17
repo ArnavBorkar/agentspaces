@@ -71,6 +71,7 @@ These codes are the same stable enum used by `asp --json` errors.
 | `checkpoint_not_found` | A checkpoint number, commit prefix, or path target is invalid. | Call `workspace_log` or `workspace_diff` and retry with a valid reference. |
 | `no_user_git_repo` | Promote needs a user Git repository and none was found. | Initialize or move into the real project Git repo before promoting. |
 | `branch_exists` | Promote would overwrite an existing branch. | Choose a different branch name. |
+| `invalid_branch` | Promote was asked to create an unsafe or invalid Git branch name. | Retry with a normal branch name such as `asp/<fork>`. |
 | `policy_violation` | `.asp/policy.toml` blocks the requested workspace operation. | Follow the hint, usually by checkpointing, choosing an allowed branch, reducing active forks, narrowing paths, or editing policy after review. |
 | `cross_volume` | A same-volume clone operation was required but impossible. | Put the workspace and fork destination on the same volume, or use a supported copy path. |
 | `store_corrupt` | The `.asp` store or journal failed an integrity check. | Run `asp doctor`; preserve the directory for investigation if repair is not offered. |
@@ -97,7 +98,7 @@ user-correctable codes most specific to each MCP tool.
 | `workspace_fork` | `not_a_workspace`, `fork_exists`, `policy_violation`, `cross_volume` |
 | `workspace_forks` | `not_a_workspace` |
 | `workspace_diff` | `not_a_workspace`, `checkpoint_not_found` |
-| `workspace_promote` | `not_a_workspace`, `fork_not_found`, `no_user_git_repo`, `branch_exists`, `policy_violation` |
+| `workspace_promote` | `not_a_workspace`, `fork_not_found`, `no_user_git_repo`, `branch_exists`, `invalid_branch`, `policy_violation` |
 | `workspace_discard` | `not_a_workspace`, `fork_not_found`, `fork_has_unpromoted_work` |
 | Unknown tool name passed to `tools/call` | `nothing_to_do` |
 

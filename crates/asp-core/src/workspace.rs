@@ -2216,6 +2216,7 @@ impl Workspace {
         }
 
         let branch = branch.unwrap_or_else(|| self.default_promote_branch(fork_name));
+        validate_user_branch_name(&self.layout.root, &branch)?;
         if user_git_ref_exists(&self.layout.root, &branch)? {
             return Err(Error::new(
                 ErrorCode::BranchExists,
@@ -3141,6 +3142,30 @@ fn run_user_git(repo_dir: &Path, args: &[&str]) -> Result<String> {
         ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn validate_user_branch_name(repo_dir: &Path, branch: &str) -> Result<()> {
+    let output = Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .arg("-C")
+        .arg(repo_dir)
+        .args(["check-ref-format", "--branch", branch])
+        .output()
+        .map_err(|e| {
+            Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
+        })?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(Error::new(
+        ErrorCode::InvalidBranch,
+        format!("invalid branch name '{branch}'"),
+    )
+    .with_hint("pass a normal branch name, for example `asp promote <fork> --branch asp/<fork>`"))
 }
 
 fn user_git_ref_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
