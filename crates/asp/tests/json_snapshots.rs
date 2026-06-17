@@ -56,6 +56,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
+        "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_policy_validate" => include_str!("snapshots/cli_policy_validate.json"),
@@ -103,7 +104,9 @@ fn normalize_value(value: &mut Value, root: &Path) {
                     }
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
                     "ts" | "generated_at" => *child = json!("<timestamp>"),
-                    "duration_ms" | "store_bytes" | "blob_bytes" if child.is_number() => {
+                    "duration_ms" | "store_bytes" | "blob_bytes" | "age_hours"
+                        if child.is_number() =>
+                    {
                         *child = json!(0);
                     }
                     "message" | "hint" => {
@@ -182,6 +185,9 @@ fn cli_json_shapes_match_snapshots() {
 
     let audit = ok_json(&root, &["audit", "--op", "checkpoint", "-n", "2"]);
     snapshot("cli_audit", normalize(audit, &root));
+
+    let retention = ok_json(&root, &["retention", "plan"]);
+    snapshot("cli_retention_plan", normalize(retention, &root));
 
     let race = ok_json(
         &root,

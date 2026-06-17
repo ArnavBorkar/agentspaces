@@ -195,6 +195,35 @@ fn invalid_policy_blocks_destructive_commands_before_mutation() {
 }
 
 #[test]
+fn retention_plan_reports_dry_run_from_policy() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+    std::fs::write(root.join("src/app.py"), "print('v2')\n").unwrap();
+    ok(&root, &["checkpoint", "-m", "v2"]);
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[retention]\nkeep_last = 1\n",
+    )
+    .unwrap();
+
+    let plan = ok_json(&root, &["retention", "plan"]);
+    assert_eq!(plan["result"]["dry_run"], true);
+    assert_eq!(plan["result"]["total_checkpoints"], 2);
+    assert_eq!(plan["result"]["delete_count"], 1);
+    let checkpoints = plan["result"]["checkpoints"].as_array().unwrap();
+    let old = checkpoints.iter().find(|entry| entry["seq"] == 1).unwrap();
+    assert_eq!(old["action"], "delete");
+    assert_eq!(old["reason"], "outside_keep_last");
+    let newest = checkpoints.iter().find(|entry| entry["seq"] == 2).unwrap();
+    assert_eq!(newest["action"], "retain");
+
+    let table = ok(&root, &["retention", "plan"]);
+    assert!(table.contains("retention plan"));
+    assert!(table.contains("outside_keep_last"));
+}
+
+#[test]
 fn audit_filters_journal_events() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

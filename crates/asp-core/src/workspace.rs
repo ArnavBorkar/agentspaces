@@ -87,6 +87,40 @@ pub struct StatsOperation {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct RetentionPlan {
+    pub dry_run: bool,
+    pub policy: RetentionPlanPolicy,
+    pub total_checkpoints: u64,
+    pub retain_count: u64,
+    pub delete_count: u64,
+    pub checkpoints: Vec<RetentionPlanEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RetentionPlanPolicy {
+    pub keep_last: Option<u64>,
+    pub max_age_days: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RetentionPlanEntry {
+    pub seq: u64,
+    pub commit: String,
+    pub ts: Option<String>,
+    pub message: Option<String>,
+    pub age_hours: Option<i64>,
+    pub action: RetentionAction,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RetentionAction {
+    Retain,
+    Delete,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DiagnosticBundle {
     pub generated_at: String,
     pub asp_version: String,
@@ -531,6 +565,108 @@ impl Workspace {
             store_bytes,
             last_operation,
             recent_operations,
+        })
+    }
+
+    pub fn retention_plan(&self) -> Result<RetentionPlan> {
+        let refs = self.checkpoint_refs()?;
+        let journal_entries = self.journal.read()?.entries;
+        let registry = self.fork_registry()?;
+        let policy = RetentionPlanPolicy {
+            keep_last: self.policy.retention.keep_last,
+            max_age_days: self.policy.retention.max_age_days,
+        };
+        let mut checkpoint_entries = BTreeMap::new();
+        for entry in &journal_entries {
+            if entry.op == Op::Checkpoint {
+                if let Some(seq) = entry.seq {
+                    checkpoint_entries.insert(seq, entry);
+                }
+            }
+        }
+
+        let latest_seq = refs.keys().next_back().copied();
+        let keep_last: BTreeSet<u64> = refs
+            .keys()
+            .rev()
+            .take(policy.keep_last.unwrap_or(0) as usize)
+            .copied()
+            .collect();
+        let fork_points: BTreeSet<u64> = registry
+            .forks
+            .iter()
+            .filter(|fork| matches!(fork.status, ForkStatus::Pending | ForkStatus::Active))
+            .map(|fork| fork.fork_point_seq)
+            .collect();
+        let has_retention_policy = policy.keep_last.is_some() || policy.max_age_days.is_some();
+        let now = OffsetDateTime::now_utc();
+        let mut entries = Vec::new();
+        let mut retain_count = 0u64;
+        let mut delete_count = 0u64;
+
+        for (seq, commit) in refs.iter().rev() {
+            let journal = checkpoint_entries.get(seq).copied();
+            let ts = journal.map(|entry| entry.ts.clone());
+            let age_hours = ts
+                .as_ref()
+                .map(|ts| {
+                    OffsetDateTime::parse(ts, &Rfc3339)
+                        .map(|parsed| (now - parsed).whole_hours())
+                        .map_err(|e| {
+                            Error::new(
+                                ErrorCode::StoreCorrupt,
+                                format!("checkpoint #{seq} has an unreadable timestamp: {e}"),
+                            )
+                            .with_hint(
+                                "run `asp doctor`; if the journal cannot be repaired, create a fresh checkpoint",
+                            )
+                        })
+                })
+                .transpose()?;
+            let message = journal.and_then(|entry| entry.message.clone());
+
+            let (action, reason) = if !has_retention_policy {
+                (RetentionAction::Retain, "no_retention_policy")
+            } else if Some(*seq) == latest_seq {
+                (RetentionAction::Retain, "latest_checkpoint")
+            } else if fork_points.contains(seq) {
+                (RetentionAction::Retain, "fork_point")
+            } else if keep_last.contains(seq) {
+                (RetentionAction::Retain, "keep_last")
+            } else if let Some(max_age_days) = policy.max_age_days {
+                match age_hours {
+                    Some(age_hours) if age_hours > (max_age_days as i64 * 24) => {
+                        (RetentionAction::Delete, "older_than_max_age_days")
+                    }
+                    Some(_) => (RetentionAction::Retain, "within_max_age_days"),
+                    None => (RetentionAction::Retain, "missing_journal_entry"),
+                }
+            } else {
+                (RetentionAction::Delete, "outside_keep_last")
+            };
+
+            match action {
+                RetentionAction::Retain => retain_count += 1,
+                RetentionAction::Delete => delete_count += 1,
+            }
+            entries.push(RetentionPlanEntry {
+                seq: *seq,
+                commit: commit.clone(),
+                ts,
+                message,
+                age_hours,
+                action,
+                reason: reason.to_string(),
+            });
+        }
+
+        Ok(RetentionPlan {
+            dry_run: true,
+            policy,
+            total_checkpoints: refs.len() as u64,
+            retain_count,
+            delete_count,
+            checkpoints: entries,
         })
     }
 

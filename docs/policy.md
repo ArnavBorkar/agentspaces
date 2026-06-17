@@ -24,6 +24,10 @@ protected = ["src/security/**", ".github/workflows/**"]
 require_clean_status = true
 require_checkpoint = true
 allowed_branch_prefixes = ["asp/"]
+
+[retention]
+keep_last = 50
+max_age_days = 30
 ```
 
 | TOML path | Type | Default | Meaning |
@@ -34,6 +38,8 @@ allowed_branch_prefixes = ["asp/"]
 | `promote.require_clean_status` | boolean | `false` | Whether promotion requires the main workspace to have no dirty, deleted, or untracked paths. |
 | `promote.require_checkpoint` | boolean | `false` | Whether promotion requires at least one checkpoint. |
 | `promote.allowed_branch_prefixes` | array of strings | `[]` | Branch prefixes promotion may create; empty means unrestricted. |
+| `retention.keep_last` | positive integer or omitted | unset | Minimum newest checkpoints retained by retention plans. |
+| `retention.max_age_days` | positive integer or omitted | unset | Checkpoints older than this many days are eligible in dry-run retention plans. |
 
 ## Validation Rules
 
@@ -43,6 +49,8 @@ mutation. Add `--json` for CI or agent harnesses; a valid policy returns
 
 - Unknown tables or keys are rejected.
 - `forks.max_active` and `checkpoints.max_age_hours` must be greater than zero
+  when set.
+- `retention.keep_last` and `retention.max_age_days` must be greater than zero
   when set.
 - `paths.protected` entries must be non-empty workspace-relative patterns and
   cannot contain `..` path segments.
@@ -92,6 +100,14 @@ Reserve promotion branches for reviewable asp output:
 require_clean_status = true
 require_checkpoint = true
 allowed_branch_prefixes = ["asp/", "review/"]
+```
+
+Plan local checkpoint retention without deleting anything:
+
+```toml
+[retention]
+keep_last = 50
+max_age_days = 30
 ```
 
 ## Recovery

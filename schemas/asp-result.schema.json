@@ -17,6 +17,7 @@
     { "$ref": "#/$defs/policyValidateReport" },
     { "$ref": "#/$defs/promoteReport" },
     { "$ref": "#/$defs/raceLaneResults" },
+    { "$ref": "#/$defs/retentionPlan" },
     { "$ref": "#/$defs/restoreReport" },
     { "$ref": "#/$defs/schemaReport" },
     { "$ref": "#/$defs/setupReport" },
@@ -339,7 +340,7 @@
     "workspacePolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["forks", "checkpoints", "paths", "promote"],
+      "required": ["forks", "checkpoints", "paths", "promote", "retention"],
       "properties": {
         "forks": {
           "type": "object",
@@ -383,6 +384,15 @@
               "type": "array",
               "items": { "type": "string" }
             }
+          }
+        },
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keep_last", "max_age_days"],
+          "properties": {
+            "keep_last": { "$ref": "#/$defs/nullableU64" },
+            "max_age_days": { "$ref": "#/$defs/nullableU64" }
           }
         }
       }
@@ -448,6 +458,67 @@
         "errors": { "$ref": "#/$defs/u64" },
         "skipped": { "$ref": "#/$defs/u64" },
         "time_seconds": { "type": "number" }
+      }
+    },
+    "retentionPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dry_run",
+        "policy",
+        "total_checkpoints",
+        "retain_count",
+        "delete_count",
+        "checkpoints"
+      ],
+      "properties": {
+        "dry_run": { "const": true },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keep_last", "max_age_days"],
+          "properties": {
+            "keep_last": { "$ref": "#/$defs/nullableU64" },
+            "max_age_days": { "$ref": "#/$defs/nullableU64" }
+          }
+        },
+        "total_checkpoints": { "$ref": "#/$defs/u64" },
+        "retain_count": { "$ref": "#/$defs/u64" },
+        "delete_count": { "$ref": "#/$defs/u64" },
+        "checkpoints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/retentionPlanEntry" }
+        }
+      }
+    },
+    "retentionPlanEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "commit",
+        "ts",
+        "message",
+        "age_hours",
+        "action",
+        "reason"
+      ],
+      "properties": {
+        "seq": { "$ref": "#/$defs/u64" },
+        "commit": { "$ref": "#/$defs/gitOid" },
+        "ts": {
+          "anyOf": [
+            { "$ref": "#/$defs/dateTime" },
+            { "type": "null" }
+          ]
+        },
+        "message": { "$ref": "#/$defs/nullableString" },
+        "age_hours": { "$ref": "#/$defs/nullableI64" },
+        "action": {
+          "type": "string",
+          "enum": ["retain", "delete"]
+        },
+        "reason": { "type": "string" }
       }
     },
     "restoreReport": {
@@ -661,6 +732,12 @@
     "nullableI32": {
       "anyOf": [
         { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        { "type": "null" }
+      ]
+    },
+    "nullableI64": {
+      "anyOf": [
+        { "type": "integer", "minimum": -9223372036854775808, "maximum": 9223372036854775807 },
         { "type": "null" }
       ]
     },

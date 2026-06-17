@@ -71,6 +71,11 @@ enum Cmd {
         #[command(subcommand)]
         command: PolicyCmd,
     },
+    /// Plan non-destructive checkpoint retention from local policy.
+    Retention {
+        #[command(subcommand)]
+        command: RetentionCmd,
+    },
     /// Capture the current state as a checkpoint (no-op if nothing changed).
     #[command(visible_alias = "cp")]
     Checkpoint {
@@ -203,6 +208,12 @@ enum AuditFormat {
 enum PolicyCmd {
     /// Validate `.asp/policy.toml` and print the resolved policy.
     Validate,
+}
+
+#[derive(Subcommand)]
+enum RetentionCmd {
+    /// Show the checkpoint retention plan without deleting anything.
+    Plan,
 }
 
 #[derive(Subcommand)]
@@ -525,6 +536,61 @@ fn run(cli: Cli) -> Result<(), Error> {
                 } else {
                     println!("  active rules: {rules}");
                 }
+                Ok(())
+            }
+        },
+        Cmd::Retention { command } => match command {
+            RetentionCmd::Plan => {
+                let ws = open(&cli.dir)?;
+                let plan = ws.retention_plan()?;
+                if json {
+                    ui::print_json(true, &plan);
+                    return Ok(());
+                }
+                println!("{}", ui::bold("retention plan (dry run)"));
+                println!(
+                    "  policy: keep_last={}, max_age_days={}",
+                    plan.policy
+                        .keep_last
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "unset".to_string()),
+                    plan.policy
+                        .max_age_days
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "unset".to_string())
+                );
+                println!(
+                    "  checkpoints: {} retained / {} eligible for deletion",
+                    plan.retain_count, plan.delete_count
+                );
+                if plan.checkpoints.is_empty() {
+                    println!("  {}", ui::dim("no checkpoints yet"));
+                    return Ok(());
+                }
+                let mut rows = vec![vec![
+                    "ACTION".to_string(),
+                    "#".to_string(),
+                    "AGE".to_string(),
+                    "REASON".to_string(),
+                    "MESSAGE".to_string(),
+                ]];
+                for entry in &plan.checkpoints {
+                    let action = match entry.action {
+                        asp_core::workspace::RetentionAction::Retain => ui::green("retain"),
+                        asp_core::workspace::RetentionAction::Delete => ui::yellow("delete"),
+                    };
+                    rows.push(vec![
+                        action,
+                        format!("#{}", entry.seq),
+                        entry
+                            .age_hours
+                            .map(|hours| format!("{hours}h"))
+                            .unwrap_or_default(),
+                        entry.reason.clone(),
+                        entry.message.clone().unwrap_or_default(),
+                    ]);
+                }
+                print!("{}", ui::table(&rows));
                 Ok(())
             }
         },

@@ -20,6 +20,8 @@ pub struct Policy {
     pub paths: PathPolicy,
     #[serde(default)]
     pub promote: PromotePolicy,
+    #[serde(default)]
+    pub retention: RetentionPolicy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -50,6 +52,13 @@ pub struct PromotePolicy {
     pub require_checkpoint: bool,
     #[serde(default)]
     pub allowed_branch_prefixes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionPolicy {
+    pub keep_last: Option<u64>,
+    pub max_age_days: Option<u64>,
 }
 
 impl Policy {
@@ -90,6 +99,12 @@ impl Policy {
 # require_clean_status = true
 # require_checkpoint = true
 # allowed_branch_prefixes = ["asp/"]
+
+[retention]
+# Keep at least this many newest checkpoints, even if they exceed max_age_days:
+# keep_last = 50
+# Mark checkpoints older than this many days as eligible in retention plans:
+# max_age_days = 30
 "#
     }
 
@@ -104,6 +119,18 @@ impl Policy {
             return Err(policy_error(
                 path,
                 "checkpoints.max_age_hours must be greater than 0 when set",
+            ));
+        }
+        if self.retention.keep_last == Some(0) {
+            return Err(policy_error(
+                path,
+                "retention.keep_last must be greater than 0 when set",
+            ));
+        }
+        if self.retention.max_age_days == Some(0) {
+            return Err(policy_error(
+                path,
+                "retention.max_age_days must be greater than 0 when set",
             ));
         }
         for protected in &self.paths.protected {
@@ -189,12 +216,17 @@ protected = ["src/security/**"]
 require_clean_status = true
 require_checkpoint = true
 allowed_branch_prefixes = ["asp/", "review/"]
+
+[retention]
+keep_last = 20
+max_age_days = 30
 "#,
         )
         .unwrap();
         policy.validate(Path::new(".asp/policy.toml")).unwrap();
         assert_eq!(policy.forks.max_active, Some(4));
         assert!(policy.promote.require_clean_status);
+        assert_eq!(policy.retention.keep_last, Some(20));
     }
 
     #[test]
@@ -223,5 +255,12 @@ allowed_branch_prefixes = ["asp/", "review/"]
         let policy: Policy = toml::from_str("[paths]\nprotected = [\"../secrets\"]\n").unwrap();
         let err = policy.validate(Path::new(".asp/policy.toml")).unwrap_err();
         assert!(err.message.contains("paths.protected"));
+    }
+
+    #[test]
+    fn retention_values_must_be_positive() {
+        let policy: Policy = toml::from_str("[retention]\nkeep_last = 0\n").unwrap();
+        let err = policy.validate(Path::new(".asp/policy.toml")).unwrap_err();
+        assert!(err.message.contains("retention.keep_last"));
     }
 }

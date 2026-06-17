@@ -51,6 +51,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
+| `asp retention plan --json` | `#/$defs/retentionPlan` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
 | `asp log --json` | `#/$defs/journalEntries` |
 | `asp undo --json` | `#/$defs/restoreReport` |

@@ -55,6 +55,8 @@
   events for compliance evidence and downstream review tools.
 - Checkpoint journal entries now include changed-path attribution under
   `detail.paths`, so `asp audit --path <path>` can find checkpoint events.
+- `asp retention plan` reads local retention policy and prints a dry-run
+  checkpoint retention plan without deleting refs or objects.
 
 ### Fixed
 
@@ -82,6 +84,8 @@
   line, and `asp audit --format csv` emits a fixed-column CSV export.
 - Additive: checkpoint journal entries may include `detail.paths`, an array of
   workspace-relative changed paths for audit filtering and exports.
+- Additive: `asp retention plan --json` returns `retentionPlan`, and
+  `asp policy validate --json` includes `policy.retention`.
 
 ## Automation Contract Rules
 

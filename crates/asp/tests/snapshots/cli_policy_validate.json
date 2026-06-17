@@ -17,6 +17,10 @@
         "require_clean_status": false,
         "require_checkpoint": false,
         "allowed_branch_prefixes": []
+      },
+      "retention": {
+        "keep_last": null,
+        "max_age_days": null
       }
     }
   }

@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "result": {
+    "dry_run": true,
+    "policy": {
+      "keep_last": null,
+      "max_age_days": null
+    },
+    "total_checkpoints": 1,
+    "retain_count": 1,
+    "delete_count": 0,
+    "checkpoints": [
+      {
+        "seq": 1,
+        "commit": "<git-oid>",
+        "ts": "<timestamp>",
+        "message": "base",
+        "age_hours": 0,
+        "action": "retain",
+        "reason": "no_retention_policy"
+      }
+    ]
+  }
+}
