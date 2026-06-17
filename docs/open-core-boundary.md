@@ -128,6 +128,7 @@ first place.
 ## Related Docs
 
 - [Trust model whitepaper](trust-model.md)
+- [Local engine governance](local-engine-governance.md)
 - [On-disk format](design/format.md)
 - [Backup and disaster recovery](backup-recovery.md)
 - [JSON schemas](schemas.md)

@@ -90,6 +90,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Architecture** — [docs/architecture.md](docs/architecture.md)
 - **Trust model whitepaper** — [docs/trust-model.md](docs/trust-model.md)
 - **Open-core boundary policy** — [docs/open-core-boundary.md](docs/open-core-boundary.md)
+- **Local engine governance** — [docs/local-engine-governance.md](docs/local-engine-governance.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)

@@ -26,6 +26,8 @@
   excludes, blob thresholds, and filesystem choice.
 - `docs/open-core-boundary.md` defines non-negotiable OSS guarantees and the
   allowed boundary for optional hosted services.
+- `docs/local-engine-governance.md` gives maintainers a review workflow for
+  deciding which future features must remain in the local engine.
 
 ### Fixed
 

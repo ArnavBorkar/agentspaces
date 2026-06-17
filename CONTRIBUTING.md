@@ -25,6 +25,7 @@ Dependency policy and triage are documented in [docs/dependency-governance.md](d
 The contributor command map and focused test guide live in [docs/development.md](docs/development.md).
 Maintainer issue triage is documented in [docs/triage.md](docs/triage.md).
 The open-core boundary policy is documented in [docs/open-core-boundary.md](docs/open-core-boundary.md).
+Boundary-sensitive feature proposals should follow [docs/local-engine-governance.md](docs/local-engine-governance.md).
 
 ## Changing the on-disk format
 
