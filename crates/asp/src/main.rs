@@ -132,6 +132,9 @@ enum Cmd {
         /// Apply safe repairs.
         #[arg(long)]
         fix: bool,
+        /// Re-hash large-file CAS blobs to detect silent corruption.
+        #[arg(long)]
+        deep: bool,
     },
     /// Run the MCP stdio server (for agent harnesses like Claude Code).
     ///
@@ -630,9 +633,9 @@ fn run(cli: Cli) -> Result<(), Error> {
             hooks::handle_hook_event();
             Ok(())
         }
-        Cmd::Doctor { fix } => {
+        Cmd::Doctor { fix, deep } => {
             let ws = open(&cli.dir)?;
-            let findings = ws.doctor(fix)?;
+            let findings = ws.doctor(fix, deep)?;
             if json {
                 ui::print_json(true, &findings);
                 return Ok(());
@@ -657,7 +660,11 @@ fn run(cli: Cli) -> Result<(), Error> {
             if !fix && findings.iter().any(|f| !f.fixed) {
                 println!(
                     "\nrun {} to apply safe repairs (not every finding is auto-repairable)",
-                    ui::cyan("asp doctor --fix")
+                    ui::cyan(if deep {
+                        "asp doctor --fix --deep"
+                    } else {
+                        "asp doctor --fix"
+                    })
                 );
             }
             // Unrepaired error-severity findings: nonzero exit for scripts/CI.

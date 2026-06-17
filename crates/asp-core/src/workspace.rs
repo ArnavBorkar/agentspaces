@@ -1506,7 +1506,7 @@ pub enum Severity {
 
 impl Workspace {
     /// Diagnose (and with `fix`, repair) workspace-store health issues.
-    pub fn doctor(&self, fix: bool) -> Result<Vec<Finding>> {
+    pub fn doctor(&self, fix: bool, deep: bool) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
         let mut add = |severity: Severity, message: String, fixed: bool| {
             findings.push(Finding {
@@ -1711,6 +1711,18 @@ impl Workspace {
                         Severity::Error,
                         format!(
                             "CAS blob for {path} is missing and the file is gone — checkpointed versions of it cannot be restored"
+                        ),
+                        false,
+                    );
+                }
+            } else if deep {
+                let actual = blobs::hash_file(&cas)?;
+                if actual != entry.blake3 {
+                    add(
+                        Severity::Error,
+                        format!(
+                            "CAS blob for {path} is corrupt (expected {}, got {actual})",
+                            entry.blake3
                         ),
                         false,
                     );

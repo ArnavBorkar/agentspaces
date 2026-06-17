@@ -472,7 +472,7 @@ fn doctor_detects_and_repairs() {
     let fork = ws.fork(Some("gone".into()), None).unwrap();
 
     // Healthy workspace: no findings.
-    assert!(ws.doctor(false).unwrap().is_empty());
+    assert!(ws.doctor(false, false).unwrap().is_empty());
 
     // Damage 1: fork dir vanishes outside asp's control.
     std::fs::remove_dir_all(&fork.path).unwrap();
@@ -489,11 +489,11 @@ fn doctor_detects_and_repairs() {
     let torn = root.parent().unwrap().join("proj@torn");
     asp_core::fork::clone_tree(&root, &torn).unwrap();
 
-    let findings = ws.doctor(false).unwrap();
+    let findings = ws.doctor(false, false).unwrap();
     assert!(findings.len() >= 3, "{findings:?}");
     assert!(findings.iter().all(|f| !f.fixed));
 
-    let findings = ws.doctor(true).unwrap();
+    let findings = ws.doctor(true, false).unwrap();
     assert!(
         findings.iter().filter(|f| f.fixed).count() >= 2,
         "{findings:?}"
@@ -504,7 +504,7 @@ fn doctor_detects_and_repairs() {
     );
 
     // Repairs hold: only the info-level look-alike note remains.
-    let after = ws.doctor(false).unwrap();
+    let after = ws.doctor(false, false).unwrap();
     assert!(
         after.iter().all(|f| f.severity == Severity::Info),
         "{after:?}"
@@ -555,6 +555,37 @@ fn big_file_shrink_below_threshold_round_trip() {
     // ...and restoring the big version brings the bytes back.
     ws.restore(&c1.seq.to_string(), &[], None).unwrap();
     assert_eq!(std::fs::read(root.join("data.log")).unwrap(), big);
+}
+
+#[test]
+fn doctor_deep_detects_corrupt_cas_blob() {
+    use asp_core::workspace::Severity;
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    write_bytes(&root, "asset.bin", &vec![3u8; 2 * 1024 * 1024]);
+    cp(&ws, "big").unwrap();
+
+    let bf = asp_core::blobs::load_bigfiles(&root.join(".asp/bigfiles.json")).unwrap();
+    let entry = bf.files.get("asset.bin").unwrap();
+    std::fs::write(root.join(".asp/blobs").join(&entry.blake3), b"corrupt").unwrap();
+
+    assert!(
+        ws.doctor(false, false).unwrap().is_empty(),
+        "shallow doctor only checks that the CAS blob exists"
+    );
+    let findings = ws.doctor(false, true).unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.severity == Severity::Error && f.message.contains("is corrupt")),
+        "{findings:?}"
+    );
 }
 
 #[test]
@@ -677,7 +708,7 @@ fn doctor_cleans_pending_forks_only() {
     std::fs::create_dir_all(innocent.join(".asp")).unwrap();
     std::fs::write(innocent.join("precious.txt"), "do not delete\n").unwrap();
 
-    let findings = ws.doctor(true).unwrap();
+    let findings = ws.doctor(true, false).unwrap();
     assert!(findings.iter().any(|f| f.fixed), "{findings:?}");
     assert!(!fork.path.exists(), "torn (pending) clone removed");
     assert!(
