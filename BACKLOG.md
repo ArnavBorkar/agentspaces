@@ -280,8 +280,8 @@
   - [x] T22.1.2 Add `asp stats --json` for scripts and CI.
   - [x] T22.1.3 Add per-command timing fields to journal entries where missing.
 - **S22.2 Diagnostics bundles**
-  - [ ] T22.2.1 Add `asp diagnostics` that redacts paths/secrets by default.
-  - [ ] T22.2.2 Add docs for attaching diagnostics to issues safely.
+  - [x] T22.2.1 Add `asp diagnostics` that redacts paths/secrets by default.
+  - [x] T22.2.2 Add docs for attaching diagnostics to issues safely.
 
 ## EPIC 23 — Windows and filesystem portability
 

@@ -138,6 +138,29 @@ fn mutating_journal_entries_include_durations() {
 }
 
 #[test]
+fn diagnostics_redacts_paths_and_secretish_messages_by_default() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "token=sk-testdiagnosticsecret").unwrap();
+
+    let redacted = ws.diagnostics(false).unwrap();
+    let json = serde_json::to_string(&redacted).unwrap();
+    assert_eq!(redacted.workspace.root, "<workspace-root>");
+    assert!(redacted.redaction.paths_redacted);
+    assert!(!json.contains(root.to_str().unwrap()), "{json}");
+    assert!(!json.contains("sk-testdiagnosticsecret"), "{json}");
+    assert!(json.contains("token=<redacted>"), "{json}");
+
+    let unredacted = ws.diagnostics(true).unwrap();
+    assert!(!unredacted.redaction.paths_redacted);
+    assert_eq!(
+        unredacted.workspace.root,
+        root.canonicalize().unwrap().display().to_string(),
+        "{unredacted:?}"
+    );
+}
+
+#[test]
 fn init_is_guarded() {
     let (_tmp, root) = project();
     Workspace::init(&root, None).unwrap();

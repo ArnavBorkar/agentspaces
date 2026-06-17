@@ -63,6 +63,23 @@ fn full_cli_loop() {
     assert_eq!(stats["result"]["last_operation"]["op"], "checkpoint");
     assert!(ok(&root, &["stats"]).contains("checkpoints"));
 
+    let diagnostics = ok_json(&root, &["diagnostics"]);
+    assert_eq!(
+        diagnostics["result"]["workspace"]["root"],
+        "<workspace-root>"
+    );
+    assert_eq!(diagnostics["result"]["redaction"]["paths_redacted"], true);
+    let report = root.parent().unwrap().join("diagnostics.json");
+    ok(
+        &root,
+        &["diagnostics", "--output", report.to_str().unwrap()],
+    );
+    let report_json = std::fs::read_to_string(&report).unwrap();
+    assert!(
+        !report_json.contains(root.to_str().unwrap()),
+        "{report_json}"
+    );
+
     // no-op checkpoint exits 0
     let noop = ok_json(&root, &["checkpoint"]);
     assert_eq!(noop["result"]["no_changes"], true);

@@ -84,6 +84,93 @@ pub struct StatsOperation {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticBundle {
+    pub generated_at: String,
+    pub asp_version: String,
+    pub format_version: u32,
+    pub redaction: DiagnosticRedaction,
+    pub workspace: DiagnosticWorkspace,
+    pub status: DiagnosticStatus,
+    pub stats: DiagnosticStats,
+    pub config: DiagnosticConfig,
+    pub forks: Vec<DiagnosticFork>,
+    pub doctor_findings: Vec<DiagnosticFinding>,
+    pub recent_operations: Vec<DiagnosticOperation>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticRedaction {
+    pub paths_redacted: bool,
+    pub secrets_redacted: bool,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticWorkspace {
+    pub root: String,
+    pub workspace_id: String,
+    pub is_fork: bool,
+    pub parent_workspace_id: Option<String>,
+    pub parent_fork_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticStatus {
+    pub dirty_files: u64,
+    pub untracked_files: u64,
+    pub deleted_files: u64,
+    pub active_forks: u64,
+    pub last_checkpoint: Option<LastCheckpoint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticStats {
+    pub checkpoints: u64,
+    pub journal_entries: u64,
+    pub forks_total: u64,
+    pub forks_pending: u64,
+    pub forks_active: u64,
+    pub forks_promoted: u64,
+    pub forks_discarded: u64,
+    pub blobs: u64,
+    pub blob_bytes: u64,
+    pub store_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticConfig {
+    pub blob_threshold_mb: u64,
+    pub excludes_count: usize,
+    pub extra_excludes_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticFork {
+    pub name: String,
+    pub status: ForkStatus,
+    pub fork_point_seq: u64,
+    pub path: String,
+    pub missing: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticFinding {
+    pub severity: Severity,
+    pub message: String,
+    pub fixed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiagnosticOperation {
+    pub op: Op,
+    pub ts: String,
+    pub seq: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub files_changed: Option<u64>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct LastCheckpoint {
     pub seq: u64,
     pub ts: String,
@@ -430,6 +517,104 @@ impl Workspace {
             store_bytes,
             last_operation,
             recent_operations,
+        })
+    }
+
+    // ---------------------------------------------------------- diagnostics
+
+    pub fn diagnostics(&self, include_paths: bool) -> Result<DiagnosticBundle> {
+        let redactor = DiagnosticsRedactor::new(&self.layout.root, include_paths);
+        let status = self.status()?;
+        let stats = self.stats()?;
+        let registry = self.fork_registry()?;
+        let doctor_findings = self
+            .doctor(false, false)?
+            .into_iter()
+            .map(|finding| DiagnosticFinding {
+                severity: finding.severity,
+                message: redactor.text(&finding.message),
+                fixed: finding.fixed,
+            })
+            .collect();
+
+        Ok(DiagnosticBundle {
+            generated_at: crate::now_rfc3339(),
+            asp_version: crate::version().to_string(),
+            format_version: FORMAT_VERSION,
+            redaction: DiagnosticRedaction {
+                paths_redacted: !include_paths,
+                secrets_redacted: true,
+                notes: vec![
+                    "file contents and environment variables are never collected".to_string(),
+                    "checkpoint messages and finding text are scanned for common secret tokens"
+                        .to_string(),
+                ],
+            },
+            workspace: DiagnosticWorkspace {
+                root: redactor.path(&self.layout.root),
+                workspace_id: self.meta.id.clone(),
+                is_fork: self.meta.parent.is_some(),
+                parent_workspace_id: self.meta.parent.as_ref().map(|p| p.workspace_id.clone()),
+                parent_fork_name: self
+                    .meta
+                    .parent
+                    .as_ref()
+                    .map(|p| redactor.text(&p.fork_name)),
+            },
+            status: DiagnosticStatus {
+                dirty_files: status.dirty_files,
+                untracked_files: status.untracked_files,
+                deleted_files: status.deleted_files,
+                active_forks: status.active_forks,
+                last_checkpoint: status.last_checkpoint.map(|mut checkpoint| {
+                    checkpoint.message = checkpoint
+                        .message
+                        .as_ref()
+                        .map(|message| redactor.text(message));
+                    checkpoint
+                }),
+            },
+            stats: DiagnosticStats {
+                checkpoints: stats.checkpoints,
+                journal_entries: stats.journal_entries,
+                forks_total: stats.forks_total,
+                forks_pending: stats.forks_pending,
+                forks_active: stats.forks_active,
+                forks_promoted: stats.forks_promoted,
+                forks_discarded: stats.forks_discarded,
+                blobs: stats.blobs,
+                blob_bytes: stats.blob_bytes,
+                store_bytes: stats.store_bytes,
+            },
+            config: DiagnosticConfig {
+                blob_threshold_mb: self.config.capture.blob_threshold_mb,
+                excludes_count: self.config.capture.excludes.len(),
+                extra_excludes_count: self.config.capture.extra_excludes.len(),
+            },
+            forks: registry
+                .forks
+                .iter()
+                .map(|fork| DiagnosticFork {
+                    name: redactor.text(&fork.name),
+                    status: fork.status,
+                    fork_point_seq: fork.fork_point_seq,
+                    path: redactor.path(&fork.path),
+                    missing: !fork.path.exists(),
+                })
+                .collect(),
+            recent_operations: stats
+                .recent_operations
+                .iter()
+                .map(|op| DiagnosticOperation {
+                    op: op.op.clone(),
+                    ts: op.ts.clone(),
+                    seq: op.seq,
+                    duration_ms: op.duration_ms,
+                    files_changed: op.files_changed,
+                    message: op.message.as_ref().map(|message| redactor.text(message)),
+                })
+                .collect(),
+            doctor_findings,
         })
     }
 
@@ -1894,6 +2079,99 @@ fn stats_operation(entry: &Entry) -> StatsOperation {
         files_changed: entry.files_changed,
         message: entry.message.clone(),
     }
+}
+
+struct DiagnosticsRedactor {
+    root: PathBuf,
+    workspace_parent: Option<PathBuf>,
+    home: Option<String>,
+    include_paths: bool,
+}
+
+impl DiagnosticsRedactor {
+    fn new(root: &Path, include_paths: bool) -> Self {
+        Self {
+            root: root.to_path_buf(),
+            workspace_parent: root.parent().map(Path::to_path_buf),
+            home: std::env::var_os("HOME").map(|h| h.to_string_lossy().to_string()),
+            include_paths,
+        }
+    }
+
+    fn path(&self, path: &Path) -> String {
+        if self.include_paths {
+            return self.text(&path.display().to_string());
+        }
+        if path == self.root {
+            return "<workspace-root>".to_string();
+        }
+        if let Ok(rel) = path.strip_prefix(&self.root) {
+            return format!("<workspace-root>/{}", rel.display());
+        }
+        if self
+            .workspace_parent
+            .as_ref()
+            .is_some_and(|parent| path.starts_with(parent))
+        {
+            return "<workspace-sibling>".to_string();
+        }
+        "<redacted-path>".to_string()
+    }
+
+    fn text(&self, input: &str) -> String {
+        let mut text = input.to_string();
+        if !self.include_paths {
+            text = text.replace(&self.root.display().to_string(), "<workspace-root>");
+            if let Some(parent) = &self.workspace_parent {
+                text = text.replace(&parent.display().to_string(), "<workspace-parent>");
+            }
+            if let Some(home) = &self.home {
+                if !home.is_empty() {
+                    text = text.replace(home, "<home>");
+                }
+            }
+        }
+        redact_secret_tokens(&text)
+    }
+}
+
+fn redact_secret_tokens(input: &str) -> String {
+    input
+        .split_whitespace()
+        .map(redact_secret_token)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_secret_token(token: &str) -> String {
+    let lower = token.to_ascii_lowercase();
+    if looks_like_standalone_secret(&lower) {
+        return "<redacted-token>".to_string();
+    }
+    const SECRET_KEYS: &[&str] = &[
+        "access_token",
+        "api_key",
+        "apikey",
+        "auth",
+        "credential",
+        "passwd",
+        "password",
+        "refresh_token",
+        "secret",
+        "token",
+    ];
+    if SECRET_KEYS.iter().any(|key| lower.contains(key)) {
+        if let Some(pos) = token.find('=').or_else(|| token.find(':')) {
+            return format!("{}<redacted>", &token[..=pos]);
+        }
+    }
+    token.to_string()
+}
+
+fn looks_like_standalone_secret(lower: &str) -> bool {
+    (lower.starts_with("sk-") && lower.len() > 12)
+        || lower.starts_with("ghp_")
+        || lower.starts_with("github_pat_")
 }
 
 fn blob_stats(blobs_dir: &Path) -> Result<(u64, u64)> {

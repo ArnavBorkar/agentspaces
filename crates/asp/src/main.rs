@@ -9,9 +9,10 @@ mod mcp;
 mod race;
 mod ui;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use asp_core::journal::{Op, Source};
+use asp_core::store::atomic_write;
 use asp_core::workspace::{CheckpointOpts, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, Parser, Subcommand};
@@ -137,6 +138,15 @@ enum Cmd {
         /// Re-hash large-file CAS blobs to detect silent corruption.
         #[arg(long)]
         deep: bool,
+    },
+    /// Emit a redacted diagnostics bundle for issue reports and support.
+    Diagnostics {
+        /// Include full local paths. Secrets are still redacted.
+        #[arg(long)]
+        include_paths: bool,
+        /// Write the bundle to this JSON file instead of stdout.
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<PathBuf>,
     },
     /// Run the MCP stdio server (for agent harnesses like Claude Code).
     ///
@@ -738,6 +748,41 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
+        Cmd::Diagnostics {
+            include_paths,
+            output,
+        } => {
+            let ws = open(&cli.dir)?;
+            let bundle = ws.diagnostics(include_paths)?;
+            if let Some(output) = output {
+                let path = resolve_output_path(ws.root(), output);
+                write_json_file(&path, &bundle)?;
+                if json {
+                    ui::print_json(
+                        true,
+                        &serde_json::json!({
+                            "path": path,
+                            "redacted": !include_paths,
+                            "bundle": bundle,
+                        }),
+                    );
+                } else {
+                    println!(
+                        "{} wrote {}diagnostics bundle to {}",
+                        ui::green("✓"),
+                        if include_paths { "" } else { "redacted " },
+                        ui::bold(&path.display().to_string())
+                    );
+                }
+                return Ok(());
+            }
+            if json {
+                ui::print_json(true, &bundle);
+            } else {
+                println!("{}", json_pretty(&bundle)?);
+            }
+            Ok(())
+        }
     }
 }
 
@@ -783,4 +828,31 @@ fn human_bytes(bytes: u64) -> String {
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
+}
+
+fn resolve_output_path(root: &Path, output: PathBuf) -> PathBuf {
+    if output.is_absolute() {
+        output
+    } else {
+        root.join(output)
+    }
+}
+
+fn write_json_file<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), Error> {
+    let parent = path.parent().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Io,
+            format!("output path has no parent: {}", path.display()),
+        )
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
+        Error::new(ErrorCode::Io, format!("diagnostics encode: {e}")).with_source(e)
+    })?;
+    atomic_write(path, &bytes)
+}
+
+fn json_pretty<T: serde::Serialize>(value: &T) -> Result<String, Error> {
+    serde_json::to_string_pretty(value)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("diagnostics encode: {e}")).with_source(e))
 }

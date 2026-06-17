@@ -111,8 +111,8 @@ Storage tools get one strike. v1 quality is defined by evidence, not claims:
 In scope:
 
 - local CLI and MCP server;
-- init, status, stats, checkpoint, log, undo, restore, fork, forks, diff,
-  promote, discard, doctor, race;
+- init, status, stats, diagnostics, checkpoint, log, undo, restore, fork,
+  forks, diff, promote, discard, doctor, race;
 - Claude Code setup and hook integration;
 - public docs, install script, release artifacts, and trust tests;
 - permissive MIT/Apache-2.0 licensing for the engine, CLI, MCP server, and

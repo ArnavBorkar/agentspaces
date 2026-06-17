@@ -51,7 +51,7 @@ There are two storage primitives:
 ## Main modules
 
 - `asp_core::workspace` is the primary API. `Workspace` implements
-  `init/open/status/stats/checkpoint/log/undo/restore/fork/forks/diff/promote/discard/doctor`.
+  `init/open/status/stats/diagnostics/checkpoint/log/undo/restore/fork/forks/diff/promote/discard/doctor`.
 - `asp_core::store` defines the `.asp/` layout, workspace identity, fork
   registry, advisory lock, safe path validation, and atomic writes.
 - `asp_core::gitx` wraps shadow-git subprocess calls and pins the git
