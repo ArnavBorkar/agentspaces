@@ -18,6 +18,8 @@
   success criteria and go/no-go signals.
 - `docs/playbooks.md` documents repeatable agent workflows for bug-fix fleets,
   test generation, docs generation, and CI repair.
+- `docs/trust-model.md` gives security reviewers a whitepaper for local trust
+  boundaries, command write behavior, residual risk, and evidence links.
 
 ### Fixed
 

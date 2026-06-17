@@ -235,6 +235,8 @@ Follow-up:
   ingestion, and saved-race comparison.
 - [Enterprise workflow playbooks](playbooks.md) for bug-fix fleets,
   test-generation races, docs generation, and CI repair.
+- [Trust model whitepaper](trust-model.md) for security-review boundaries,
+  residual risks, and evidence links.
 - [Architecture](architecture.md) for module boundaries and trust invariants.
 - [On-disk format](design/format.md) for stock-git recovery details.
 - [Diagnostics](diagnostics.md) for safe issue-report bundles.

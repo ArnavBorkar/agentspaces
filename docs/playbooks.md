@@ -5,7 +5,8 @@ written for local-first use: no hosted control plane, no telemetry, and no
 required account beyond the agent tool you already run.
 
 Use them after the [30-minute evaluation](evaluation.md) proves the repository
-is a good pilot candidate.
+is a good pilot candidate. Pair them with the [trust model whitepaper](trust-model.md)
+when security reviewers need boundaries, residual risks, and evidence links.
 
 ## Shared Guardrails
 

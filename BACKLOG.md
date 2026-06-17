@@ -338,7 +338,7 @@
 - **S27.1 Evaluation guides**
   - [x] T27.1.1 Add a 30-minute team evaluation guide with success criteria.
   - [x] T27.1.2 Add playbooks for bug-fix fleets, test-generation races, docs generation, and CI repair.
-  - [ ] T27.1.3 Add a trust-model whitepaper suitable for security review.
+  - [x] T27.1.3 Add a trust-model whitepaper suitable for security review.
 - **S27.2 Operations docs**
   - [ ] T27.2.1 Add backup and disaster-recovery docs for `.asp/`.
   - [ ] T27.2.2 Add monorepo tuning docs for excludes, blob thresholds, and filesystem choice.
