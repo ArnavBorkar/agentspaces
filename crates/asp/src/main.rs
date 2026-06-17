@@ -144,8 +144,11 @@ enum Cmd {
         /// Stop still-running lanes after the first successful lane exits 0.
         #[arg(long)]
         cancel_on_success: bool,
+        /// Resume an interrupted race from .asp/races/<name>.json.
+        #[arg(long)]
+        resume: bool,
         /// The command to run in each fork (everything after --).
-        #[arg(last = true, required = true)]
+        #[arg(last = true, required_unless_present = "resume")]
         command: Vec<String>,
     },
     /// Check workspace health; --fix applies safe repairs.
@@ -697,6 +700,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             timeout,
             retries,
             cancel_on_success,
+            resume,
             command,
         } => race::run(
             &open(&cli.dir)?,
@@ -711,6 +715,7 @@ fn run(cli: Cli) -> Result<(), Error> {
                     cancel_on_success,
                 },
                 command: &command,
+                resume,
                 json,
             },
         ),

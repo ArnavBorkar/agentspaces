@@ -77,6 +77,21 @@ slower lanes should stop spending time or agent budget.
 asp race -n 5 --cancel-on-success -- claude -p "fix the flaky test"
 ```
 
+## Resuming Interrupted Races
+
+Each race writes recoverable metadata to `.asp/races/<name>.json` before lanes
+start and updates each lane as it runs. If the `asp race` process is interrupted
+after lanes are created, resume it by name:
+
+```bash
+asp race --name variant --resume
+```
+
+Resume uses the recorded command, labels, environment templates, timeout,
+retry, and cancellation settings. Lanes already marked `complete` are reported
+from metadata and not rerun; lanes left `pending` or `running` are executed in
+their existing fork directories.
+
 ## Review And Cleanup
 
 Lane logs are written to `<fork>/.asp/race.log`. The parent workspace is not

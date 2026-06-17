@@ -320,6 +320,82 @@ fn race_timeout_retry_and_cancel_controls() {
 }
 
 #[test]
+fn race_resume_reruns_only_incomplete_lanes() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+
+    let first = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "2",
+            "--name",
+            "resumable",
+            "--label",
+            "keep",
+            "--label",
+            "rerun",
+            "--",
+            "sh",
+            "-c",
+            "if [ \"$ASP_RACE_LABEL\" = keep ]; then echo keep >> keep.txt; else echo \"$ASP_RACE_ATTEMPT\" >> rerun.txt; fi",
+        ],
+    );
+    let first_lanes = first["result"].as_array().unwrap();
+    let keep_path = PathBuf::from(
+        first_lanes
+            .iter()
+            .find(|lane| lane["label"] == "keep")
+            .unwrap()["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let rerun_path = PathBuf::from(
+        first_lanes
+            .iter()
+            .find(|lane| lane["label"] == "rerun")
+            .unwrap()["path"]
+            .as_str()
+            .unwrap(),
+    );
+
+    let metadata_path = root.join(".asp/races/resumable.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&metadata_path).unwrap()).unwrap();
+    for lane in metadata["lanes"].as_array_mut().unwrap() {
+        if lane["label"] == "rerun" {
+            lane["status"] = serde_json::json!("running");
+            lane["exit_code"] = serde_json::Value::Null;
+            lane["attempts"] = serde_json::json!(0);
+        }
+    }
+    std::fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).unwrap(),
+    )
+    .unwrap();
+
+    let resumed = ok_json(&root, &["race", "--name", "resumable", "--resume"]);
+    let lanes = resumed["result"].as_array().unwrap();
+    let keep = lanes.iter().find(|lane| lane["label"] == "keep").unwrap();
+    let rerun = lanes.iter().find(|lane| lane["label"] == "rerun").unwrap();
+    assert_eq!(keep["exit_code"], 0);
+    assert_eq!(rerun["exit_code"], 0);
+    assert_eq!(keep["attempts"], 1);
+    assert_eq!(rerun["attempts"], 1);
+    assert_eq!(
+        std::fs::read_to_string(keep_path.join("keep.txt")).unwrap(),
+        "keep\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(rerun_path.join("rerun.txt")).unwrap(),
+        "1\n1\n"
+    );
+}
+
+#[test]
 fn promote_via_cli_lands_branch() {
     let (_tmp, root) = project();
     let git = |args: &[&str]| {

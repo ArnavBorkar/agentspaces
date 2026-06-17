@@ -326,7 +326,7 @@
 - **S26.1 Runner controls**
   - [x] T26.1.1 Add per-lane environment variable templates and labels.
   - [x] T26.1.2 Add timeout, retry, and cancellation behavior with tests.
-  - [ ] T26.1.3 Add resumable race metadata for interrupted runs.
+  - [x] T26.1.3 Add resumable race metadata for interrupted runs.
 - **S26.2 Result quality**
   - [ ] T26.2.1 Add structured per-lane test result ingestion from common formats.
   - [ ] T26.2.2 Add `asp race compare` to re-rank existing lanes after manual inspection.

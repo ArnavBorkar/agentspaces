@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 
@@ -14,8 +14,9 @@ use std::time::{Duration, Instant};
 use std::os::unix::process::CommandExt;
 
 use asp_core::journal::Source;
+use asp_core::store::atomic_write;
 use asp_core::{Error, ErrorCode, Workspace};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::ui;
 
@@ -49,7 +50,16 @@ pub struct RunRequest<'a> {
     pub env_templates: &'a [String],
     pub options: RunOptions,
     pub command: &'a [String],
+    pub resume: bool,
     pub json: bool,
+}
+
+#[derive(Debug, Clone)]
+struct RaceLane {
+    index: u32,
+    fork: String,
+    label: String,
+    path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +72,220 @@ struct LaneRun {
     log_file: PathBuf,
 }
 
+struct LaneRunRequest<'a> {
+    ws: &'a Workspace,
+    name: &'a str,
+    cmd_string: &'a str,
+    env_templates: &'a [(String, String)],
+    options: RunOptions,
+    lanes: &'a [RaceLane],
+    metadata: Arc<Mutex<RaceMetadata>>,
+    metadata_path: PathBuf,
+    exit_by_lane: std::collections::HashMap<String, LaneRun>,
+    json: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RaceMetadata {
+    version: u32,
+    name: String,
+    count: u32,
+    command: Vec<String>,
+    labels: Vec<String>,
+    env_templates: Vec<String>,
+    options: RaceMetadataOptions,
+    lanes: Vec<RaceLaneMetadata>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct RaceMetadataOptions {
+    timeout_ms: Option<u64>,
+    retries: u32,
+    cancel_on_success: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RaceLaneMetadata {
+    index: u32,
+    fork: String,
+    label: String,
+    path: PathBuf,
+    status: RaceLaneStatus,
+    exit_code: Option<i32>,
+    duration_ms: u64,
+    attempts: u32,
+    timed_out: bool,
+    canceled: bool,
+    log_file: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RaceLaneStatus {
+    Pending,
+    Running,
+    Complete,
+}
+
+impl RaceMetadata {
+    fn new(
+        name: &str,
+        count: u32,
+        command: &[String],
+        labels: &[String],
+        env_templates: &[String],
+        options: RunOptions,
+        lanes: &[RaceLane],
+    ) -> Self {
+        Self {
+            version: 1,
+            name: name.to_string(),
+            count,
+            command: command.to_vec(),
+            labels: labels.to_vec(),
+            env_templates: env_templates.to_vec(),
+            options: RaceMetadataOptions::from_run_options(options),
+            lanes: lanes
+                .iter()
+                .map(|lane| RaceLaneMetadata {
+                    index: lane.index,
+                    fork: lane.fork.clone(),
+                    label: lane.label.clone(),
+                    path: lane.path.clone(),
+                    status: RaceLaneStatus::Pending,
+                    exit_code: None,
+                    duration_ms: 0,
+                    attempts: 0,
+                    timed_out: false,
+                    canceled: false,
+                    log_file: lane.path.join(".asp/race.log"),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl RaceMetadataOptions {
+    fn from_run_options(options: RunOptions) -> Self {
+        Self {
+            timeout_ms: options.timeout.map(duration_millis),
+            retries: options.retries,
+            cancel_on_success: options.cancel_on_success,
+        }
+    }
+
+    fn to_run_options(self) -> RunOptions {
+        RunOptions {
+            timeout: self.timeout_ms.map(Duration::from_millis),
+            retries: self.retries,
+            cancel_on_success: self.cancel_on_success,
+        }
+    }
+}
+
+fn duration_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+fn race_metadata_path(ws: &Workspace, name: &str) -> PathBuf {
+    ws.root()
+        .join(".asp")
+        .join("races")
+        .join(format!("{}.json", sanitize_race_name(name)))
+}
+
+fn sanitize_race_name(name: &str) -> String {
+    let s: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let s = s.trim_matches('-').to_string();
+    if s.is_empty() {
+        "race".to_string()
+    } else {
+        s
+    }
+}
+
+fn load_metadata(path: &Path) -> Result<RaceMetadata, Error> {
+    let bytes = std::fs::read(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::new(
+                ErrorCode::NothingToDo,
+                format!("no race metadata exists at {}", path.display()),
+            )
+            .with_hint("run a race first, or pass --name for the race you want to resume")
+        } else {
+            Error::new(
+                ErrorCode::Io,
+                format!("read race metadata {}: {e}", path.display()),
+            )
+            .with_source(e)
+        }
+    })?;
+    serde_json::from_slice(&bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("race metadata {} is invalid JSON: {e}", path.display()),
+        )
+        .with_hint("inspect or remove the metadata file, then rerun the race")
+    })
+}
+
+fn save_metadata_arc(path: &Path, metadata: &Arc<Mutex<RaceMetadata>>) -> Result<(), Error> {
+    let metadata = metadata.lock().map_err(|_| {
+        Error::new(
+            ErrorCode::Io,
+            "race metadata lock was poisoned by a panicked worker",
+        )
+    })?;
+    save_metadata(path, &metadata)
+}
+
+fn save_metadata(path: &Path, metadata: &RaceMetadata) -> Result<(), Error> {
+    let parent = path.parent().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Io,
+            format!("race metadata path has no parent: {}", path.display()),
+        )
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let bytes = serde_json::to_vec_pretty(metadata).map_err(|e| {
+        Error::new(ErrorCode::Io, format!("encode race metadata: {e}")).with_source(e)
+    })?;
+    atomic_write(path, &bytes)
+}
+
+fn mark_lane_running(metadata: &Arc<Mutex<RaceMetadata>>, path: &Path, fork: &str) {
+    if let Ok(mut metadata) = metadata.lock() {
+        if let Some(lane) = metadata.lanes.iter_mut().find(|lane| lane.fork == fork) {
+            lane.status = RaceLaneStatus::Running;
+        }
+        let _ = save_metadata(path, &metadata);
+    }
+}
+
+fn mark_lane_complete(metadata: &Arc<Mutex<RaceMetadata>>, path: &Path, fork: &str, run: &LaneRun) {
+    if let Ok(mut metadata) = metadata.lock() {
+        if let Some(lane) = metadata.lanes.iter_mut().find(|lane| lane.fork == fork) {
+            lane.status = RaceLaneStatus::Complete;
+            lane.exit_code = run.exit_code;
+            lane.duration_ms = run.duration_ms;
+            lane.attempts = run.attempts;
+            lane.timed_out = run.timed_out;
+            lane.canceled = run.canceled;
+            lane.log_file = run.log_file.clone();
+        }
+        let _ = save_metadata(path, &metadata);
+    }
+}
+
 pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
     let RunRequest {
         count,
@@ -70,14 +294,25 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
         env_templates,
         options,
         command,
+        resume,
         json,
     } = request;
     if command.is_empty() {
+        if resume {
+            return resume_race(ws, name, json);
+        }
         return Err(
             Error::new(ErrorCode::NothingToDo, "race needs a command to run").with_hint(
                 "pass the command after `--`, e.g.: asp race -n 3 -- claude -p \"fix the test\"",
             ),
         );
+    }
+    if resume {
+        return Err(Error::new(
+            ErrorCode::NothingToDo,
+            "race resume uses the command recorded in race metadata",
+        )
+        .with_hint("drop the command after `--`, or run a new race without --resume"));
     }
     if labels.len() > count as usize {
         return Err(Error::new(
@@ -95,11 +330,7 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
                 .with_hint("pass a non-empty --label value for each labeled lane"),
         );
     }
-    let env_templates = parse_env_templates(env_templates)?;
-    let max_attempts = options.retries.checked_add(1).ok_or_else(|| {
-        Error::new(ErrorCode::NothingToDo, "race retry count is too large")
-            .with_hint("pass a smaller --retries value")
-    })?;
+    let parsed_env_templates = parse_env_templates(env_templates)?;
     let cmd_string = shell_join(command);
 
     // Create the lanes (forks) up front, sequentially — fork creation takes
@@ -120,8 +351,24 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
                 ui::dim(&info.path.display().to_string())
             );
         }
-        lanes.push((i, label, info));
+        lanes.push(RaceLane {
+            index: i,
+            fork: info.name,
+            label,
+            path: info.path,
+        });
     }
+    let metadata_path = race_metadata_path(ws, name);
+    let metadata = Arc::new(Mutex::new(RaceMetadata::new(
+        name,
+        count,
+        command,
+        labels,
+        env_templates,
+        options,
+        &lanes,
+    )));
+    save_metadata_arc(&metadata_path, &metadata)?;
     if !json {
         println!(
             "\n{} running `{}` in {} lanes…\n",
@@ -133,17 +380,122 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
 
     // Run all lanes in parallel; each lane's output is captured to a log
     // file inside the fork so the working tree stays clean for diffing.
+    run_lanes(LaneRunRequest {
+        ws,
+        name,
+        cmd_string: &cmd_string,
+        env_templates: &parsed_env_templates,
+        options,
+        lanes: &lanes,
+        metadata,
+        metadata_path,
+        exit_by_lane: std::collections::HashMap::new(),
+        json,
+    })
+}
+
+fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
+    let metadata_path = race_metadata_path(ws, name);
+    let metadata = load_metadata(&metadata_path)?;
+    let race_name = metadata.name.clone();
+    let cmd_string = shell_join(&metadata.command);
+    let env_templates = parse_env_templates(&metadata.env_templates)?;
+    let options = metadata.options.to_run_options();
+    let lanes: Vec<_> = metadata
+        .lanes
+        .iter()
+        .map(|lane| RaceLane {
+            index: lane.index,
+            fork: lane.fork.clone(),
+            label: lane.label.clone(),
+            path: lane.path.clone(),
+        })
+        .collect();
+    for lane in &lanes {
+        if !lane.path.is_dir() {
+            return Err(Error::new(
+                ErrorCode::ForkNotFound,
+                format!(
+                    "race lane '{}' is missing at {}",
+                    lane.fork,
+                    lane.path.display()
+                ),
+            )
+            .with_hint("restore the fork directory, or start a new race without --resume"));
+        }
+    }
+    if !json {
+        println!(
+            "{} resuming race {} from {}",
+            ui::bold("race:"),
+            ui::cyan(name),
+            ui::dim(&metadata_path.display().to_string())
+        );
+    }
+    let completed = metadata
+        .lanes
+        .iter()
+        .filter(|lane| lane.status == RaceLaneStatus::Complete)
+        .map(|lane| {
+            (
+                lane.fork.clone(),
+                LaneRun {
+                    exit_code: lane.exit_code,
+                    duration_ms: lane.duration_ms,
+                    attempts: lane.attempts,
+                    timed_out: lane.timed_out,
+                    canceled: lane.canceled,
+                    log_file: lane.log_file.clone(),
+                },
+            )
+        })
+        .collect();
+    run_lanes(LaneRunRequest {
+        ws,
+        name: &race_name,
+        cmd_string: &cmd_string,
+        env_templates: &env_templates,
+        options,
+        lanes: &lanes,
+        metadata: Arc::new(Mutex::new(metadata)),
+        metadata_path,
+        exit_by_lane: completed,
+        json,
+    })
+}
+
+fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
+    let LaneRunRequest {
+        ws,
+        name,
+        cmd_string,
+        env_templates,
+        options,
+        lanes,
+        metadata,
+        metadata_path,
+        mut exit_by_lane,
+        json,
+    } = request;
+    let max_attempts = options.retries.checked_add(1).ok_or_else(|| {
+        Error::new(ErrorCode::NothingToDo, "race retry count is too large")
+            .with_hint("pass a smaller --retries value")
+    })?;
     let cancel = Arc::new(AtomicBool::new(false));
     let handles: Vec<_> = lanes
         .iter()
-        .map(|(lane_index, label, lane)| {
+        .filter(|lane| !exit_by_lane.contains_key(&lane.fork))
+        .map(|lane| {
             let path = lane.path.clone();
-            let lane_name = lane.name.clone();
-            let label = label.clone();
-            let env_vars = lane_env(*lane_index, name, &lane_name, &label, &path, &env_templates);
-            let cmd = cmd_string.clone();
+            let lane_name = lane.fork.clone();
+            let label = lane.label.clone();
+            let env_vars = lane_env(lane.index, name, &lane_name, &label, &path, env_templates);
+            let cmd = cmd_string.to_string();
             let cancel = Arc::clone(&cancel);
+            let metadata = Arc::clone(&metadata);
+            let metadata_path = metadata_path.clone();
             std::thread::spawn(move || {
+                mark_lane_running(&metadata, &metadata_path, &lane_name);
                 let run = run_lane(
                     &path,
                     &lane_name,
@@ -153,12 +505,12 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
                     max_attempts,
                     cancel,
                 );
+                mark_lane_complete(&metadata, &metadata_path, &lane_name, &run);
                 (lane_name, run)
             })
         })
         .collect();
 
-    let mut exit_by_lane = std::collections::HashMap::new();
     for handle in handles {
         let (lane_name, run) = handle
             .join()
@@ -169,9 +521,9 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
     // Compare lanes against their fork points.
     let compare = ws.fork_compare()?;
     let mut results = Vec::new();
-    for (_lane_index, label, lane) in &lanes {
+    for lane in lanes {
         let run = exit_by_lane
-            .get(&lane.name)
+            .get(&lane.fork)
             .cloned()
             .unwrap_or_else(|| LaneRun {
                 exit_code: None,
@@ -181,10 +533,10 @@ pub fn run(ws: &Workspace, request: RunRequest<'_>) -> Result<(), Error> {
                 canceled: true,
                 log_file: lane.path.join(".asp/race.log"),
             });
-        let row = compare.iter().find(|r| r.name == lane.name);
+        let row = compare.iter().find(|r| r.name == lane.fork);
         results.push(LaneResult {
-            fork: lane.name.clone(),
-            label: label.clone(),
+            fork: lane.fork.clone(),
+            label: lane.label.clone(),
             path: lane.path.clone(),
             exit_code: run.exit_code,
             duration_ms: run.duration_ms,

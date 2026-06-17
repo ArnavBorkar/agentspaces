@@ -8,6 +8,8 @@
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner
   controls for bounded best-of-N agent work.
+- `asp race --resume --name <race>` records and resumes interrupted races from
+  `.asp/races/<race>.json`.
 
 ### Fixed
 
