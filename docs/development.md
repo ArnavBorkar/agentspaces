@@ -180,6 +180,9 @@ python3 scripts/bench/run.py
 
 # Explore a targeted benchmark fixture
 python3 scripts/bench/run.py --fixture small-files --files 50000 --blob-gb 0
+
+# Inspect local filesystem capabilities before comparing benchmark numbers
+asp bench self
 ```
 
 CI also runs a small non-blocking benchmark baseline and uploads the markdown

@@ -4,6 +4,7 @@
   "title": "asp result payloads",
   "description": "Result payloads emitted as CLI envelope result values and MCP structuredContent values.",
   "anyOf": [
+    { "$ref": "#/$defs/benchSelfReport" },
     { "$ref": "#/$defs/checkpointInfo" },
     { "$ref": "#/$defs/diagnosticBundle" },
     { "$ref": "#/$defs/diagnosticsOutputResult" },
@@ -26,6 +27,76 @@
     { "$ref": "#/$defs/doctorFindings" }
   ],
   "$defs": {
+    "benchSelfReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "platform",
+        "filesystem",
+        "capabilities",
+        "recommendations",
+        "probe_errors"
+      ],
+      "properties": {
+        "path": { "type": "string" },
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["os", "arch", "supported", "support_hint"],
+          "properties": {
+            "os": { "type": "string" },
+            "arch": { "type": "string" },
+            "supported": { "type": "boolean" },
+            "support_hint": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "filesystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "case_sensitive",
+            "symlinks",
+            "hardlinks",
+            "atomic_rename"
+          ],
+          "properties": {
+            "kind": { "$ref": "#/$defs/nullableString" },
+            "case_sensitive": { "type": "boolean" },
+            "symlinks": { "type": "boolean" },
+            "hardlinks": { "type": "boolean" },
+            "atomic_rename": { "type": "boolean" }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "directory_clone_method",
+            "copy_on_write_forks",
+            "large_file_sidecar_cow",
+            "same_volume_forks_required"
+          ],
+          "properties": {
+            "directory_clone_method": {
+              "anyOf": [{ "$ref": "#/$defs/cloneMethod" }, { "type": "null" }]
+            },
+            "copy_on_write_forks": { "type": "boolean" },
+            "large_file_sidecar_cow": { "type": "boolean" },
+            "same_volume_forks_required": { "type": "boolean" }
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "probe_errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "checkpointInfo": {
       "type": "object",
       "additionalProperties": false,

@@ -63,6 +63,8 @@
   every run for performance trend review.
 - Benchmark tooling now includes named fixtures for small-file storms, large
   binary repositories, deep trees, and rename-heavy workloads.
+- `asp bench self` reports local platform and filesystem capabilities relevant
+  to fork/checkpoint benchmarks.
 
 ### Fixed
 
@@ -92,6 +94,8 @@
   workspace-relative changed paths for audit filtering and exports.
 - Additive: `asp retention plan --json` returns `retentionPlan`, and
   `asp policy validate --json` includes `policy.retention`.
+- Additive: `asp bench self --json` returns `benchSelfReport`, a read-only
+  local capability probe that can run outside initialized workspaces.
 
 ## Automation Contract Rules
 

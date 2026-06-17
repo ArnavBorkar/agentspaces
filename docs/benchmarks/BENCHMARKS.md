@@ -53,6 +53,22 @@ python3 scripts/bench/run.py --fixture rename-heavy --files 50000 --blob-gb 0.1
 `--edit-count` planned moves before the incremental checkpoint. Other fixtures
 append text edits to the first editable files they expose.
 
+## Local Capability Probe
+
+Use `asp bench self` before trusting local benchmark numbers from a new machine
+or volume:
+
+```bash
+asp bench self
+asp -C /path/to/repo --json bench self
+```
+
+The command reports the selected path, platform, filesystem kind when the OS
+exposes it, the observed directory clone method (`clonefile`, `reflink`, or
+`copy`), case sensitivity, symlink/hardlink support, atomic rename behavior, and
+recommendations. It creates a short-lived `.asp-bench-self-*` directory under
+the target path and removes it before exiting.
+
 ## CI Trend Artifact
 
 The CI workflow also runs a lightweight benchmark baseline with a much smaller

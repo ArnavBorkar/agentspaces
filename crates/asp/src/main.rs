@@ -4,6 +4,7 @@
 //! Agents are first-class users: every command supports `--json`, and every
 //! error states the corrective next action.
 
+mod bench;
 mod hooks;
 mod mcp;
 mod race;
@@ -62,6 +63,11 @@ enum Cmd {
     Status,
     /// Local store statistics: checkpoints, forks, blobs, size, recent timings.
     Stats,
+    /// Benchmark and local filesystem probes.
+    Bench {
+        #[command(subcommand)]
+        command: BenchCmd,
+    },
     /// Print supported schema and format versions.
     Schema,
     /// Show filtered audit events from the local journal.
@@ -202,6 +208,13 @@ enum AuditFormat {
     Table,
     Jsonl,
     Csv,
+}
+
+#[derive(Subcommand)]
+enum BenchCmd {
+    /// Report local filesystem capabilities used by asp benchmarks and forks.
+    #[command(name = "self")]
+    Self_,
 }
 
 #[derive(Subcommand)]
@@ -475,6 +488,17 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
+        Cmd::Bench { command } => match command {
+            BenchCmd::Self_ => {
+                let report = bench::self_report(&cwd(&cli.dir)?)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    bench::print_self_report(&report);
+                }
+                Ok(())
+            }
+        },
         Cmd::Schema => {
             let report = schema_report();
             if json {

@@ -42,6 +42,27 @@ fn project() -> (tempfile::TempDir, PathBuf) {
 }
 
 #[test]
+fn bench_self_runs_outside_workspace() {
+    let tmp = tempfile::tempdir().unwrap();
+    let human = ok(tmp.path(), &["bench", "self"]);
+    assert!(human.contains("bench self"));
+    assert!(human.contains("dir clone"));
+
+    let json = ok_json(tmp.path(), &["bench", "self"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(
+        json["result"]["path"],
+        tmp.path()
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
+    );
+    assert!(json["result"]["platform"]["supported"].is_boolean());
+    assert!(json["result"]["filesystem"]["atomic_rename"].is_boolean());
+}
+
+#[test]
 fn full_cli_loop() {
     let (_tmp, root) = project();
 

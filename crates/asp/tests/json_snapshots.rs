@@ -56,6 +56,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
+        "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
@@ -79,6 +80,33 @@ fn snapshot(name: &str, actual: Value) {
 
 fn normalize(mut value: Value, root: &Path) -> Value {
     normalize_value(&mut value, root);
+    value
+}
+
+fn normalize_bench_self(mut value: Value, root: &Path) -> Value {
+    normalize_value(&mut value, root);
+    let result = value
+        .get_mut("result")
+        .and_then(Value::as_object_mut)
+        .expect("bench self result");
+    result["platform"]["os"] = json!("<os>");
+    result["platform"]["arch"] = json!("<arch>");
+    result["platform"]["supported"] = json!(true);
+    result["platform"]["support_hint"] = json!(null);
+    result["filesystem"]["kind"] = json!("<filesystem>");
+    for key in ["case_sensitive", "symlinks", "hardlinks", "atomic_rename"] {
+        result["filesystem"][key] = json!(true);
+    }
+    result["capabilities"]["directory_clone_method"] = json!("<clone-method>");
+    for key in [
+        "copy_on_write_forks",
+        "large_file_sidecar_cow",
+        "same_volume_forks_required",
+    ] {
+        result["capabilities"][key] = json!(true);
+    }
+    result["recommendations"] = json!(["<recommendation>"]);
+    result["probe_errors"] = json!([]);
     value
 }
 
@@ -164,6 +192,9 @@ fn cli_json_shapes_match_snapshots() {
 
     let schema = ok_json(&root, &["schema"]);
     snapshot("cli_schema", normalize(schema, &root));
+
+    let bench_self = ok_json(&root, &["bench", "self"]);
+    snapshot("cli_bench_self", normalize_bench_self(bench_self, &root));
 
     let init = ok_json(&root, &["init"]);
     snapshot("cli_init", normalize(init, &root));

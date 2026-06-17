@@ -48,6 +48,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp init --json` | `#/$defs/initResult` |
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
+| `asp bench self --json` | `#/$defs/benchSelfReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
@@ -74,6 +75,10 @@ emits fixed columns documented in [docs/audit.md](audit.md).
 Checkpoint journal entries may include `detail.paths` with workspace-relative
 changed paths; clients should treat unknown `detail` fields as operation-specific
 metadata.
+
+`asp bench self --json` can run outside an initialized workspace. It creates a
+short-lived probe directory under the selected `-C` path, reports the observed
+filesystem capabilities, and removes the probe before exiting.
 
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,

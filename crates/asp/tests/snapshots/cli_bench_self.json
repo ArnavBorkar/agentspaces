@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "result": {
+    "capabilities": {
+      "copy_on_write_forks": true,
+      "directory_clone_method": "<clone-method>",
+      "large_file_sidecar_cow": true,
+      "same_volume_forks_required": true
+    },
+    "filesystem": {
+      "atomic_rename": true,
+      "case_sensitive": true,
+      "hardlinks": true,
+      "kind": "<filesystem>",
+      "symlinks": true
+    },
+    "path": "<workspace-root>",
+    "platform": {
+      "arch": "<arch>",
+      "os": "<os>",
+      "support_hint": null,
+      "supported": true
+    },
+    "probe_errors": [],
+    "recommendations": [
+      "<recommendation>"
+    ]
+  }
+}
