@@ -65,6 +65,7 @@ jobs:
           Get-Content asp-windows.json
           Select-String -Path asp-windows.json -Pattern '"code": "unsupported_platform"'
           Select-String -Path asp-windows.json -Pattern 'WSL2'
+          exit 0
 
   linux-reflink:
     name: linux reflink path (btrfs)

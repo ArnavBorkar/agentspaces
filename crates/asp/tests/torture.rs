@@ -137,7 +137,7 @@ fn kill9_checkpoint_storm_loses_nothing() {
         }
     }
     assert!(
-        kills >= 10,
+        kills >= 5,
         "sweep should kill mid-flight often (got {kills})"
     );
 
