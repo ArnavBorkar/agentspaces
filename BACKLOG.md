@@ -313,7 +313,7 @@
 
 - **S25.1 Schemas**
   - [x] T25.1.1 Publish JSON Schemas for CLI JSON envelopes and MCP tool results.
-  - [ ] T25.1.2 Publish TOML schema docs for `.asp/config.toml`.
+  - [x] T25.1.2 Publish TOML schema docs for `.asp/config.toml`.
   - [ ] T25.1.3 Add snapshot tests that prevent accidental JSON shape drift.
 - **S25.2 Versioning**
   - [ ] T25.2.1 Add `asp schema` command to print supported schema versions.

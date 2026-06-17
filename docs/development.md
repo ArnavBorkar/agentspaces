@@ -26,7 +26,7 @@ Important engine modules:
 | `journal.rs` | Append-only CRC journal and torn-tail recovery. |
 | `fork.rs` | Platform-specific whole-tree clone/reflink/copy behavior. |
 | `blobs.rs` | Large-file content-addressed sidecar and restore helpers. |
-| `config.rs` | Capture excludes and `.asp/config.toml` defaults. |
+| `config.rs` | Capture excludes and `.asp/config.toml` defaults. See [docs/config.md](config.md) for the public schema. |
 
 Important binary modules:
 
@@ -146,6 +146,7 @@ Before opening a PR or pushing to `main`, verify the same items captured in
 - Any new command has JSON output and tests for both success and failure.
 - Serialized CLI or MCP output changes update [docs/schemas.md](schemas.md) and
   [schemas/](../schemas/).
+- `.asp/config.toml` changes update [docs/config.md](config.md).
 - Storage changes include regression or torture coverage.
 - README performance claims still match measured benchmark docs.
 

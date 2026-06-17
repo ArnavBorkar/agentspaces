@@ -11,6 +11,9 @@ The schemas use JSON Schema Draft 2020-12. They describe the current v1 CLI and
 MCP payload contract; the on-disk format is separately versioned by
 `.asp/format-version`.
 
+The TOML schema for `.asp/config.toml` is documented in
+[docs/config.md](config.md).
+
 ## CLI Envelope
 
 Every user-facing command accepts `--json`. Successful commands emit:
