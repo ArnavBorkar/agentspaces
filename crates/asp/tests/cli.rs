@@ -122,6 +122,11 @@ fn full_cli_loop() {
     let rows = diff["result"]["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["path"], "src/app.py");
+    assert_eq!(diff["result"]["summary"]["files"], 1);
+    assert_eq!(
+        diff["result"]["summary"]["by_language"][0]["name"],
+        "Python"
+    );
 
     // undo steps back; file content reverts
     ok(&root, &["undo"]);

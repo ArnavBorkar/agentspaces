@@ -258,10 +258,39 @@
     "diffReport": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "to", "rows"],
+      "required": ["from", "to", "summary", "rows"],
       "properties": {
         "from": { "type": "string" },
         "to": { "type": "string" },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "insertions",
+            "deletions",
+            "by_path",
+            "by_language",
+            "by_change_type"
+          ],
+          "properties": {
+            "files": { "$ref": "#/$defs/u64" },
+            "insertions": { "$ref": "#/$defs/u64" },
+            "deletions": { "$ref": "#/$defs/u64" },
+            "by_path": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            },
+            "by_language": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            },
+            "by_change_type": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            }
+          }
+        },
         "rows": {
           "type": "array",
           "items": {
@@ -276,6 +305,17 @@
             }
           }
         }
+      }
+    },
+    "diffSummaryBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "files", "insertions", "deletions"],
+      "properties": {
+        "name": { "type": "string" },
+        "files": { "$ref": "#/$defs/u64" },
+        "insertions": { "$ref": "#/$defs/u64" },
+        "deletions": { "$ref": "#/$defs/u64" }
       }
     },
     "discardResult": {

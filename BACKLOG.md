@@ -216,7 +216,7 @@
 **Done when:** humans can compare agent attempts quickly enough that best-of-N becomes a daily workflow.
 
 - **S17.1 Better summaries**
-  - [ ] T17.1.1 Add path-grouped diff summaries with counts by language and change type.
+  - [x] T17.1.1 Add path-grouped diff summaries with counts by language and change type.
   - [ ] T17.1.2 Add fork comparison scoring hooks for tests passed, files touched, and risk markers.
   - [ ] T17.1.3 Add JSON output suitable for dashboards and CI comments.
 - **S17.2 Review artifacts**

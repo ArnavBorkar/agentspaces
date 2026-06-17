@@ -640,6 +640,37 @@ fn diff_between_checkpoints_and_worktree() {
     cp(&ws, "changes").unwrap();
 
     let report = ws.diff("1", Some("2")).unwrap();
+    assert_eq!(report.summary.files, 3);
+    assert_eq!(
+        report
+            .summary
+            .by_path
+            .iter()
+            .find(|bucket| bucket.name == "src/")
+            .unwrap()
+            .files,
+        1
+    );
+    assert_eq!(
+        report
+            .summary
+            .by_language
+            .iter()
+            .find(|bucket| bucket.name == "Rust")
+            .unwrap()
+            .files,
+        1
+    );
+    assert_eq!(
+        report
+            .summary
+            .by_change_type
+            .iter()
+            .find(|bucket| bucket.name == "added")
+            .unwrap()
+            .files,
+        1
+    );
     let by_path: std::collections::HashMap<_, _> =
         report.rows.iter().map(|r| (r.path.as_str(), r)).collect();
     assert_eq!(by_path["src/main.rs"].status, "M");

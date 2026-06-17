@@ -69,6 +69,8 @@
   cache with crash-safe atomic writes.
 - Regression coverage now guards no-op checkpoint latency and literal
   changed-path staging for paths with spaces or leading dashes.
+- `asp diff` reports summary totals grouped by top-level path, language, and
+  change type in human and JSON output.
 
 ### Fixed
 
@@ -100,6 +102,9 @@
   `asp policy validate --json` includes `policy.retention`.
 - Additive: `asp bench self --json` returns `benchSelfReport`, a read-only
   local capability probe that can run outside initialized workspaces.
+- Additive: `asp diff --json` result objects include `summary` with total
+  file/line counts and grouped `by_path`, `by_language`, and `by_change_type`
+  buckets. Existing `rows` are unchanged.
 
 ## Automation Contract Rules
 

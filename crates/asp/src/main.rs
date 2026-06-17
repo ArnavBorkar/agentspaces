@@ -839,6 +839,16 @@ fn run(cli: Cli) -> Result<(), Error> {
                 println!("{}", ui::dim("no differences"));
                 return Ok(());
             }
+            println!(
+                "summary: {} file{}, {}, {}",
+                report.summary.files,
+                if report.summary.files == 1 { "" } else { "s" },
+                ui::green(&format!("+{}", report.summary.insertions)),
+                ui::red(&format!("-{}", report.summary.deletions))
+            );
+            print_diff_summary_table("path", &report.summary.by_path);
+            print_diff_summary_table("language", &report.summary.by_language);
+            print_diff_summary_table("change", &report.summary.by_change_type);
             let mut table = vec![vec![
                 "".to_string(),
                 "PATH".to_string(),
@@ -1355,6 +1365,24 @@ fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
         + usize::from(policy.promote.require_clean_status)
         + usize::from(policy.promote.require_checkpoint)
         + policy.promote.allowed_branch_prefixes.len()
+}
+
+fn print_diff_summary_table(title: &str, rows: &[asp_core::workspace::DiffSummaryBucket]) {
+    let mut table = vec![vec![
+        title.to_ascii_uppercase(),
+        "FILES".to_string(),
+        "+".to_string(),
+        "-".to_string(),
+    ]];
+    for row in rows {
+        table.push(vec![
+            row.name.clone(),
+            row.files.to_string(),
+            ui::green(&format!("+{}", row.insertions)),
+            ui::red(&format!("-{}", row.deletions)),
+        ]);
+    }
+    print!("{}", ui::table(&table));
 }
 
 fn schema_report() -> SchemaReport {

@@ -80,6 +80,10 @@ metadata.
 short-lived probe directory under the selected `-C` path, reports the observed
 filesystem capabilities, and removes the probe before exiting.
 
+`asp diff --json` result objects include `summary` totals plus grouped buckets
+by top-level path, language, and change type. The existing `rows` array remains
+the per-path detail for exact review tooling.
+
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,
 `attempts` is the number of attempts actually started, and `timed_out` /

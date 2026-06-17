@@ -246,7 +246,26 @@ pub struct DiffRow {
 pub struct DiffReport {
     pub from: String,
     pub to: String,
+    pub summary: DiffSummary,
     pub rows: Vec<DiffRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiffSummary {
+    pub files: u64,
+    pub insertions: u64,
+    pub deletions: u64,
+    pub by_path: Vec<DiffSummaryBucket>,
+    pub by_language: Vec<DiffSummaryBucket>,
+    pub by_change_type: Vec<DiffSummaryBucket>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiffSummaryBucket {
+    pub name: String,
+    pub files: u64,
+    pub insertions: u64,
+    pub deletions: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1980,6 +1999,7 @@ impl Workspace {
         Ok(DiffReport {
             from: from_label,
             to: to_label,
+            summary: summarize_diff(&rows),
             rows,
         })
     }
@@ -2682,6 +2702,98 @@ fn glob_segment_match(pattern: &str, text: &str) -> bool {
         pi += 1;
     }
     pi == pattern_chars.len()
+}
+
+fn summarize_diff(rows: &[DiffRow]) -> DiffSummary {
+    let files = rows.len() as u64;
+    let insertions = rows.iter().filter_map(|row| row.insertions).sum();
+    let deletions = rows.iter().filter_map(|row| row.deletions).sum();
+
+    DiffSummary {
+        files,
+        insertions,
+        deletions,
+        by_path: diff_buckets(rows, |row| diff_path_group(&row.path)),
+        by_language: diff_buckets(rows, |row| diff_language(&row.path)),
+        by_change_type: diff_buckets(rows, |row| diff_change_type(&row.status)),
+    }
+}
+
+fn diff_buckets<F>(rows: &[DiffRow], label: F) -> Vec<DiffSummaryBucket>
+where
+    F: Fn(&DiffRow) -> String,
+{
+    let mut buckets: BTreeMap<String, DiffSummaryBucket> = BTreeMap::new();
+    for row in rows {
+        let name = label(row);
+        let bucket = buckets
+            .entry(name.clone())
+            .or_insert_with(|| DiffSummaryBucket {
+                name,
+                files: 0,
+                insertions: 0,
+                deletions: 0,
+            });
+        bucket.files += 1;
+        bucket.insertions += row.insertions.unwrap_or(0);
+        bucket.deletions += row.deletions.unwrap_or(0);
+    }
+    buckets.into_values().collect()
+}
+
+fn diff_path_group(path: &str) -> String {
+    match path.split('/').next().filter(|part| !part.is_empty()) {
+        Some(first) if path.contains('/') => format!("{first}/"),
+        Some(_) | None => "(root)".to_string(),
+    }
+}
+
+fn diff_language(path: &str) -> String {
+    let Some(ext) = Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
+    else {
+        return "Other".to_string();
+    };
+
+    match ext.as_str() {
+        "rs" => "Rust",
+        "py" => "Python",
+        "js" | "jsx" | "mjs" | "cjs" => "JavaScript",
+        "ts" | "tsx" => "TypeScript",
+        "md" | "mdx" => "Markdown",
+        "toml" => "TOML",
+        "json" => "JSON",
+        "yaml" | "yml" => "YAML",
+        "sh" | "bash" | "zsh" => "Shell",
+        "html" | "htm" => "HTML",
+        "css" | "scss" | "sass" => "CSS",
+        "go" => "Go",
+        "java" => "Java",
+        "kt" | "kts" => "Kotlin",
+        "rb" => "Ruby",
+        "php" => "PHP",
+        "swift" => "Swift",
+        "c" | "h" => "C/C++",
+        "cc" | "cpp" | "cxx" | "hpp" => "C++",
+        "txt" => "Text",
+        other => other,
+    }
+    .to_string()
+}
+
+fn diff_change_type(status: &str) -> String {
+    match status.chars().next().unwrap_or('M') {
+        'A' => "added",
+        'D' => "deleted",
+        'M' => "modified",
+        'T' => "type_changed",
+        'R' => "renamed",
+        'C' => "copied",
+        _ => "other",
+    }
+    .to_string()
 }
 
 fn paths_from_nul(raw: &[u8]) -> Vec<String> {
