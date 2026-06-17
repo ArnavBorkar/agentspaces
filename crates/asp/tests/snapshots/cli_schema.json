@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "result": {
+    "asp_version": "<asp-version>",
+    "schemas": [
+      {
+        "kind": "json_schema",
+        "name": "cli_json_envelope",
+        "path": "schemas/cli-json-envelope.schema.json",
+        "version": 1
+      },
+      {
+        "kind": "json_schema",
+        "name": "result_payloads",
+        "path": "schemas/asp-result.schema.json",
+        "version": 1
+      },
+      {
+        "kind": "json_schema",
+        "name": "mcp_tool_result",
+        "path": "schemas/mcp-tool-result.schema.json",
+        "version": 1
+      },
+      {
+        "kind": "toml_schema_doc",
+        "name": "workspace_config_toml",
+        "path": "docs/config.md",
+        "version": 1
+      },
+      {
+        "kind": "store_format",
+        "name": "on_disk_format",
+        "path": "docs/design/format.md",
+        "version": 1
+      }
+    ]
+  }
+}

@@ -17,6 +17,7 @@
     { "$ref": "#/$defs/promoteReport" },
     { "$ref": "#/$defs/raceLaneResults" },
     { "$ref": "#/$defs/restoreReport" },
+    { "$ref": "#/$defs/schemaReport" },
     { "$ref": "#/$defs/setupReport" },
     { "$ref": "#/$defs/statusReport" },
     { "$ref": "#/$defs/statsReport" },
@@ -377,6 +378,40 @@
         "safety_seq": { "$ref": "#/$defs/nullableU64" },
         "files_written": { "$ref": "#/$defs/u64" },
         "files_deleted": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "schemaReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asp_version", "schemas"],
+      "properties": {
+        "asp_version": { "type": "string" },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version", "kind", "path"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "cli_json_envelope",
+                  "result_payloads",
+                  "mcp_tool_result",
+                  "workspace_config_toml",
+                  "on_disk_format"
+                ]
+              },
+              "version": { "$ref": "#/$defs/u64" },
+              "kind": {
+                "type": "string",
+                "enum": ["json_schema", "toml_schema_doc", "store_format"]
+              },
+              "path": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "setupReport": {

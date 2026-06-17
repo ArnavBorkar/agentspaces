@@ -48,6 +48,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp init --json` | `#/$defs/initResult` |
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
+| `asp schema --json` | `#/$defs/schemaReport` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
 | `asp log --json` | `#/$defs/journalEntries` |
 | `asp undo --json` | `#/$defs/restoreReport` |
@@ -95,3 +96,6 @@ The CI snapshot guard for these shapes is:
 ```bash
 cargo test -p asp --test json_snapshots
 ```
+
+Use `asp schema --json` to ask an installed binary which schema and on-disk
+format versions it supports.

@@ -12,7 +12,7 @@ mod ui;
 use std::path::{Path, PathBuf};
 
 use asp_core::journal::{Op, Source};
-use asp_core::store::atomic_write;
+use asp_core::store::{atomic_write, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, Parser, Subcommand};
@@ -60,6 +60,8 @@ enum Cmd {
     Status,
     /// Local store statistics: checkpoints, forks, blobs, size, recent timings.
     Stats,
+    /// Print supported schema and format versions.
+    Schema,
     /// Capture the current state as a checkpoint (no-op if nothing changed).
     #[command(visible_alias = "cp")]
     Checkpoint {
@@ -188,6 +190,20 @@ struct Provenance {
     /// Tool that caused the change (set by hooks).
     #[arg(long, hide = true)]
     tool: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SchemaReport {
+    asp_version: &'static str,
+    schemas: Vec<SchemaInfo>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SchemaInfo {
+    name: &'static str,
+    version: u32,
+    kind: &'static str,
+    path: &'static str,
 }
 
 fn parse_source(s: &str) -> Result<Source, String> {
@@ -352,6 +368,31 @@ fn run(cli: Cli) -> Result<(), Error> {
                 println!();
                 print!("{}", ui::table(&rows));
             }
+            Ok(())
+        }
+        Cmd::Schema => {
+            let report = schema_report();
+            if json {
+                ui::print_json(true, &report);
+                return Ok(());
+            }
+            println!("{}", ui::bold("asp schema versions"));
+            println!("  asp version: {}", report.asp_version);
+            let mut rows = vec![vec![
+                "NAME".to_string(),
+                "VERSION".to_string(),
+                "KIND".to_string(),
+                "REFERENCE".to_string(),
+            ]];
+            for schema in &report.schemas {
+                rows.push(vec![
+                    schema.name.to_string(),
+                    schema.version.to_string(),
+                    schema.kind.to_string(),
+                    schema.path.to_string(),
+                ]);
+            }
+            print!("{}", ui::table(&rows));
             Ok(())
         }
         Cmd::Checkpoint {
@@ -812,6 +853,44 @@ fn op_name(op: &Op) -> &'static str {
         Op::Undo => "undo",
         Op::Promote => "promote",
         Op::Discard => "discard",
+    }
+}
+
+fn schema_report() -> SchemaReport {
+    SchemaReport {
+        asp_version: asp_core::version(),
+        schemas: vec![
+            SchemaInfo {
+                name: "cli_json_envelope",
+                version: 1,
+                kind: "json_schema",
+                path: "schemas/cli-json-envelope.schema.json",
+            },
+            SchemaInfo {
+                name: "result_payloads",
+                version: 1,
+                kind: "json_schema",
+                path: "schemas/asp-result.schema.json",
+            },
+            SchemaInfo {
+                name: "mcp_tool_result",
+                version: 1,
+                kind: "json_schema",
+                path: "schemas/mcp-tool-result.schema.json",
+            },
+            SchemaInfo {
+                name: "workspace_config_toml",
+                version: 1,
+                kind: "toml_schema_doc",
+                path: "docs/config.md",
+            },
+            SchemaInfo {
+                name: "on_disk_format",
+                version: FORMAT_VERSION,
+                kind: "store_format",
+                path: "docs/design/format.md",
+            },
+        ],
     }
 }
 

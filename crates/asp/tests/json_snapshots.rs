@@ -55,6 +55,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_status" => include_str!("snapshots/cli_status.json"),
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
         "cli_log" => include_str!("snapshots/cli_log.json"),
+        "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_error" => include_str!("snapshots/cli_error.json"),
         "mcp_status" => include_str!("snapshots/mcp_status.json"),
         "mcp_error" => include_str!("snapshots/mcp_error.json"),
@@ -90,6 +91,7 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         }
                     }
                     "workspace_id" => *child = json!("<workspace-id>"),
+                    "asp_version" => *child = json!("<asp-version>"),
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
                     "ts" | "generated_at" => *child = json!("<timestamp>"),
                     "duration_ms" | "store_bytes" | "blob_bytes" if child.is_number() => {
@@ -126,6 +128,9 @@ fn normalize_path(s: &str, root: &Path) -> String {
 #[test]
 fn cli_json_shapes_match_snapshots() {
     let (_tmp, root) = project();
+
+    let schema = ok_json(&root, &["schema"]);
+    snapshot("cli_schema", normalize(schema, &root));
 
     let init = ok_json(&root, &["init"]);
     snapshot("cli_init", normalize(init, &root));

@@ -74,6 +74,7 @@ change.
 | `asp init` | `Workspace::init` | `workspace_init` | engine init tests, CLI happy path |
 | `asp status` | `Workspace::status` | `workspace_status` | engine status assertions |
 | `asp stats` | `Workspace::stats` | none yet | engine stats tests, CLI JSON shape |
+| `asp schema` | CLI schema metadata | none | JSON snapshot tests |
 | `asp checkpoint` | `Workspace::checkpoint` | `workspace_checkpoint` | engine capture tests, hook/MCP provenance tests |
 | `asp log` | `Workspace::log` | `workspace_log` | engine journal/log tests |
 | `asp undo` | `Workspace::undo` | `workspace_undo` | engine undo tests and CLI loop |
