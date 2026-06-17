@@ -251,6 +251,37 @@ pub struct DiffReport {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DiffTextReport {
+    pub from: String,
+    pub to: String,
+    pub mode: String,
+    pub summary: DiffSummary,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DiffTextMode {
+    Patch,
+    Stat,
+}
+
+impl DiffTextMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Patch => "patch",
+            Self::Stat => "stat",
+        }
+    }
+
+    fn git_arg(self) -> &'static str {
+        match self {
+            Self::Patch => "--patch",
+            Self::Stat => "--stat",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DiffSummary {
     pub files: u64,
     pub insertions: u64,
@@ -1948,6 +1979,42 @@ impl Workspace {
 
     /// Diff two checkpoints, or a checkpoint against the working tree.
     pub fn diff(&self, from_spec: &str, to_spec: Option<&str>) -> Result<DiffReport> {
+        let (from_label, from_tree, to_label, to_tree) =
+            self.resolve_diff_trees(from_spec, to_spec)?;
+        self.diff_report(from_label, from_tree, to_label, to_tree)
+    }
+
+    /// Patch/stat text between two checkpoints, or a checkpoint and the working tree.
+    pub fn diff_text(
+        &self,
+        from_spec: &str,
+        to_spec: Option<&str>,
+        mode: DiffTextMode,
+    ) -> Result<DiffTextReport> {
+        let (from_label, from_tree, to_label, to_tree) =
+            self.resolve_diff_trees(from_spec, to_spec)?;
+        self.diff_text_report(from_label, from_tree, to_label, to_tree, mode)
+    }
+
+    /// Diff an active fork against its fork point.
+    pub fn diff_fork(&self, fork_name: &str) -> Result<DiffReport> {
+        let (from_label, from_tree, to_label, to_tree, fork_ws) =
+            self.resolve_fork_diff_trees(fork_name)?;
+        fork_ws.diff_report(from_label, from_tree, to_label, to_tree)
+    }
+
+    /// Patch/stat text for an active fork against its fork point.
+    pub fn diff_fork_text(&self, fork_name: &str, mode: DiffTextMode) -> Result<DiffTextReport> {
+        let (from_label, from_tree, to_label, to_tree, fork_ws) =
+            self.resolve_fork_diff_trees(fork_name)?;
+        fork_ws.diff_text_report(from_label, from_tree, to_label, to_tree, mode)
+    }
+
+    fn resolve_diff_trees(
+        &self,
+        from_spec: &str,
+        to_spec: Option<&str>,
+    ) -> Result<(String, String, String, String)> {
         let (from_label, from_commit) = {
             let (seq, c) = self.resolve_checkpoint(from_spec)?;
             (format!("#{seq}"), c)
@@ -1963,14 +2030,95 @@ impl Workspace {
                 ("working tree".to_string(), tree)
             }
         };
+        Ok((from_label, from_commit, to_label, to_tree))
+    }
 
-        let rows = self.diff_rows(&from_commit, &to_tree)?;
+    fn diff_report(
+        &self,
+        from_label: String,
+        from_tree: String,
+        to_label: String,
+        to_tree: String,
+    ) -> Result<DiffReport> {
+        let rows = self.diff_rows(&from_tree, &to_tree)?;
         Ok(DiffReport {
             from: from_label,
             to: to_label,
             summary: summarize_diff(&rows),
             rows,
         })
+    }
+
+    fn diff_text_report(
+        &self,
+        from_label: String,
+        from_tree: String,
+        to_label: String,
+        to_tree: String,
+        mode: DiffTextMode,
+    ) -> Result<DiffTextReport> {
+        let rows = self.diff_rows(&from_tree, &to_tree)?;
+        let raw = self.shadow.run_raw(&[
+            "diff-tree",
+            "-r",
+            mode.git_arg(),
+            "--no-ext-diff",
+            &from_tree,
+            &to_tree,
+        ])?;
+        Ok(DiffTextReport {
+            from: from_label,
+            to: to_label,
+            mode: mode.as_str().to_string(),
+            summary: summarize_diff(&rows),
+            text: String::from_utf8_lossy(&raw).to_string(),
+        })
+    }
+
+    fn resolve_fork_diff_trees(
+        &self,
+        fork_name: &str,
+    ) -> Result<(String, String, String, String, Workspace)> {
+        let registry = self.fork_registry()?;
+        let rec = registry
+            .forks
+            .iter()
+            .find(|fork| fork.name == fork_name && fork.status == ForkStatus::Active)
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::ForkNotFound,
+                    format!("no active fork named '{fork_name}'"),
+                )
+                .with_hint("run `asp forks` to list active forks")
+            })?;
+        if !rec.path.exists() {
+            return Err(Error::new(
+                ErrorCode::ForkNotFound,
+                format!("fork '{}' is missing at {}", rec.name, rec.path.display()),
+            )
+            .with_hint("run `asp doctor --fix` to inspect missing fork directories"));
+        }
+        let fork_ws = Workspace::open_root(&rec.path)?;
+        let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
+        let base = fork_ws
+            .checkpoint_refs()?
+            .get(&rec.fork_point_seq)
+            .cloned()
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("fork '{}' is missing its fork-point checkpoint", rec.name),
+                )
+                .with_hint("run `asp doctor` inside the fork")
+            })?;
+        let (tree, _) = fork_ws.stage_tree()?;
+        Ok((
+            format!("#{}", rec.fork_point_seq),
+            format!("{base}^{{tree}}"),
+            format!("fork {}", rec.name),
+            tree,
+            fork_ws,
+        ))
     }
 
     fn diff_rows(&self, from: &str, to: &str) -> Result<Vec<DiffRow>> {

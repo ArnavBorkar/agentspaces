@@ -83,7 +83,10 @@ filesystem capabilities, and removes the probe before exiting.
 
 `asp diff --json` result objects include `summary` totals plus grouped buckets
 by top-level path, language, and change type. The existing `rows` array remains
-the per-path detail for exact review tooling.
+the per-path detail for exact review tooling. `asp diff --json --patch` and
+`asp diff --json --stat` return `diffTextReport` with the same summary plus
+the rendered patch or stat text. `asp diff --fork <name>` compares an active
+fork against its fork point.
 
 `asp forks --json` rows and `asp race --json` lane results may include `review`
 signals with `tests_passed`, touched-file and line-churn counts, a numeric

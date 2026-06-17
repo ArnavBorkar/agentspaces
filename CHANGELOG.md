@@ -75,6 +75,8 @@
   files touched, line churn, and explainable risk markers.
 - `asp review --json` emits a dashboard-ready review packet with workspace
   status, active fork comparison rows, and a Markdown CI-comment body.
+- `asp diff` accepts `--patch`, `--stat`, and `--fork <name>` for checkpoint
+  and fork-point comparisons.
 
 ### Fixed
 
@@ -114,6 +116,8 @@
   and explicit risk markers. Existing comparison fields are unchanged.
 - Additive: `asp review --json` returns `reviewReport`, a new opt-in result
   payload for dashboards and CI comments.
+- Additive: `asp diff --json --patch` and `asp diff --json --stat` return
+  `diffTextReport` with summary fields plus rendered text.
 
 ## Automation Contract Rules
 

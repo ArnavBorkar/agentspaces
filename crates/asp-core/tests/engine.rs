@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use asp_core::journal::{Entry, Op};
 use asp_core::store::ForkStatus;
-use asp_core::workspace::{CheckpointOpts, RetentionAction};
+use asp_core::workspace::{CheckpointOpts, DiffTextMode, RetentionAction};
 use asp_core::{ErrorCode, Workspace};
 
 fn write(root: &Path, rel: &str, content: &str) {
@@ -622,6 +622,12 @@ fn fork_is_independent_and_compared() {
         .iter()
         .any(|marker| marker.kind == "dependency_manifest" && marker.path == "Cargo.toml"));
     assert_eq!(r2.review.risk_score, 20);
+    let fork_patch = ws.diff_fork_text("attempt-1", DiffTextMode::Patch).unwrap();
+    assert_eq!(fork_patch.mode, "patch");
+    assert!(fork_patch.text.contains("fork one wins"));
+    let fork_stat = ws.diff_fork_text("attempt-2", DiffTextMode::Stat).unwrap();
+    assert_eq!(fork_stat.mode, "stat");
+    assert!(fork_stat.text.contains("Cargo.toml"));
 
     // Duplicate active fork name is refused.
     let err = ws.fork(Some("attempt-1".into()), None).unwrap_err();
@@ -689,6 +695,12 @@ fn diff_between_checkpoints_and_worktree() {
     assert_eq!(by_path["src/main.rs"].status, "M");
     assert_eq!(by_path["new.txt"].status, "A");
     assert_eq!(by_path["README.md"].status, "D");
+    let patch = ws.diff_text("1", Some("2"), DiffTextMode::Patch).unwrap();
+    assert_eq!(patch.mode, "patch");
+    assert!(patch.text.contains("src/main.rs"));
+    let stat = ws.diff_text("1", Some("2"), DiffTextMode::Stat).unwrap();
+    assert_eq!(stat.mode, "stat");
+    assert!(stat.text.contains("new.txt"));
 
     // Diff against the working tree.
     write(&root, "wip.txt", "work in progress\n");

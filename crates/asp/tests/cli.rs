@@ -127,6 +127,13 @@ fn full_cli_loop() {
         diff["result"]["summary"]["by_language"][0]["name"],
         "Python"
     );
+    assert!(ok(&root, &["diff", "--stat", "1", "2"]).contains("src/app.py"));
+    let patch = ok_json(&root, &["diff", "--patch", "1", "2"]);
+    assert_eq!(patch["result"]["mode"], "patch");
+    assert!(patch["result"]["text"]
+        .as_str()
+        .unwrap()
+        .contains("src/app.py"));
 
     // undo steps back; file content reverts
     ok(&root, &["undo"]);
@@ -147,6 +154,13 @@ fn full_cli_loop() {
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0]["review"]["files_touched"], 1);
     assert!(rows[0]["review"]["tests_passed"].is_null());
+    let fork_diff = ok_json(&root, &["diff", "--fork", "try-1"]);
+    assert_eq!(fork_diff["result"]["to"], "fork try-1");
+    assert!(fork_diff["result"]["rows"][0]["path"]
+        .as_str()
+        .unwrap()
+        .contains("src/app.py"));
+    assert!(ok(&root, &["diff", "--fork", "try-1", "--stat"]).contains("src/app.py"));
     let review = ok_json(&root, &["review"]);
     assert_eq!(review["result"]["forks"].as_array().unwrap().len(), 2);
     assert!(review["result"]["markdown"]

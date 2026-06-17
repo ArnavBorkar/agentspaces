@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, FORMAT_VERSION};
-use asp_core::workspace::{CheckpointOpts, Severity};
+use asp_core::workspace::{CheckpointOpts, DiffTextMode, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -121,8 +121,17 @@ enum Cmd {
     Review,
     /// Show what changed between two checkpoints, or a checkpoint and now.
     Diff {
+        /// Show a unified patch instead of the summary table.
+        #[arg(long, conflicts_with = "stat")]
+        patch: bool,
+        /// Show git-style diffstat instead of the summary table.
+        #[arg(long, conflicts_with = "patch")]
+        stat: bool,
+        /// Compare a fork against its fork point.
+        #[arg(long, value_name = "NAME")]
+        fork: Option<String>,
         /// From: #seq or commit prefix.
-        from: String,
+        from: Option<String>,
         /// To: #seq or commit prefix (default: the working tree).
         to: Option<String>,
     },
@@ -844,58 +853,59 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
-        Cmd::Diff { from, to } => {
+        Cmd::Diff {
+            patch,
+            stat,
+            fork,
+            from,
+            to,
+        } => {
             let ws = open(&cli.dir)?;
+            let mode = diff_text_mode(patch, stat);
+            if let Some(fork) = fork {
+                if from.is_some() || to.is_some() {
+                    return Err(Error::new(
+                        ErrorCode::NothingToDo,
+                        "`asp diff --fork` does not accept checkpoint arguments",
+                    )
+                    .with_hint("run `asp diff --fork <name>` or `asp diff <from> [to]`"));
+                }
+                if let Some(mode) = mode {
+                    let report = ws.diff_fork_text(&fork, mode)?;
+                    if json {
+                        ui::print_json(true, &report);
+                    } else {
+                        print_diff_text_report(&report);
+                    }
+                    return Ok(());
+                }
+                let report = ws.diff_fork(&fork)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_diff_report(&report);
+                }
+                return Ok(());
+            }
+            let from = from.ok_or_else(|| {
+                Error::new(ErrorCode::NothingToDo, "diff needs a checkpoint or fork")
+                    .with_hint("run `asp diff <from> [to]` or `asp diff --fork <name>`")
+            })?;
+            if let Some(mode) = mode {
+                let report = ws.diff_text(&from, to.as_deref(), mode)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_diff_text_report(&report);
+                }
+                return Ok(());
+            }
             let report = ws.diff(&from, to.as_deref())?;
             if json {
                 ui::print_json(true, &report);
                 return Ok(());
             }
-            println!(
-                "{} {} → {}",
-                ui::bold("diff"),
-                ui::cyan(&report.from),
-                ui::cyan(&report.to)
-            );
-            if report.rows.is_empty() {
-                println!("{}", ui::dim("no differences"));
-                return Ok(());
-            }
-            println!(
-                "summary: {} file{}, {}, {}",
-                report.summary.files,
-                if report.summary.files == 1 { "" } else { "s" },
-                ui::green(&format!("+{}", report.summary.insertions)),
-                ui::red(&format!("-{}", report.summary.deletions))
-            );
-            print_diff_summary_table("path", &report.summary.by_path);
-            print_diff_summary_table("language", &report.summary.by_language);
-            print_diff_summary_table("change", &report.summary.by_change_type);
-            let mut table = vec![vec![
-                "".to_string(),
-                "PATH".to_string(),
-                "+".to_string(),
-                "-".to_string(),
-            ]];
-            for row in &report.rows {
-                let status = match row.status.as_str() {
-                    "A" => ui::green("A"),
-                    "D" => ui::red("D"),
-                    "M" => ui::yellow("M"),
-                    other => other.to_string(),
-                };
-                table.push(vec![
-                    status,
-                    row.path.clone(),
-                    row.insertions
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| "·".into()),
-                    row.deletions
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| "·".into()),
-                ]);
-            }
-            print!("{}", ui::table(&table));
+            print_diff_report(&report);
             Ok(())
         }
         Cmd::Promote { fork, branch } => {
@@ -1473,6 +1483,91 @@ fn review_risk_label(review: &asp_core::workspace::ForkReviewSignals) -> String 
 
 fn markdown_cell(raw: &str) -> String {
     raw.replace('\n', " ").replace('|', "\\|")
+}
+
+fn diff_text_mode(patch: bool, stat: bool) -> Option<DiffTextMode> {
+    if patch {
+        Some(DiffTextMode::Patch)
+    } else if stat {
+        Some(DiffTextMode::Stat)
+    } else {
+        None
+    }
+}
+
+fn print_diff_report(report: &asp_core::workspace::DiffReport) {
+    println!(
+        "{} {} → {}",
+        ui::bold("diff"),
+        ui::cyan(&report.from),
+        ui::cyan(&report.to)
+    );
+    if report.rows.is_empty() {
+        println!("{}", ui::dim("no differences"));
+        return;
+    }
+    print_diff_summary(&report.summary);
+    let mut table = vec![vec![
+        "".to_string(),
+        "PATH".to_string(),
+        "+".to_string(),
+        "-".to_string(),
+    ]];
+    for row in &report.rows {
+        let status = match row.status.as_str() {
+            "A" => ui::green("A"),
+            "D" => ui::red("D"),
+            "M" => ui::yellow("M"),
+            other => other.to_string(),
+        };
+        table.push(vec![
+            status,
+            row.path.clone(),
+            row.insertions
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "·".into()),
+            row.deletions
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "·".into()),
+        ]);
+    }
+    print!("{}", ui::table(&table));
+}
+
+fn print_diff_text_report(report: &asp_core::workspace::DiffTextReport) {
+    println!(
+        "{} {} → {} ({})",
+        ui::bold("diff"),
+        ui::cyan(&report.from),
+        ui::cyan(&report.to),
+        report.mode
+    );
+    if report.summary.files == 0 {
+        println!("{}", ui::dim("no differences"));
+        return;
+    }
+    print_diff_summary(&report.summary);
+    if report.text.trim().is_empty() {
+        println!("{}", ui::dim("no patch output"));
+        return;
+    }
+    print!("{}", report.text);
+    if !report.text.ends_with('\n') {
+        println!();
+    }
+}
+
+fn print_diff_summary(summary: &asp_core::workspace::DiffSummary) {
+    println!(
+        "summary: {} file{}, {}, {}",
+        summary.files,
+        if summary.files == 1 { "" } else { "s" },
+        ui::green(&format!("+{}", summary.insertions)),
+        ui::red(&format!("-{}", summary.deletions))
+    );
+    print_diff_summary_table("path", &summary.by_path);
+    print_diff_summary_table("language", &summary.by_language);
+    print_diff_summary_table("change", &summary.by_change_type);
 }
 
 fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {
