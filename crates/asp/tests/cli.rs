@@ -195,6 +195,55 @@ fn invalid_policy_blocks_destructive_commands_before_mutation() {
 }
 
 #[test]
+fn audit_filters_journal_events() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base", "--tool", "editor"]);
+    std::fs::write(root.join("src/app.py"), "print('v2')\n").unwrap();
+    ok(
+        &root,
+        &[
+            "checkpoint",
+            "-m",
+            "agent update",
+            "--tool",
+            "claude",
+            "--session-id",
+            "session-1",
+        ],
+    );
+
+    let audit = ok_json(
+        &root,
+        &[
+            "audit",
+            "--op",
+            "checkpoint",
+            "--tool",
+            "claude",
+            "--session",
+            "session-1",
+        ],
+    );
+    let rows = audit["result"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["message"], "agent update");
+    assert_eq!(rows[0]["tool"], "claude");
+    assert_eq!(rows[0]["session_id"], "session-1");
+
+    ok(&root, &["restore", "1", "src/app.py"]);
+    let path_audit = ok_json(&root, &["audit", "--op", "restore", "--path", "src/app.py"]);
+    let path_rows = path_audit["result"].as_array().unwrap();
+    assert_eq!(path_rows.len(), 1);
+    assert_eq!(path_rows[0]["op"], "restore");
+
+    let future = ok_json(&root, &["audit", "--since", "2999-01-01T00:00:00Z"]);
+    assert!(future["result"].as_array().unwrap().is_empty());
+    let past_until = ok_json(&root, &["audit", "--until", "1970-01-01T00:00:00Z"]);
+    assert!(past_until["result"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn race_runs_and_compares() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

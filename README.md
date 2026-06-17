@@ -98,6 +98,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)
 - **Enterprise workflow playbooks** — [docs/playbooks.md](docs/playbooks.md)
+- **Audit** — [docs/audit.md](docs/audit.md)
 - **Race workflow** — [docs/race.md](docs/race.md)
 - **Development** — [docs/development.md](docs/development.md)
 - **Maintainer triage** — [docs/triage.md](docs/triage.md)

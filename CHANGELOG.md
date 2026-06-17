@@ -49,6 +49,8 @@
   protected paths, and promote requirements.
 - `asp policy validate --json` validates workspace policy and returns the
   resolved policy in a stable automation-facing shape.
+- `asp audit` shows filtered local journal events by session, tool, operation,
+  path, and RFC3339 time range.
 
 ### Fixed
 
@@ -70,6 +72,8 @@
   JUnit report ingestion is configured. Existing lane fields are unchanged.
 - Additive: `asp race compare --json` lane result objects include `rank` after
   saved lanes are re-sorted for review. Existing lane fields are unchanged.
+- Additive: `asp audit --json` returns the existing journal-entry array shape
+  used by `asp log --json`; clients can opt in by calling the new command.
 
 ## Automation Contract Rules
 

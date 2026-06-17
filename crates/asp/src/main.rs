@@ -12,11 +12,12 @@ mod ui;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use asp_core::journal::{Op, Source};
+use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, Parser, Subcommand};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Parser)]
 #[command(
@@ -63,6 +64,8 @@ enum Cmd {
     Stats,
     /// Print supported schema and format versions.
     Schema,
+    /// Show filtered audit events from the local journal.
+    Audit(AuditArgs),
     /// Inspect and validate local workspace policy.
     Policy {
         #[command(subcommand)]
@@ -159,6 +162,31 @@ enum Cmd {
     /// (internal) Invoked by harness hooks; reads the event from stdin.
     #[command(hide = true, name = "hook-event")]
     HookEvent,
+}
+
+#[derive(Args)]
+struct AuditArgs {
+    /// Include only entries with this agent session id.
+    #[arg(long)]
+    session: Option<String>,
+    /// Include only entries created by this tool.
+    #[arg(long)]
+    tool: Option<String>,
+    /// Include only this operation. Repeat to include multiple operations.
+    #[arg(long = "op", value_parser = parse_op_filter)]
+    ops: Vec<Op>,
+    /// Include only path-aware entries touching this workspace-relative path.
+    #[arg(long = "path")]
+    paths: Vec<String>,
+    /// Include entries at or after this RFC3339 timestamp.
+    #[arg(long, value_parser = parse_rfc3339)]
+    since: Option<OffsetDateTime>,
+    /// Include entries at or before this RFC3339 timestamp.
+    #[arg(long, value_parser = parse_rfc3339)]
+    until: Option<OffsetDateTime>,
+    /// Max entries to show after filtering.
+    #[arg(short = 'n', long, default_value = "100")]
+    limit: usize,
 }
 
 #[derive(Subcommand)]
@@ -446,6 +474,42 @@ fn run(cli: Cli) -> Result<(), Error> {
                     schema.version.to_string(),
                     schema.kind.to_string(),
                     schema.path.to_string(),
+                ]);
+            }
+            print!("{}", ui::table(&rows));
+            Ok(())
+        }
+        Cmd::Audit(args) => {
+            let ws = open(&cli.dir)?;
+            let entries = audit_entries(&ws, &args)?;
+            if json {
+                ui::print_json(true, &entries);
+                return Ok(());
+            }
+            if entries.is_empty() {
+                println!("{}", ui::dim("no audit events matched"));
+                return Ok(());
+            }
+            let mut rows = vec![vec![
+                "WHEN".to_string(),
+                "OP".to_string(),
+                "#".to_string(),
+                "SESSION".to_string(),
+                "TOOL".to_string(),
+                "MESSAGE".to_string(),
+            ]];
+            for entry in &entries {
+                rows.push(vec![
+                    entry.ts.clone(),
+                    op_name(&entry.op).to_string(),
+                    entry.seq.map(|seq| format!("#{seq}")).unwrap_or_default(),
+                    entry.session_id.clone().unwrap_or_default(),
+                    entry.tool.clone().unwrap_or_default(),
+                    entry
+                        .message
+                        .clone()
+                        .or_else(|| entry.detail.as_ref().map(detail_summary))
+                        .unwrap_or_default(),
                 ]);
             }
             print!("{}", ui::table(&rows));
@@ -955,6 +1019,109 @@ fn op_name(op: &Op) -> &'static str {
         Op::Promote => "promote",
         Op::Discard => "discard",
     }
+}
+
+fn audit_entries(ws: &Workspace, args: &AuditArgs) -> Result<Vec<Entry>, Error> {
+    let mut entries = ws.journal().read()?.entries;
+    entries.reverse();
+    let mut filtered = Vec::new();
+    for entry in entries {
+        if !audit_entry_matches(&entry, args)? {
+            continue;
+        }
+        filtered.push(entry);
+        if filtered.len() >= args.limit {
+            break;
+        }
+    }
+    Ok(filtered)
+}
+
+fn audit_entry_matches(entry: &Entry, args: &AuditArgs) -> Result<bool, Error> {
+    if let Some(session) = &args.session {
+        if entry.session_id.as_deref() != Some(session.as_str()) {
+            return Ok(false);
+        }
+    }
+    if let Some(tool) = &args.tool {
+        if entry.tool.as_deref() != Some(tool.as_str()) {
+            return Ok(false);
+        }
+    }
+    if !args.ops.is_empty() && !args.ops.iter().any(|op| op == &entry.op) {
+        return Ok(false);
+    }
+    if args.since.is_some() || args.until.is_some() {
+        let ts = OffsetDateTime::parse(&entry.ts, &Rfc3339).map_err(|e| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("journal entry timestamp is unreadable: {e}"),
+            )
+            .with_hint("run `asp doctor`; if the journal cannot be repaired, export a narrower audit range")
+        })?;
+        if args.since.is_some_and(|since| ts < since) {
+            return Ok(false);
+        }
+        if args.until.is_some_and(|until| ts > until) {
+            return Ok(false);
+        }
+    }
+    if !args.paths.is_empty()
+        && !args
+            .paths
+            .iter()
+            .any(|path| audit_entry_touches_path(entry, path))
+    {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn audit_entry_touches_path(entry: &Entry, path: &str) -> bool {
+    let Some(detail) = &entry.detail else {
+        return false;
+    };
+    let normalized = path.trim_matches('/');
+    if normalized.is_empty() {
+        return false;
+    }
+    if detail_path_matches(detail.get("path"), normalized) {
+        return true;
+    }
+    if let Some(paths) = detail.get("paths").and_then(|value| value.as_array()) {
+        return paths
+            .iter()
+            .any(|value| detail_path_matches(Some(value), normalized));
+    }
+    false
+}
+
+fn detail_path_matches(value: Option<&serde_json::Value>, wanted: &str) -> bool {
+    let Some(path) = value.and_then(|value| value.as_str()) else {
+        return false;
+    };
+    let path = path.trim_matches('/');
+    path == wanted || path.starts_with(&format!("{wanted}/"))
+}
+
+fn parse_op_filter(raw: &str) -> Result<Op, String> {
+    match raw {
+        "init" => Ok(Op::Init),
+        "checkpoint" | "cp" => Ok(Op::Checkpoint),
+        "fork" => Ok(Op::Fork),
+        "restore" => Ok(Op::Restore),
+        "undo" => Ok(Op::Undo),
+        "promote" => Ok(Op::Promote),
+        "discard" => Ok(Op::Discard),
+        _ => Err(
+            "operation must be init, checkpoint, fork, restore, undo, promote, or discard"
+                .to_string(),
+        ),
+    }
+}
+
+fn parse_rfc3339(raw: &str) -> Result<OffsetDateTime, String> {
+    OffsetDateTime::parse(raw, &Rfc3339).map_err(|_| "timestamp must be RFC3339".to_string())
 }
 
 fn parse_duration(raw: &str) -> Result<Duration, String> {

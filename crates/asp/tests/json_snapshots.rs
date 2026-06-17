@@ -55,6 +55,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_status" => include_str!("snapshots/cli_status.json"),
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
         "cli_log" => include_str!("snapshots/cli_log.json"),
+        "cli_audit" => include_str!("snapshots/cli_audit.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_policy_validate" => include_str!("snapshots/cli_policy_validate.json"),
@@ -178,6 +179,9 @@ fn cli_json_shapes_match_snapshots() {
 
     let log = ok_json(&root, &["log", "-n", "2"]);
     snapshot("cli_log", normalize(log, &root));
+
+    let audit = ok_json(&root, &["audit", "--op", "checkpoint", "-n", "2"]);
+    snapshot("cli_audit", normalize(audit, &root));
 
     let race = ok_json(
         &root,

@@ -192,7 +192,7 @@
 **Done when:** a team can answer who changed what, when, with which tool, and export evidence without a SaaS dependency.
 
 - **S15.1 Audit views**
-  - [ ] T15.1.1 Add `asp audit` with filters for session, tool, operation, path, and time range.
+  - [x] T15.1.1 Add `asp audit` with filters for session, tool, operation, path, and time range.
   - [ ] T15.1.2 Add JSONL and CSV export formats for audit events.
   - [ ] T15.1.3 Add checkpoint-to-path attribution for changed files in audit output.
 - **S15.2 Retention**
