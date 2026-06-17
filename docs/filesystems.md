@@ -49,6 +49,8 @@ diskutil info "$PWD"
 - Keep forks on the same local volume as the workspace. `asp` creates fork
   siblings (`<repo>@<fork>`) specifically so CoW has a chance to work.
 - Treat network filesystems as copy fallback until a probe proves otherwise.
+- For large repositories, pair the probe result with the
+  [monorepo tuning guide](monorepo-tuning.md).
 - For performance-sensitive CI, put `TMPDIR` on the filesystem you want to
   exercise; the btrfs CI job does this before running the torture suite.
 - Large-file CAS restores use the same file-level CoW helper where available,

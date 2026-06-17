@@ -42,6 +42,9 @@ yourself.
 
 ## Examples
 
+For larger repositories, see [monorepo tuning](monorepo-tuning.md) before
+changing excludes or large-file thresholds.
+
 Append project-specific generated output while keeping defaults:
 
 ```toml

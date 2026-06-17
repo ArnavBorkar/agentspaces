@@ -239,6 +239,8 @@ Follow-up:
   residual risks, and evidence links.
 - [Backup and disaster recovery](backup-recovery.md) for `.asp/` backup policy,
   restore drills, and incident checklists.
+- [Monorepo tuning](monorepo-tuning.md) for excludes, blob thresholds, and
+  filesystem choices in large repositories.
 - [Architecture](architecture.md) for module boundaries and trust invariants.
 - [On-disk format](design/format.md) for stock-git recovery details.
 - [Diagnostics](diagnostics.md) for safe issue-report bundles.

@@ -22,6 +22,8 @@
   boundaries, command write behavior, residual risk, and evidence links.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
   and disaster-recovery runbook.
+- `docs/monorepo-tuning.md` documents large-repository tuning for checkpoint
+  excludes, blob thresholds, and filesystem choice.
 
 ### Fixed
 
