@@ -193,7 +193,7 @@
 
 - **S15.1 Audit views**
   - [x] T15.1.1 Add `asp audit` with filters for session, tool, operation, path, and time range.
-  - [ ] T15.1.2 Add JSONL and CSV export formats for audit events.
+  - [x] T15.1.2 Add JSONL and CSV export formats for audit events.
   - [ ] T15.1.3 Add checkpoint-to-path attribution for changed files in audit output.
 - **S15.2 Retention**
   - [ ] T15.2.1 Add configurable checkpoint retention policies with dry-run output.

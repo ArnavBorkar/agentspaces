@@ -67,6 +67,10 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
 | `asp diagnostics --json --output file.json` | `#/$defs/diagnosticsOutputResult` |
 
+`asp audit --format jsonl` is a raw export format: each line is one
+`#/$defs/journalEntry` object without the CLI envelope. `asp audit --format csv`
+emits fixed columns documented in [docs/audit.md](audit.md).
+
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,
 `attempts` is the number of attempts actually started, and `timed_out` /

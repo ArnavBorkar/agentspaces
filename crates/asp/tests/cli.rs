@@ -205,7 +205,7 @@ fn audit_filters_journal_events() {
         &[
             "checkpoint",
             "-m",
-            "agent update",
+            "agent, update",
             "--tool",
             "claude",
             "--session-id",
@@ -227,9 +227,48 @@ fn audit_filters_journal_events() {
     );
     let rows = audit["result"].as_array().unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["message"], "agent update");
+    assert_eq!(rows[0]["message"], "agent, update");
     assert_eq!(rows[0]["tool"], "claude");
     assert_eq!(rows[0]["session_id"], "session-1");
+
+    let jsonl = ok(
+        &root,
+        &[
+            "audit",
+            "--format",
+            "jsonl",
+            "--op",
+            "checkpoint",
+            "--tool",
+            "claude",
+        ],
+    );
+    let jsonl_rows: Vec<serde_json::Value> = jsonl
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(jsonl_rows.len(), 1);
+    assert_eq!(jsonl_rows[0]["message"], "agent, update");
+
+    let csv = ok(
+        &root,
+        &[
+            "audit",
+            "--format",
+            "csv",
+            "--op",
+            "checkpoint",
+            "--tool",
+            "claude",
+        ],
+    );
+    let csv_lines: Vec<_> = csv.lines().collect();
+    assert_eq!(csv_lines.len(), 2);
+    assert_eq!(
+        csv_lines[0],
+        "v,ts,op,seq,commit,source,session_id,tool,message,files_changed,duration_ms,detail"
+    );
+    assert!(csv_lines[1].contains("\"agent, update\""), "{csv}");
 
     ok(&root, &["restore", "1", "src/app.py"]);
     let path_audit = ok_json(&root, &["audit", "--op", "restore", "--path", "src/app.py"]);

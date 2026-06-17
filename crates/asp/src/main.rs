@@ -16,7 +16,7 @@ use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Parser)]
@@ -184,9 +184,19 @@ struct AuditArgs {
     /// Include entries at or before this RFC3339 timestamp.
     #[arg(long, value_parser = parse_rfc3339)]
     until: Option<OffsetDateTime>,
+    /// Output format. Use global --json for the enveloped JSON API.
+    #[arg(long, value_enum, default_value_t = AuditFormat::Table)]
+    format: AuditFormat,
     /// Max entries to show after filtering.
     #[arg(short = 'n', long, default_value = "100")]
     limit: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum AuditFormat {
+    Table,
+    Jsonl,
+    Csv,
 }
 
 #[derive(Subcommand)]
@@ -486,34 +496,11 @@ fn run(cli: Cli) -> Result<(), Error> {
                 ui::print_json(true, &entries);
                 return Ok(());
             }
-            if entries.is_empty() {
-                println!("{}", ui::dim("no audit events matched"));
-                return Ok(());
+            match args.format {
+                AuditFormat::Table => print_audit_table(&entries),
+                AuditFormat::Jsonl => print_audit_jsonl(&entries),
+                AuditFormat::Csv => print_audit_csv(&entries),
             }
-            let mut rows = vec![vec![
-                "WHEN".to_string(),
-                "OP".to_string(),
-                "#".to_string(),
-                "SESSION".to_string(),
-                "TOOL".to_string(),
-                "MESSAGE".to_string(),
-            ]];
-            for entry in &entries {
-                rows.push(vec![
-                    entry.ts.clone(),
-                    op_name(&entry.op).to_string(),
-                    entry.seq.map(|seq| format!("#{seq}")).unwrap_or_default(),
-                    entry.session_id.clone().unwrap_or_default(),
-                    entry.tool.clone().unwrap_or_default(),
-                    entry
-                        .message
-                        .clone()
-                        .or_else(|| entry.detail.as_ref().map(detail_summary))
-                        .unwrap_or_default(),
-                ]);
-            }
-            print!("{}", ui::table(&rows));
-            Ok(())
         }
         Cmd::Policy { command } => match command {
             PolicyCmd::Validate => {
@@ -1035,6 +1022,126 @@ fn audit_entries(ws: &Workspace, args: &AuditArgs) -> Result<Vec<Entry>, Error> 
         }
     }
     Ok(filtered)
+}
+
+fn print_audit_table(entries: &[Entry]) -> Result<(), Error> {
+    if entries.is_empty() {
+        println!("{}", ui::dim("no audit events matched"));
+        return Ok(());
+    }
+    let mut rows = vec![vec![
+        "WHEN".to_string(),
+        "OP".to_string(),
+        "#".to_string(),
+        "SESSION".to_string(),
+        "TOOL".to_string(),
+        "MESSAGE".to_string(),
+    ]];
+    for entry in entries {
+        rows.push(vec![
+            entry.ts.clone(),
+            op_name(&entry.op).to_string(),
+            entry.seq.map(|seq| format!("#{seq}")).unwrap_or_default(),
+            entry.session_id.clone().unwrap_or_default(),
+            entry.tool.clone().unwrap_or_default(),
+            entry
+                .message
+                .clone()
+                .or_else(|| entry.detail.as_ref().map(detail_summary))
+                .unwrap_or_default(),
+        ]);
+    }
+    print!("{}", ui::table(&rows));
+    Ok(())
+}
+
+fn print_audit_jsonl(entries: &[Entry]) -> Result<(), Error> {
+    for entry in entries {
+        println!("{}", audit_json(entry)?);
+    }
+    Ok(())
+}
+
+fn print_audit_csv(entries: &[Entry]) -> Result<(), Error> {
+    println!(
+        "{}",
+        csv_line(&[
+            "v",
+            "ts",
+            "op",
+            "seq",
+            "commit",
+            "source",
+            "session_id",
+            "tool",
+            "message",
+            "files_changed",
+            "duration_ms",
+            "detail",
+        ])
+    );
+    for entry in entries {
+        let detail = match &entry.detail {
+            Some(detail) => audit_json(detail)?,
+            None => String::new(),
+        };
+        let fields = vec![
+            entry.v.to_string(),
+            entry.ts.clone(),
+            op_name(&entry.op).to_string(),
+            entry.seq.map(|seq| seq.to_string()).unwrap_or_default(),
+            entry.commit.clone().unwrap_or_default(),
+            entry
+                .source
+                .as_ref()
+                .map(source_name)
+                .unwrap_or_default()
+                .to_string(),
+            entry.session_id.clone().unwrap_or_default(),
+            entry.tool.clone().unwrap_or_default(),
+            entry.message.clone().unwrap_or_default(),
+            entry
+                .files_changed
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            entry
+                .duration_ms
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            detail,
+        ];
+        println!("{}", csv_line(&fields));
+    }
+    Ok(())
+}
+
+fn audit_json(value: &impl serde::Serialize) -> Result<String, Error> {
+    serde_json::to_string(value)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("audit export encode: {e}")).with_source(e))
+}
+
+fn csv_line<T: AsRef<str>>(fields: &[T]) -> String {
+    fields
+        .iter()
+        .map(|field| csv_cell(field.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn csv_cell(value: &str) -> String {
+    if !value.contains([',', '"', '\n', '\r']) {
+        return value.to_string();
+    }
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
+fn source_name(source: &Source) -> &'static str {
+    match source {
+        Source::Manual => "manual",
+        Source::Hook => "hook",
+        Source::Mcp => "mcp",
+        Source::Race => "race",
+    }
 }
 
 fn audit_entry_matches(entry: &Entry, args: &AuditArgs) -> Result<bool, Error> {

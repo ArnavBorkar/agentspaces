@@ -51,6 +51,8 @@
   resolved policy in a stable automation-facing shape.
 - `asp audit` shows filtered local journal events by session, tool, operation,
   path, and RFC3339 time range.
+- `asp audit --format jsonl` and `asp audit --format csv` export filtered audit
+  events for compliance evidence and downstream review tools.
 
 ### Fixed
 
@@ -74,6 +76,8 @@
   saved lanes are re-sorted for review. Existing lane fields are unchanged.
 - Additive: `asp audit --json` returns the existing journal-entry array shape
   used by `asp log --json`; clients can opt in by calling the new command.
+- Additive: `asp audit --format jsonl` emits one journal-entry JSON object per
+  line, and `asp audit --format csv` emits a fixed-column CSV export.
 
 ## Automation Contract Rules
 
