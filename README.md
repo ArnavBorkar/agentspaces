@@ -101,6 +101,8 @@ cargo install --git https://github.com/ArnavBorkar/agentspaces asp
 
 Requires `git` ≥ 2.32 on PATH (asp uses it as its storage engine — that's the trust model, not a shortcut).
 
+Release checksum signatures can be verified with Sigstore; see [docs/release-verification.md](docs/release-verification.md).
+
 ## Project status & open-core boundary
 
 `asp` is young software under active development; the format is versioned (`.asp/format-version`) and the trust suite runs on every commit. **The engine, CLI, MCP server, and on-disk format in this repository are MIT/Apache-2.0 forever — they will never be relicensed.** If a hosted offering ever exists (e.g. managed sync/control plane), it will be a separate proprietary service; nothing in this repo will be moved behind it.

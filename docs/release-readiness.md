@@ -25,6 +25,7 @@ trust model before it asks users to trust the binary.
 - [ ] Dependency audit workflow green or manually rerun if the scheduled run is stale
 - [ ] Release workflow dry run or tagged release workflow green
 - [ ] Checksums generated for every binary artifact
+- [ ] Sigstore bundles generated for every checksum file
 - [ ] Downloaded release artifact smoke-tested outside the build tree
 
 ## Public repo readiness
