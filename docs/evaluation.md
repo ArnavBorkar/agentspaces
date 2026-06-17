@@ -233,6 +233,8 @@ Follow-up:
 
 - [Race workflow](race.md) for labels, environment variables, retries, JUnit
   ingestion, and saved-race comparison.
+- [Enterprise workflow playbooks](playbooks.md) for bug-fix fleets,
+  test-generation races, docs generation, and CI repair.
 - [Architecture](architecture.md) for module boundaries and trust invariants.
 - [On-disk format](design/format.md) for stock-git recovery details.
 - [Diagnostics](diagnostics.md) for safe issue-report bundles.

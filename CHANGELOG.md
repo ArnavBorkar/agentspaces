@@ -16,6 +16,8 @@
   lane commands.
 - `docs/evaluation.md` gives teams a 30-minute pilot guide with explicit
   success criteria and go/no-go signals.
+- `docs/playbooks.md` documents repeatable agent workflows for bug-fix fleets,
+  test generation, docs generation, and CI repair.
 
 ### Fixed
 

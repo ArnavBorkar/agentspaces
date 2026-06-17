@@ -89,6 +89,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **FAQ** — [docs/FAQ.md](docs/FAQ.md)
 - **Architecture** — [docs/architecture.md](docs/architecture.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)
+- **Enterprise workflow playbooks** — [docs/playbooks.md](docs/playbooks.md)
 - **Race workflow** — [docs/race.md](docs/race.md)
 - **Development** — [docs/development.md](docs/development.md)
 - **Maintainer triage** — [docs/triage.md](docs/triage.md)
