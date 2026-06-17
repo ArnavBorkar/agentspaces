@@ -10,6 +10,7 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 use asp_core::journal::Source;
+use asp_core::store::FORMAT_VERSION;
 use asp_core::workspace::CheckpointOpts;
 use asp_core::{Error, Workspace};
 use serde_json::{json, Value};
@@ -80,7 +81,10 @@ fn initialize_result(params: &Value) -> Value {
         .unwrap_or(PROTOCOL_VERSION);
     json!({
         "protocolVersion": requested,
-        "capabilities": { "tools": { "listChanged": false } },
+        "capabilities": {
+            "tools": { "listChanged": false },
+            "experimental": { "asp": asp_capabilities() },
+        },
         "serverInfo": {
             "name": "agentspaces",
             "title": "agentspaces — branchable agent workspaces",
@@ -95,6 +99,23 @@ fn initialize_result(params: &Value) -> Value {
     })
 }
 
+fn asp_capabilities() -> Value {
+    json!({
+        "serverVersion": env!("CARGO_PKG_VERSION"),
+        "protocolVersion": PROTOCOL_VERSION,
+        "formatVersion": FORMAT_VERSION,
+        "localOnlyByDefault": true,
+        "stockGitRecovery": true,
+        "toolCount": tool_definitions().len(),
+        "toolAnnotations": true,
+        "jsonSchemas": {
+            "mcpToolResult": "schemas/mcp-tool-result.schema.json",
+            "cliEnvelope": "schemas/cli-json-envelope.schema.json",
+            "sharedResults": "schemas/asp-result.schema.json",
+        }
+    })
+}
+
 fn schema(props: Value, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": props, "required": required })
 }
@@ -106,6 +127,16 @@ fn dir_prop() -> Value {
     })
 }
 
+fn annotations(title: &str, read_only: bool, destructive: bool, idempotent: bool) -> Value {
+    json!({
+        "title": title,
+        "readOnlyHint": read_only,
+        "destructiveHint": destructive,
+        "idempotentHint": idempotent,
+        "openWorldHint": false,
+    })
+}
+
 pub fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
@@ -114,12 +145,14 @@ pub fn tool_definitions() -> Vec<Value> {
         last checkpoint info, active forks. Use this first to orient yourself. If the directory is not \
         an asp workspace yet, the error will say so — call workspace_init then.",
             "inputSchema": schema(json!({ "directory": dir_prop() }), &[]),
+            "annotations": annotations("Workspace status", true, false, true),
         }),
         json!({
             "name": "workspace_init",
             "description": "Adopt a directory as an asp workspace. Instant; touches nothing — it \
         only creates a .asp sidecar. Call once per project, before any other workspace tool.",
             "inputSchema": schema(json!({ "directory": dir_prop() }), &[]),
+            "annotations": annotations("Initialize workspace", false, false, false),
         }),
         json!({
             "name": "workspace_checkpoint",
@@ -133,6 +166,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &[],
             ),
+            "annotations": annotations("Checkpoint workspace", false, false, false),
         }),
         json!({
             "name": "workspace_log",
@@ -145,6 +179,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &[],
             ),
+            "annotations": annotations("Workspace log", true, false, true),
         }),
         json!({
             "name": "workspace_undo",
@@ -152,6 +187,7 @@ pub fn tool_definitions() -> Vec<Value> {
         (including bash side-effects like deleted or generated files), revert them; if the tree is clean, \
         go back one checkpoint. The pre-undo state is saved automatically, so undo is always safe.",
             "inputSchema": schema(json!({ "directory": dir_prop() }), &[]),
+            "annotations": annotations("Undo workspace", false, true, false),
         }),
         json!({
             "name": "workspace_restore",
@@ -165,6 +201,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &["checkpoint"],
             ),
+            "annotations": annotations("Restore workspace", false, true, false),
         }),
         json!({
             "name": "workspace_fork",
@@ -180,12 +217,14 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &[],
             ),
+            "annotations": annotations("Fork workspace", false, false, false),
         }),
         json!({
             "name": "workspace_forks",
             "description": "Compare all active forks against their fork points: files changed, \
         lines added/removed, last activity. Use after running work in forks to decide which to promote.",
             "inputSchema": schema(json!({ "directory": dir_prop() }), &[]),
+            "annotations": annotations("Compare forks", true, false, true),
         }),
         json!({
             "name": "workspace_diff",
@@ -199,6 +238,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &["from"],
             ),
+            "annotations": annotations("Diff workspace", true, false, true),
         }),
         json!({
             "name": "workspace_promote",
@@ -213,6 +253,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &["fork"],
             ),
+            "annotations": annotations("Promote fork", false, false, false),
         }),
         json!({
             "name": "workspace_discard",
@@ -226,6 +267,7 @@ pub fn tool_definitions() -> Vec<Value> {
                 }),
                 &["fork"],
             ),
+            "annotations": annotations("Discard fork", false, true, false),
         }),
     ]
 }

@@ -94,6 +94,12 @@ Tool-level MCP errors still return a JSON-RPC success response containing
 `{ "isError": true, "content": [...] }`, which is covered by
 `mcp-tool-result.schema.json`.
 
+The MCP `initialize` response includes asp-specific capability metadata under
+`capabilities.experimental.asp`, including server version, protocol version,
+format version, schema paths, and whether tool annotations are present.
+`tools/list` entries include MCP tool annotations such as `readOnlyHint` and
+`destructiveHint`; snapshot tests guard these model-facing schemas.
+
 ## Change Rules
 
 When a PR changes a serialized field, command result, MCP tool result, or error

@@ -58,6 +58,8 @@ fn snapshot(name: &str, actual: Value) {
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_error" => include_str!("snapshots/cli_error.json"),
+        "mcp_initialize" => include_str!("snapshots/mcp_initialize.json"),
+        "mcp_tools" => include_str!("snapshots/mcp_tools.json"),
         "mcp_status" => include_str!("snapshots/mcp_status.json"),
         "mcp_error" => include_str!("snapshots/mcp_error.json"),
         other => panic!("unknown snapshot {other}"),
@@ -92,7 +94,8 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         }
                     }
                     "workspace_id" => *child = json!("<workspace-id>"),
-                    "asp_version" => *child = json!("<asp-version>"),
+                    "asp_version" | "serverVersion" => *child = json!("<asp-version>"),
+                    "version" if child.is_string() => *child = json!("<asp-version>"),
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
                     "ts" | "generated_at" => *child = json!("<timestamp>"),
                     "duration_ms" | "store_bytes" | "blob_bytes" if child.is_number() => {
@@ -202,13 +205,13 @@ impl McpClient {
         }
     }
 
-    fn call_tool(&mut self, name: &str, args: Value) -> Value {
+    fn request(&mut self, method: &str, params: Value) -> Value {
         self.next_id += 1;
         let msg = json!({
             "jsonrpc": "2.0",
             "id": self.next_id,
-            "method": "tools/call",
-            "params": { "name": name, "arguments": args }
+            "method": method,
+            "params": params,
         });
         writeln!(self.stdin, "{msg}").unwrap();
         self.stdin.flush().unwrap();
@@ -216,6 +219,11 @@ impl McpClient {
         self.stdout.read_line(&mut line).unwrap();
         let resp: Value = serde_json::from_str(&line).expect("valid mcp response");
         assert_eq!(resp["id"], self.next_id);
+        resp
+    }
+
+    fn call_tool(&mut self, name: &str, args: Value) -> Value {
+        let resp = self.request("tools/call", json!({ "name": name, "arguments": args }));
         resp["result"].clone()
     }
 }
@@ -231,6 +239,19 @@ impl Drop for McpClient {
 fn mcp_tool_result_shapes_match_snapshots() {
     let (_tmp, root) = project();
     let mut mcp = McpClient::start(&root);
+
+    let init = mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": { "name": "snapshot", "version": "0" }
+        }),
+    );
+    snapshot("mcp_initialize", normalize(init["result"].clone(), &root));
+
+    let tools = mcp.request("tools/list", json!({}));
+    snapshot("mcp_tools", tools["result"].clone());
 
     let error = mcp.call_tool("workspace_status", json!({}));
     snapshot("mcp_error", normalize(error, &root));

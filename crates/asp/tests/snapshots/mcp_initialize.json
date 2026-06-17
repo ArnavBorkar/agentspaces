@@ -1,0 +1,30 @@
+{
+  "capabilities": {
+    "experimental": {
+      "asp": {
+        "formatVersion": 1,
+        "jsonSchemas": {
+          "cliEnvelope": "schemas/cli-json-envelope.schema.json",
+          "mcpToolResult": "schemas/mcp-tool-result.schema.json",
+          "sharedResults": "schemas/asp-result.schema.json"
+        },
+        "localOnlyByDefault": true,
+        "protocolVersion": "2025-06-18",
+        "serverVersion": "<asp-version>",
+        "stockGitRecovery": true,
+        "toolAnnotations": true,
+        "toolCount": 11
+      }
+    },
+    "tools": {
+      "listChanged": false
+    }
+  },
+  "instructions": "asp gives this session durable, branchable state over the real working directory. Checkpoint before risky changes (workspace_checkpoint), undo damage including bash side-effects (workspace_undo / workspace_restore), fork the whole directory to try N approaches in parallel (workspace_fork), compare them (workspace_forks), and land the winner as an ordinary git branch (workspace_promote). Checkpoints capture untracked files too — everything is recoverable with stock git.",
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "agentspaces",
+    "title": "agentspaces — branchable agent workspaces",
+    "version": "<asp-version>"
+  }
+}

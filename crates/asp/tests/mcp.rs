@@ -85,6 +85,14 @@ fn full_mcp_session() {
         }),
     );
     assert_eq!(init["result"]["serverInfo"]["name"], "agentspaces");
+    assert_eq!(
+        init["result"]["capabilities"]["experimental"]["asp"]["serverVersion"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert_eq!(
+        init["result"]["capabilities"]["experimental"]["asp"]["localOnlyByDefault"],
+        true
+    );
     assert!(init["result"]["instructions"]
         .as_str()
         .unwrap()

@@ -168,7 +168,7 @@
 **Done when:** the MCP server is discoverable, well-specified, robust under bad clients, and pleasant for models.
 
 - **S13.1 Protocol completeness**
-  - [ ] T13.1.1 Add MCP capability metadata, server version, and tool schema snapshots.
+  - [x] T13.1.1 Add MCP capability metadata, server version, and tool schema snapshots.
   - [ ] T13.1.2 Add tests for malformed JSON-RPC, unknown ids, bad params, and partial lines.
   - [ ] T13.1.3 Add stable error-code documentation for all MCP tools.
 - **S13.2 Model ergonomics**

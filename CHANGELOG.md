@@ -34,6 +34,8 @@
   workflows that do not require a hosted control plane.
 - `docs/enterprise-support-boundaries.md` defines support and SLA boundaries
   that avoid mandatory telemetry, accounts, or source custody.
+- MCP `initialize` now reports asp capability metadata, and `tools/list` entries
+  include model-facing safety annotations guarded by snapshots.
 
 ### Fixed
 

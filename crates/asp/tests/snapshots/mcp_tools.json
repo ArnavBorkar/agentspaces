@@ -1,0 +1,294 @@
+{
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Workspace status"
+      },
+      "description": "Summarize the asp workspace: files changed since the last checkpoint, last checkpoint info, active forks. Use this first to orient yourself. If the directory is not an asp workspace yet, the error will say so — call workspace_init then.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Initialize workspace"
+      },
+      "description": "Adopt a directory as an asp workspace. Instant; touches nothing — it only creates a .asp sidecar. Call once per project, before any other workspace tool.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_init"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Checkpoint workspace"
+      },
+      "description": "Capture the current state of every file (untracked included) as a checkpoint. Cheap (sub-second) and a no-op if nothing changed — call it freely before and after risky operations so workspace_undo always has a point to return to.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "message": {
+            "description": "What this state represents, e.g. 'before dependency upgrade'.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_checkpoint"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Workspace log"
+      },
+      "description": "Timeline of checkpoints and operations (newest first) with what caused each one. Use it to find a checkpoint number for workspace_restore or workspace_diff.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Max entries (default 20).",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_log"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Undo workspace"
+      },
+      "description": "Step back: if there are uncommitted changes since the last checkpoint (including bash side-effects like deleted or generated files), revert them; if the tree is clean, go back one checkpoint. The pre-undo state is saved automatically, so undo is always safe.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_undo"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Restore workspace"
+      },
+      "description": "Restore the working tree (or specific paths) to a checkpoint from workspace_log. The current state is safety-checkpointed first, so nothing is ever lost.",
+      "inputSchema": {
+        "properties": {
+          "checkpoint": {
+            "description": "Checkpoint number (e.g. \"3\") or commit prefix from workspace_log.",
+            "type": "string"
+          },
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "paths": {
+            "description": "Optional: restore only these paths.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checkpoint"
+        ],
+        "type": "object"
+      },
+      "name": "workspace_restore"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Fork workspace"
+      },
+      "description": "Create instant copy-on-write fork(s) of the WHOLE directory — untracked files, node_modules, build artifacts, everything — each a fully runnable sibling directory. Use forks to try multiple approaches in parallel or to experiment without touching the main tree. Returns each fork's path; run commands there.",
+      "inputSchema": {
+        "properties": {
+          "count": {
+            "description": "How many forks (default 1).",
+            "type": "integer"
+          },
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "name": {
+            "description": "Fork name or name prefix.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_fork"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Compare forks"
+      },
+      "description": "Compare all active forks against their fork points: files changed, lines added/removed, last activity. Use after running work in forks to decide which to promote.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "workspace_forks"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Diff workspace"
+      },
+      "description": "What changed between two checkpoints, or between a checkpoint and the current working tree (omit 'to'). File-level summary with +/- line counts.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "from": {
+            "description": "Checkpoint number or commit prefix.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Optional second checkpoint; defaults to the working tree.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
+      "name": "workspace_diff"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Promote fork"
+      },
+      "description": "Land a fork's work as an ordinary git branch in the main repository (never touches HEAD or the user's worktree). Use after workspace_forks shows a winner. The result names the branch; suggest a PR or merge to the user afterwards.",
+      "inputSchema": {
+        "properties": {
+          "branch": {
+            "description": "Branch name (default asp/<fork>).",
+            "type": "string"
+          },
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "fork": {
+            "description": "Fork name from workspace_forks.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fork"
+        ],
+        "type": "object"
+      },
+      "name": "workspace_promote"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Discard fork"
+      },
+      "description": "Delete a fork. Refuses if the fork has work that was never promoted — pass force=true only when the user has confirmed the work should be thrown away.",
+      "inputSchema": {
+        "properties": {
+          "directory": {
+            "description": "Workspace directory (defaults to the server's working directory).",
+            "type": "string"
+          },
+          "force": {
+            "description": "Delete even with unpromoted work.",
+            "type": "boolean"
+          },
+          "fork": {
+            "description": "Fork name from workspace_forks.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fork"
+        ],
+        "type": "object"
+      },
+      "name": "workspace_discard"
+    }
+  ]
+}
