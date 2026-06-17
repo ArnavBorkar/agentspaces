@@ -19,3 +19,10 @@ Tree: generated 100026 files, 3.28 GiB in 14.8s at /Users/apple/Projects/agentsp
 `.asp` store size after benchmarks: 3.0G
 
 Methodology: every number is one cold run of the release binary via subprocess (includes process startup, ~5ms). Generator and harness are in `scripts/`; reproduce with `python3 scripts/bench/run.py`.
+
+## CI Trend Artifact
+
+The CI workflow also runs a lightweight benchmark baseline with a much smaller
+synthetic tree and uploads `bench-baseline.md` as a non-blocking artifact. These
+CI numbers are useful for spotting rough trends across commits, but they are not
+the source for README performance claims.

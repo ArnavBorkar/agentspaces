@@ -16,6 +16,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,7 +24,15 @@ ASP = os.path.join(REPO, "target", "release", "asp")
 
 
 def run(cmd, cwd=None, env=None):
-    return subprocess.run(cmd, cwd=cwd, env=env, check=True, capture_output=True, text=True)
+    proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({proc.returncode}): {' '.join(cmd)}\n"
+            f"cwd: {cwd or os.getcwd()}\n"
+            f"stdout:\n{proc.stdout}\n"
+            f"stderr:\n{proc.stderr}"
+        )
+    return proc
 
 
 def timed(fn):
@@ -46,7 +55,7 @@ def main():
     if not os.path.exists(ASP):
         sys.exit("build first: cargo build --release")
 
-    base = os.path.join(REPO, "bench-data")
+    base = os.environ.get("ASP_BENCH_BASE") or tempfile.mkdtemp(prefix="asp-bench-")
     tree = os.path.join(base, "bench-tree")
     for leftover in [tree] + [
         os.path.join(base, d) for d in os.listdir(base) if d.startswith("bench-tree@")

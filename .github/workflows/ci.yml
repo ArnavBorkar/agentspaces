@@ -92,3 +92,26 @@ jobs:
           ./target/release/asp -C /mnt/btrfs/proj checkpoint -m base
           ./target/release/asp -C /mnt/btrfs/proj --json fork --name rf | tee /tmp/fork.json
           grep -q '"method": "reflink"' /tmp/fork.json
+
+  benchmark-baseline:
+    name: benchmark baseline (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release -p asp
+      - name: Run lightweight benchmark baseline
+        run: |
+          python3 scripts/bench/run.py --files 2000 --blob-gb 0.02 > bench-baseline.md
+          cat bench-baseline.md
+      - name: Upload benchmark trend artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asp-benchmark-baseline-${{ github.sha }}
+          path: bench-baseline.md
+          if-no-files-found: warn

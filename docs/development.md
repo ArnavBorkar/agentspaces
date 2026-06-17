@@ -178,3 +178,8 @@ asp doctor --fix
 # Reproduce benchmark claims
 python3 scripts/bench/run.py
 ```
+
+CI also runs a small non-blocking benchmark baseline and uploads the markdown
+report as an artifact. Treat it as trend signal only; the published performance
+claims still come from the full benchmark methodology in
+[docs/benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).

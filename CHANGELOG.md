@@ -59,6 +59,8 @@
   checkpoint retention plan without deleting refs or objects.
 - Retention planning retains the latest checkpoint and active fork-point
   checkpoints even under aggressive `keep_last` policy.
+- CI now publishes a non-blocking lightweight benchmark baseline artifact on
+  every run for performance trend review.
 
 ### Fixed
 

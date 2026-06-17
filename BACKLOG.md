@@ -204,7 +204,7 @@
 **Done when:** performance claims remain honest and improve for monorepos with many files, large blobs, and hook storms.
 
 - **S16.1 Measurement**
-  - [ ] T16.1.1 Add benchmark baselines to CI as non-blocking trend artifacts.
+  - [x] T16.1.1 Add benchmark baselines to CI as non-blocking trend artifacts.
   - [ ] T16.1.2 Add benchmark fixtures for many small files, large binaries, deep trees, and rename-heavy workloads.
   - [ ] T16.1.3 Add a `asp bench self` command that reports local filesystem capabilities.
 - **S16.2 Optimizations**
