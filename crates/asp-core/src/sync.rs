@@ -7,7 +7,11 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use fs2::FileExt;
+
 use crate::error::{Error, ErrorCode, Result};
+
+const LOCAL_REMOTE_LOCK: &str = ".asp-local-remote.lock";
 
 #[derive(Debug, Clone)]
 pub struct LocalRemote {
@@ -17,18 +21,42 @@ pub struct LocalRemote {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteObject {
     pub bytes: Vec<u8>,
+    pub version: RemoteVersion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteEntry {
     pub key: String,
     pub bytes: u64,
+    pub version: RemoteVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteVersion(String);
+
+impl RemoteVersion {
+    pub fn token(&self) -> &str {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PutOutcome {
     Created,
+    Replaced,
     AlreadyExists,
+}
+
+pub trait SyncRemote {
+    fn get(&self, key: &str) -> Result<Option<RemoteObject>>;
+    fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>>;
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome>;
+    fn put_if_match(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome>;
 }
 
 impl LocalRemote {
@@ -43,6 +71,27 @@ impl LocalRemote {
     }
 
     pub fn get(&self, key: &str) -> Result<Option<RemoteObject>> {
+        <Self as SyncRemote>::get(self, key)
+    }
+
+    pub fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
+        <Self as SyncRemote>::list(self, prefix)
+    }
+
+    pub fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
+        <Self as SyncRemote>::put_immutable(self, key, bytes)
+    }
+
+    pub fn put_if_match(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome> {
+        <Self as SyncRemote>::put_if_match(self, key, bytes, expected)
+    }
+
+    fn get_unlocked(&self, key: &str) -> Result<Option<RemoteObject>> {
         let path = self.key_path(key)?;
         let meta = match std::fs::symlink_metadata(&path) {
             Ok(meta) => meta,
@@ -58,12 +107,14 @@ impl LocalRemote {
         if !meta.is_file() {
             return Err(remote_corrupt(format!("remote key '{key}' is not a file")));
         }
+        let bytes = std::fs::read(path)?;
         Ok(Some(RemoteObject {
-            bytes: std::fs::read(path)?,
+            version: version_for(&bytes),
+            bytes,
         }))
     }
 
-    pub fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
+    fn list_unlocked(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
         let prefix = normalize_prefix(prefix)?;
         let path = if prefix.is_empty() {
             self.root.clone()
@@ -109,28 +160,26 @@ impl LocalRemote {
                 )
                 .with_source(e)
             })?;
+            let key = rel_key(rel)?;
+            if key == LOCAL_REMOTE_LOCK {
+                continue;
+            }
+            let bytes = std::fs::read(entry.path())?;
             entries.push(RemoteEntry {
-                key: rel_key(rel)?,
-                bytes: entry
-                    .metadata()
-                    .map_err(|e| {
-                        Error::new(
-                            ErrorCode::Io,
-                            format!("read remote metadata {}: {e}", entry.path().display()),
-                        )
-                    })?
-                    .len(),
+                key,
+                bytes: bytes.len() as u64,
+                version: version_for(&bytes),
             });
         }
         entries.sort_by(|a, b| a.key.cmp(&b.key));
         Ok(entries)
     }
 
-    pub fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
+    fn put_immutable_unlocked(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
         let path = self.key_path(key)?;
         ensure_parent_dirs(&self.root, key)?;
 
-        match self.get(key)? {
+        match self.get_unlocked(key)? {
             Some(existing) if existing.bytes == bytes => return Ok(PutOutcome::AlreadyExists),
             Some(_) => {
                 return Err(remote_corrupt(format!(
@@ -182,6 +231,85 @@ impl LocalRemote {
         }
     }
 
+    fn put_if_match_unlocked(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome> {
+        let current = self.get_unlocked(key)?;
+        match (current, expected) {
+            (None, None) => self.put_immutable_unlocked(key, bytes),
+            (None, Some(_)) => Err(sync_conflict(format!(
+                "remote key '{key}' is missing; conditional write expected an existing version"
+            ))),
+            (Some(_), None) => Err(sync_conflict(format!(
+                "remote key '{key}' already exists; conditional create expected it to be absent"
+            ))),
+            (Some(current), Some(expected)) => {
+                if &current.version != expected {
+                    return Err(sync_conflict(format!(
+                        "remote key '{key}' changed before conditional write"
+                    )));
+                }
+                if current.bytes == bytes {
+                    return Ok(PutOutcome::AlreadyExists);
+                }
+                self.replace_existing(key, bytes)?;
+                Ok(PutOutcome::Replaced)
+            }
+        }
+    }
+
+    fn replace_existing(&self, key: &str, bytes: &[u8]) -> Result<()> {
+        let path = self.key_path(key)?;
+        ensure_parent_dirs(&self.root, key)?;
+        let parent = path.parent().ok_or_else(|| {
+            Error::new(
+                ErrorCode::Io,
+                format!("remote key '{key}' has no parent directory"),
+            )
+        })?;
+        let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| {
+            Error::new(
+                ErrorCode::Io,
+                format!("temp remote object in {}: {e}", parent.display()),
+            )
+            .with_source(e)
+        })?;
+        tmp.write_all(bytes)?;
+        tmp.as_file().sync_data()?;
+        tmp.persist(&path).map_err(|e| {
+            Error::new(
+                ErrorCode::Io,
+                format!("replace remote object {}: {}", path.display(), e.error),
+            )
+            .with_source(e.error)
+        })?;
+        let _ = sync_dir(parent);
+        Ok(())
+    }
+
+    fn with_lock<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        let lock_path = self.root.join(LOCAL_REMOTE_LOCK);
+        let lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(lock_path)?;
+        lock.lock_exclusive().map_err(|e| {
+            Error::new(
+                ErrorCode::Locked,
+                "another asp process is modifying this sync remote",
+            )
+            .with_hint("wait for it to finish and retry")
+            .with_source(e)
+        })?;
+        let result = f();
+        let _ = FileExt::unlock(&lock);
+        result
+    }
+
     fn key_path(&self, key: &str) -> Result<PathBuf> {
         let parts = validate_key(key)?;
         let mut path = self.root.clone();
@@ -189,6 +317,29 @@ impl LocalRemote {
             path.push(part);
         }
         Ok(path)
+    }
+}
+
+impl SyncRemote for LocalRemote {
+    fn get(&self, key: &str) -> Result<Option<RemoteObject>> {
+        self.get_unlocked(key)
+    }
+
+    fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
+        self.list_unlocked(prefix)
+    }
+
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
+        self.with_lock(|| self.put_immutable_unlocked(key, bytes))
+    }
+
+    fn put_if_match(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome> {
+        self.with_lock(|| self.put_if_match_unlocked(key, bytes, expected))
     }
 }
 
@@ -279,6 +430,15 @@ fn remote_corrupt(message: impl Into<String>) -> Error {
         .with_hint("inspect the sync remote before retrying")
 }
 
+fn sync_conflict(message: impl Into<String>) -> Error {
+    Error::new(ErrorCode::SyncConflict, message)
+        .with_hint("fetch the latest remote state, review conflicts, and retry")
+}
+
+fn version_for(bytes: &[u8]) -> RemoteVersion {
+    RemoteVersion(blake3::hash(bytes).to_hex().to_string())
+}
+
 fn sync_dir(path: &Path) -> std::io::Result<()> {
     OpenOptions::new().read(true).open(path)?.sync_all()
 }
@@ -311,12 +471,9 @@ mod tests {
             PutOutcome::Created
         );
 
-        assert_eq!(
-            remote.get("objects/git/sha1/aa/1111").unwrap().unwrap(),
-            RemoteObject {
-                bytes: b"one".to_vec()
-            }
-        );
+        let object = remote.get("objects/git/sha1/aa/1111").unwrap().unwrap();
+        assert_eq!(object.bytes, b"one");
+        assert_eq!(object.version.token(), version_for(b"one").token());
 
         let keys: Vec<_> = remote
             .list("objects")
@@ -331,6 +488,45 @@ mod tests {
                 ("objects/git/sha1/aa/1111".to_string(), 3)
             ]
         );
+    }
+
+    #[test]
+    fn local_remote_supports_conditional_writes_through_trait() {
+        let tmp = tempfile::tempdir().unwrap();
+        let remote = LocalRemote::open(tmp.path().join("remote")).unwrap();
+        let remote_trait: &dyn SyncRemote = &remote;
+
+        assert_eq!(
+            remote_trait
+                .put_if_match("refs/head.json", br#"{"seq":1}"#, None)
+                .unwrap(),
+            PutOutcome::Created
+        );
+        let v1 = remote_trait.get("refs/head.json").unwrap().unwrap().version;
+        assert_eq!(
+            remote_trait
+                .put_if_match("refs/head.json", br#"{"seq":2}"#, Some(&v1))
+                .unwrap(),
+            PutOutcome::Replaced
+        );
+        assert_eq!(
+            remote_trait.get("refs/head.json").unwrap().unwrap().bytes,
+            br#"{"seq":2}"#
+        );
+
+        let stale = remote_trait
+            .put_if_match("refs/head.json", br#"{"seq":3}"#, Some(&v1))
+            .unwrap_err();
+        assert_eq!(stale.code, ErrorCode::SyncConflict);
+        assert_eq!(
+            remote_trait.get("refs/head.json").unwrap().unwrap().bytes,
+            br#"{"seq":2}"#
+        );
+
+        let duplicate_create = remote_trait
+            .put_if_match("refs/head.json", br#"{"seq":2}"#, None)
+            .unwrap_err();
+        assert_eq!(duplicate_create.code, ErrorCode::SyncConflict);
     }
 
     #[test]

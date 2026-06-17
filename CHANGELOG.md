@@ -97,6 +97,8 @@
   for immutable git objects, CAS blobs, conditional refs, and conflicts.
 - `asp-core` now includes a deterministic local filesystem sync remote with
   safe key validation, immutable puts, reads, and sorted listing.
+- `asp-core` now defines a sync remote trait with versioned conditional writes
+  and a `sync_conflict` error code for compare-and-swap failures.
 
 ### Fixed
 
@@ -153,6 +155,8 @@
   `cause` and `next_action` strings for automation and support workflows.
 - Additive: repairable `asp doctor --json` findings may include `repair_plan`
   with `operation`, `description`, `command`, and `destructive`.
+- Additive: future sync commands may return the new `sync_conflict` error code
+  when conditional remote writes detect newer state.
 
 ## Automation Contract Rules
 

@@ -22,6 +22,7 @@ pub enum ErrorCode {
     BranchExists,
     InvalidBranch,
     PolicyViolation,
+    SyncConflict,
     CrossVolume,
     StoreCorrupt,
     FormatTooNew,
