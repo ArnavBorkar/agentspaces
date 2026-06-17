@@ -160,6 +160,41 @@ fn policy_validate_reports_invalid_policy() {
 }
 
 #[test]
+fn invalid_policy_blocks_destructive_commands_before_mutation() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+    std::fs::write(root.join("src/app.py"), "print('damage')\n").unwrap();
+    ok(&root, &["checkpoint", "-m", "damage"]);
+    let fork = ok_json(&root, &["fork", "--name", "guard"]);
+    let fork_path = PathBuf::from(fork["result"][0]["path"].as_str().unwrap());
+    assert!(fork_path.exists());
+
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[paths]\nprotected = [\"../escape\"]\n",
+    )
+    .unwrap();
+
+    let restore = asp(&root, &["--json", "restore", "1"]);
+    assert!(!restore.status.success());
+    let restore_err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&restore.stdout)).unwrap();
+    assert_eq!(restore_err["error"]["code"], "store_corrupt");
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/app.py")).unwrap(),
+        "print('damage')\n"
+    );
+
+    let discard = asp(&root, &["--json", "discard", "guard", "--force"]);
+    assert!(!discard.status.success());
+    let discard_err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&discard.stdout)).unwrap();
+    assert_eq!(discard_err["error"]["code"], "store_corrupt");
+    assert!(fork_path.exists(), "invalid policy must not permit discard");
+}
+
+#[test]
 fn race_runs_and_compares() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

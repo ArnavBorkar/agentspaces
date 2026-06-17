@@ -185,7 +185,7 @@
   - [x] T14.1.3 Add `asp policy validate --json`.
 - **S14.2 Enforcement**
   - [x] T14.2.1 Enforce protected path prompts or hard blocks for promote and restore.
-  - [ ] T14.2.2 Add tests proving invalid policy cannot make destructive operations less safe.
+  - [x] T14.2.2 Add tests proving invalid policy cannot make destructive operations less safe.
 
 ## EPIC 15 — Audit, retention, and compliance exports
 
