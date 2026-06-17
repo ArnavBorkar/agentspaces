@@ -301,8 +301,9 @@ pub fn tool_definitions() -> Vec<Value> {
             "name": "workspace_promote",
             "description": "Land a fork's work as an ordinary git branch in the main repository \
         (never touches HEAD or the user's worktree). Use after workspace_forks shows a winner. The \
-        result names the branch; suggest a PR or merge to the user afterwards. Do not call before \
-        comparing forks or when the user only asked to inspect alternatives.",
+        result names the branch and cleanup command for the retained fork directory. Suggest a PR \
+        or merge to the user afterwards. Do not call before comparing forks or when the user only \
+        asked to inspect alternatives.",
             "inputSchema": schema(
                 json!({
                     "directory": dir_prop(),

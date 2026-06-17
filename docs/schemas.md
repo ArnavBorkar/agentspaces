@@ -89,6 +89,10 @@ the rendered patch or stat text. `asp diff --fork <name>` compares an active
 fork against its fork point. `asp diff --json --html --output review.html`
 returns `diffHtmlOutputResult` after writing an offline HTML review artifact.
 
+`asp promote --json` returns `promoteReport` with the created branch and
+retained-fork cleanup metadata: `fork_path`, `fork_retained: true`, and
+`cleanup_command` (`asp discard <fork>`).
+
 `asp forks --json` rows and `asp race --json` lane results may include `review`
 signals with `tests_passed`, touched-file and line-churn counts, a numeric
 `risk_score`, and explicit `risk_markers` for review dashboards.

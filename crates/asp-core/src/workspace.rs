@@ -333,8 +333,11 @@ pub struct ForkRiskMarker {
 #[derive(Debug, Clone, Serialize)]
 pub struct PromoteReport {
     pub fork: String,
+    pub fork_path: PathBuf,
+    pub fork_retained: bool,
     pub branch: String,
     pub commit: String,
+    pub cleanup_command: String,
 }
 
 struct ScanResult {
@@ -2225,6 +2228,8 @@ impl Workspace {
 
         // Build a commit in the FORK's user repo via plumbing (no checkout,
         // no HEAD move, no hooks), then fetch it into the original repo.
+        let fork_path = rec.path.clone();
+        let cleanup_command = format!("asp discard {fork_name}");
         let commit = build_user_commit(&rec.path, fork_name)?;
         let tmp_ref = format!("refs/asp-promote/{fork_name}");
         run_user_git(&rec.path, &["update-ref", &tmp_ref, &commit])?;
@@ -2245,14 +2250,22 @@ impl Workspace {
         let mut entry = Entry::new(Op::Promote);
         entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
         entry.detail = Some(serde_json::json!({
-            "fork": fork_name, "branch": branch, "commit": commit,
+            "fork": fork_name,
+            "fork_path": fork_path,
+            "fork_retained": true,
+            "branch": branch,
+            "commit": commit,
+            "cleanup_command": cleanup_command,
         }));
         self.journal.append(&entry)?;
 
         Ok(PromoteReport {
             fork: fork_name.to_string(),
+            fork_path,
+            fork_retained: true,
             branch,
             commit,
+            cleanup_command,
         })
     }
 

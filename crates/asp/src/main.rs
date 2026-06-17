@@ -983,6 +983,11 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::cyan(&format!("git diff HEAD...{}", report.branch)),
                     ui::cyan(&format!("git merge {}", report.branch))
                 );
+                println!(
+                    "  fork directory remains: {}   clean up: {}",
+                    ui::cyan(&report.fork_path.display().to_string()),
+                    ui::cyan(&report.cleanup_command)
+                );
             }
             Ok(())
         }

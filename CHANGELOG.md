@@ -81,6 +81,8 @@
   for checkpoint and fork comparisons.
 - `.asp/config.toml` now supports `promote.branch_template` so teams can
   standardize default branch names created by `asp promote`.
+- `asp promote` now reports that the fork directory remains on disk and prints
+  the exact `asp discard <fork>` cleanup command.
 
 ### Fixed
 
@@ -124,6 +126,8 @@
   `diffTextReport` with summary fields plus rendered text.
 - Additive: `asp diff --json --html --output <file>` returns
   `diffHtmlOutputResult` with the written path, byte count, and summary fields.
+- Additive: `asp promote --json` and `workspace_promote` results include
+  `fork_path`, `fork_retained`, and `cleanup_command` cleanup metadata.
 
 ## Automation Contract Rules
 

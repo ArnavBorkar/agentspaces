@@ -633,11 +633,21 @@
     "promoteReport": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["fork", "branch", "commit"],
+      "required": [
+        "fork",
+        "fork_path",
+        "fork_retained",
+        "branch",
+        "commit",
+        "cleanup_command"
+      ],
       "properties": {
         "fork": { "type": "string" },
+        "fork_path": { "type": "string" },
+        "fork_retained": { "const": true },
         "branch": { "type": "string" },
-        "commit": { "$ref": "#/$defs/gitOid" }
+        "commit": { "$ref": "#/$defs/gitOid" },
+        "cleanup_command": { "type": "string" }
       }
     },
     "raceLaneResults": {

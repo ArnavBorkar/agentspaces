@@ -746,6 +746,10 @@ fn promote_lands_branch_in_user_repo() {
 
     let report = ws.promote("winner", None).unwrap();
     assert_eq!(report.branch, "asp/winner");
+    assert_eq!(report.fork_path, fork.path);
+    assert!(report.fork_retained);
+    assert_eq!(report.cleanup_command, "asp discard winner");
+    assert!(report.fork_path.exists());
 
     // The branch exists in the ORIGINAL repo with the fork's content,
     // and the user's HEAD/worktree were not touched.
@@ -791,6 +795,8 @@ fn promote_uses_configured_branch_template_when_branch_is_omitted() {
 
     let report = ws.promote("winner", None).unwrap();
     assert_eq!(report.branch, "review/proj/winner");
+    assert_eq!(report.fork_path, fork.path);
+    assert_eq!(report.cleanup_command, "asp discard winner");
     let show = git(&root, &["show", "review/proj/winner:src/main.rs"]);
     assert!(show.contains("reviewed"));
 

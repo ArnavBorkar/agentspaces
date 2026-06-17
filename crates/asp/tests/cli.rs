@@ -795,8 +795,22 @@ fn promote_via_cli_lands_branch() {
 
     let p = ok_json(&root, &["promote", "winner"]);
     assert_eq!(p["result"]["branch"], "review/proj/winner");
+    assert_eq!(
+        p["result"]["fork_path"].as_str().unwrap(),
+        fork_path.to_string_lossy().as_ref()
+    );
+    assert_eq!(p["result"]["fork_retained"], true);
+    assert_eq!(p["result"]["cleanup_command"], "asp discard winner");
     let content = git(&["show", "review/proj/winner:src/app.py"]);
     assert_eq!(content, "print('better')");
+
+    let forks = ok_json(&root, &["fork", "--name", "human"]);
+    let human_path = PathBuf::from(forks["result"][0]["path"].as_str().unwrap());
+    std::fs::write(human_path.join("src/app.py"), "print('human')\n").unwrap();
+    let out = ok(&root, &["promote", "human"]);
+    assert!(out.contains("fork directory remains:"), "{out}");
+    assert!(out.contains(human_path.to_string_lossy().as_ref()), "{out}");
+    assert!(out.contains("asp discard human"), "{out}");
 }
 
 #[test]
