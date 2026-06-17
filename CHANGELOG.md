@@ -20,6 +20,8 @@
   test generation, docs generation, and CI repair.
 - `docs/trust-model.md` gives security reviewers a whitepaper for local trust
   boundaries, command write behavior, residual risk, and evidence links.
+- `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
+  and disaster-recovery runbook.
 
 ### Fixed
 

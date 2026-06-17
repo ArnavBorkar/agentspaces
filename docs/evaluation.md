@@ -237,6 +237,8 @@ Follow-up:
   test-generation races, docs generation, and CI repair.
 - [Trust model whitepaper](trust-model.md) for security-review boundaries,
   residual risks, and evidence links.
+- [Backup and disaster recovery](backup-recovery.md) for `.asp/` backup policy,
+  restore drills, and incident checklists.
 - [Architecture](architecture.md) for module boundaries and trust invariants.
 - [On-disk format](design/format.md) for stock-git recovery details.
 - [Diagnostics](diagnostics.md) for safe issue-report bundles.

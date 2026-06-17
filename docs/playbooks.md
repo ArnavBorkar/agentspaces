@@ -22,6 +22,7 @@ Agree on these rules:
 
 - Run agents only with credentials that are safe in sibling workspace copies.
 - Keep production secrets out of prompts, logs, diagnostics, and issue reports.
+- Confirm `.asp/` backup and restore policy before piloting critical repos.
 - Remember the scope split: `asp fork` copies the whole physical tree;
   checkpoints capture tracked plus untracked, non-gitignored source files.
 - Prefer `--label` values that describe strategy, not model internals.
