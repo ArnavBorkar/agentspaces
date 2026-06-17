@@ -30,11 +30,15 @@
   deciding which future features must remain in the local engine.
 - `docs/control-plane-constraints.md` sets zero-custody, opt-in sync, offline
   behavior, and exportability requirements for any future hosted control plane.
+- `docs/local-first-team-workflows.md` drafts local audit, policy, and approval
+  workflows that do not require a hosted control plane.
 
 ### Fixed
 
 - Checkpoint staging preserves case-only path renames on case-insensitive
   filesystems by removing stale index spellings before adding the real path.
+- The fork kill-9 torture sweep is less timing-fragile on very fast APFS
+  runners while still requiring a real killed fork process.
 - Shadow-git commands retry transient index-lock collisions left by killed git
   subprocesses during crash recovery.
 

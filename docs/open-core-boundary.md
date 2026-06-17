@@ -130,6 +130,7 @@ first place.
 - [Trust model whitepaper](trust-model.md)
 - [Local engine governance](local-engine-governance.md)
 - [Future control plane constraints](control-plane-constraints.md)
+- [Local-first team workflows](local-first-team-workflows.md)
 - [On-disk format](design/format.md)
 - [Backup and disaster recovery](backup-recovery.md)
 - [JSON schemas](schemas.md)

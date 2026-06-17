@@ -126,6 +126,7 @@ recoverable, and safe to adopt even if commercial services grow around it.
 
 - [Open-core boundary policy](open-core-boundary.md)
 - [Future control plane constraints](control-plane-constraints.md)
+- [Local-first team workflows](local-first-team-workflows.md)
 - [Trust model whitepaper](trust-model.md)
 - [Development guide](development.md)
 - [JSON schemas](schemas.md)
