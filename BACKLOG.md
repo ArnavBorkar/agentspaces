@@ -242,7 +242,7 @@
 - **S19.1 Detection**
   - [ ] T19.1.1 Add checks for stale locks, missing git binary, unsupported git versions, and config drift.
   - [x] T19.1.2 Add optional deep CAS verification that re-hashes sidecar blobs.
-  - [ ] T19.1.3 Add checks for orphan fork directories and promoted fork cleanup candidates.
+  - [x] T19.1.3 Add checks for orphan fork directories and promoted fork cleanup candidates.
 - **S19.2 Repair UX**
   - [ ] T19.2.1 Add `asp doctor --explain` with human-readable cause and next action per finding.
   - [ ] T19.2.2 Add JSON repair plans before applying `--fix`.

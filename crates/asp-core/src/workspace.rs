@@ -1637,6 +1637,18 @@ impl Workspace {
                         fixed,
                     );
                 }
+                ForkStatus::Promoted if rec.path.exists() => {
+                    add(
+                        Severity::Info,
+                        format!(
+                            "fork '{}' was promoted but its directory still exists ({}); run `asp discard {}` to remove it",
+                            rec.name,
+                            rec.path.display(),
+                            rec.name
+                        ),
+                        false,
+                    );
+                }
                 _ => {}
             }
         }

@@ -320,6 +320,46 @@ fn promote_without_user_git_errors_helpfully() {
 }
 
 #[test]
+fn doctor_reports_promoted_fork_cleanup_candidate() {
+    use asp_core::workspace::Severity;
+    let (_tmp, root) = project();
+    Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["init", "-q"])
+        .status()
+        .unwrap();
+    Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["config", "user.email", "test@example.com"])
+        .status()
+        .unwrap();
+    Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["config", "user.name", "Test"])
+        .status()
+        .unwrap();
+
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(&fork.path, "result.txt", "accepted\n");
+    ws.promote("winner", None).unwrap();
+
+    let findings = ws.doctor(false, false).unwrap();
+    assert!(
+        findings.iter().any(|f| {
+            f.severity == Severity::Info
+                && f.message.contains("was promoted")
+                && f.message.contains("asp discard winner")
+        }),
+        "{findings:?}"
+    );
+}
+
+#[test]
 fn discard_guards_unpromoted_work() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();
