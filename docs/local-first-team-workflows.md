@@ -215,5 +215,6 @@ Automation must not:
 - [Open-core boundary policy](open-core-boundary.md)
 - [Local engine governance](local-engine-governance.md)
 - [Future control plane constraints](control-plane-constraints.md)
+- [Enterprise support boundaries](enterprise-support-boundaries.md)
 - [Enterprise workflow playbooks](playbooks.md)
 - [Trust model whitepaper](trust-model.md)

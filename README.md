@@ -93,6 +93,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Local engine governance** — [docs/local-engine-governance.md](docs/local-engine-governance.md)
 - **Future control plane constraints** — [docs/control-plane-constraints.md](docs/control-plane-constraints.md)
 - **Local-first team workflows** — [docs/local-first-team-workflows.md](docs/local-first-team-workflows.md)
+- **Enterprise support boundaries** — [docs/enterprise-support-boundaries.md](docs/enterprise-support-boundaries.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)

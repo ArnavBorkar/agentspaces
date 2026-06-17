@@ -144,6 +144,7 @@ No control-plane feature should ship until these answers are public.
 - [Open-core boundary policy](open-core-boundary.md)
 - [Local engine governance](local-engine-governance.md)
 - [Local-first team workflows](local-first-team-workflows.md)
+- [Enterprise support boundaries](enterprise-support-boundaries.md)
 - [Trust model whitepaper](trust-model.md)
 - [Backup and disaster recovery](backup-recovery.md)
 - [On-disk format](design/format.md)

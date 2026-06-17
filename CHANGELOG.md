@@ -32,6 +32,8 @@
   behavior, and exportability requirements for any future hosted control plane.
 - `docs/local-first-team-workflows.md` drafts local audit, policy, and approval
   workflows that do not require a hosted control plane.
+- `docs/enterprise-support-boundaries.md` defines support and SLA boundaries
+  that avoid mandatory telemetry, accounts, or source custody.
 
 ### Fixed
 

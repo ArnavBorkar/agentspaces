@@ -353,7 +353,7 @@
   - [x] T28.1.3 Add design constraints for any future control plane: zero custody by default, opt-in sync, exportability.
 - **S28.2 Team features on paper**
   - [x] T28.2.1 Draft team audit, policy, and approval workflows that can run locally first.
-  - [ ] T28.2.2 Draft enterprise support/SLA boundaries without adding telemetry or mandatory accounts.
+  - [x] T28.2.2 Draft enterprise support/SLA boundaries without adding telemetry or mandatory accounts.
 
 ---
 
