@@ -90,9 +90,11 @@ MCP tools return the same payloads in `structuredContent`:
 | `workspace_promote` | `#/$defs/promoteReport` |
 | `workspace_discard` | `#/$defs/discardResult` |
 
-Tool-level MCP errors still return a JSON-RPC success response containing
-`{ "isError": true, "content": [...] }`, which is covered by
-`mcp-tool-result.schema.json`.
+Tool-level MCP errors still return a JSON-RPC success response. Their result
+contains `{ "isError": true, "content": [...], "structuredContent": { "error":
+... } }`, with the same stable error enum used by CLI `--json` envelopes.
+The full protocol/tool code table is documented in
+[docs/mcp-error-codes.md](mcp-error-codes.md).
 
 The MCP `initialize` response includes asp-specific capability metadata under
 `capabilities.experimental.asp`, including server version, protocol version,

@@ -5,5 +5,12 @@
       "type": "text"
     }
   ],
-  "isError": true
+  "isError": true,
+  "structuredContent": {
+    "error": {
+      "code": "not_a_workspace",
+      "hint": "run `asp init` in your project root to create one",
+      "message": "no asp workspace found at or above <workspace-root>"
+    }
+  }
 }

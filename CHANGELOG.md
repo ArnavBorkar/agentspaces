@@ -38,6 +38,8 @@
   include model-facing safety annotations guarded by snapshots.
 - MCP JSON-RPC handling now rejects malformed request ids and bad `tools/call`
   params with protocol errors while continuing to serve later requests.
+- MCP tool errors now include structured `code`, `message`, and `hint` fields,
+  with stable recovery guidance documented in `docs/mcp-error-codes.md`.
 
 ### Fixed
 

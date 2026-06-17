@@ -101,6 +101,11 @@ fn normalize_value(value: &mut Value, root: &Path) {
                     "duration_ms" | "store_bytes" | "blob_bytes" if child.is_number() => {
                         *child = json!(0);
                     }
+                    "message" | "hint" => {
+                        if let Some(s) = child.as_str() {
+                            *child = json!(normalize_text(s, root));
+                        }
+                    }
                     "text" => *child = json!("<text>"),
                     _ => normalize_value(child, root),
                 }
@@ -127,6 +132,22 @@ fn normalize_path(s: &str, root: &Path) -> String {
         }
     }
     s.to_string()
+}
+
+fn normalize_text(s: &str, root: &Path) -> String {
+    let canonical = root.canonicalize().ok();
+    let mut normalized = s.to_string();
+    let mut candidates: Vec<String> = [Some(root), canonical.as_deref()]
+        .into_iter()
+        .flatten()
+        .map(|candidate| candidate.to_string_lossy().to_string())
+        .collect();
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.len()));
+    candidates.dedup();
+    for candidate in candidates {
+        normalized = normalized.replace(&candidate, "<workspace-root>");
+    }
+    normalized
 }
 
 #[test]

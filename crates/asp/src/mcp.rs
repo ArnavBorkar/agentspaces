@@ -348,12 +348,22 @@ fn handle_tool_call(params: &Value) -> Result<Value, Value> {
             "isError": false,
         })),
         Err(e) => {
-            let mut text = e.message.clone();
-            if let Some(hint) = &e.hint {
+            let code = e.code;
+            let message = e.message;
+            let hint = e.hint;
+            let mut text = message.clone();
+            if let Some(hint) = &hint {
                 text.push_str(&format!("\nnext step: {hint}"));
             }
             Ok(json!({
                 "content": [{ "type": "text", "text": text }],
+                "structuredContent": {
+                    "error": {
+                        "code": code,
+                        "message": message,
+                        "hint": hint,
+                    }
+                },
                 "isError": true,
             }))
         }

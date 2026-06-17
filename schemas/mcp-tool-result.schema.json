@@ -17,9 +17,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["content", "isError"],
+      "required": ["content", "structuredContent", "isError"],
       "properties": {
         "content": { "$ref": "#/$defs/content" },
+        "structuredContent": { "$ref": "#/$defs/toolError" },
         "isError": { "const": true }
       }
     }
@@ -36,6 +37,14 @@
           "type": { "const": "text" },
           "text": { "type": "string" }
         }
+      }
+    },
+    "toolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": {
+        "error": { "$ref": "cli-json-envelope.schema.json#/$defs/error" }
       }
     }
   }

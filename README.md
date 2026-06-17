@@ -73,7 +73,7 @@ Storage tools get one strike, so `asp` is built to be boring:
 ## Agents are first-class users
 
 - Every command takes `--json` and returns a stable `{ok, result|error}` envelope; errors carry a machine-readable `code` and a `hint` stating the corrective next action.
-- `asp mcp` is a built-in MCP server (`claude mcp add agentspaces -- asp mcp`, or let `asp setup claude` wire it): `workspace_fork`, `workspace_checkpoint`, `workspace_undo`, `workspace_diff`, `workspace_promote`, and friends — with descriptions written for models.
+- `asp mcp` is a built-in MCP server (`claude mcp add agentspaces -- asp mcp`, or let `asp setup claude` wire it): `workspace_fork`, `workspace_checkpoint`, `workspace_undo`, `workspace_diff`, `workspace_promote`, and friends — with descriptions written for models and [stable protocol/tool error codes](docs/mcp-error-codes.md).
 - The journal records *which session and tool caused every change* — provenance is the audit log.
 
 ## Benchmarks

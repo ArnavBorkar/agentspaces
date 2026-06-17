@@ -142,6 +142,10 @@ fn full_mcp_session() {
     // Calling a tool before init returns a self-correcting error.
     let status = mcp.call_tool("workspace_status", serde_json::json!({}));
     assert_eq!(status["isError"], true);
+    assert_eq!(
+        status["structuredContent"]["error"]["code"],
+        "not_a_workspace"
+    );
     let text = status["content"][0]["text"].as_str().unwrap();
     assert!(
         text.contains("workspace_init") || text.contains("asp init"),
@@ -185,6 +189,7 @@ fn full_mcp_session() {
     // Unknown tool: actionable error listing valid tools.
     let bad = mcp.call_tool("workspace_nope", serde_json::json!({}));
     assert_eq!(bad["isError"], true);
+    assert_eq!(bad["structuredContent"]["error"]["code"], "nothing_to_do");
     assert!(bad["content"][0]["text"]
         .as_str()
         .unwrap()
