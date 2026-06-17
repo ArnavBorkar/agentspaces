@@ -122,38 +122,7 @@ enum Cmd {
         force: bool,
     },
     /// Fork N ways, run the same command in each, and compare the results.
-    Race {
-        /// How many forks to race.
-        #[arg(short = 'n', long, default_value = "3")]
-        count: u32,
-        /// Name prefix for the race forks.
-        #[arg(long, default_value = "race")]
-        name: String,
-        /// Human label for a lane. Repeat to label lanes in order.
-        #[arg(long = "label", value_name = "LABEL")]
-        labels: Vec<String>,
-        /// Per-lane environment template: KEY=VALUE, with {lane}, {fork}, {label}, {path}, {name}.
-        #[arg(long = "env", value_name = "KEY=VALUE")]
-        env: Vec<String>,
-        /// JUnit XML report path template to ingest from each lane. Repeat for multiple reports.
-        #[arg(long = "junit", value_name = "PATH")]
-        junit_reports: Vec<String>,
-        /// Per-attempt timeout, such as 500ms, 30s, 2m, or bare seconds.
-        #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
-        timeout: Option<Duration>,
-        /// Retry failed or timed-out lanes this many times.
-        #[arg(long, default_value_t = 0)]
-        retries: u32,
-        /// Stop still-running lanes after the first successful lane exits 0.
-        #[arg(long)]
-        cancel_on_success: bool,
-        /// Resume an interrupted race from .asp/races/<name>.json.
-        #[arg(long)]
-        resume: bool,
-        /// The command to run in each fork (everything after --).
-        #[arg(last = true, required_unless_present = "resume")]
-        command: Vec<String>,
-    },
+    Race(RaceArgs),
     /// Check workspace health; --fix applies safe repairs.
     Doctor {
         /// Apply safe repairs.
@@ -197,6 +166,53 @@ enum SetupHarness {
         /// Remove the integration instead of installing it.
         #[arg(long)]
         remove: bool,
+    },
+}
+
+#[derive(Args)]
+struct RaceArgs {
+    /// How many forks to race.
+    #[arg(short = 'n', long, default_value = "3")]
+    count: u32,
+    /// Name prefix for the race forks.
+    #[arg(long, default_value = "race")]
+    name: String,
+    /// Human label for a lane. Repeat to label lanes in order.
+    #[arg(long = "label", value_name = "LABEL")]
+    labels: Vec<String>,
+    /// Per-lane environment template: KEY=VALUE, with {lane}, {fork}, {label}, {path}, {name}.
+    #[arg(long = "env", value_name = "KEY=VALUE")]
+    env: Vec<String>,
+    /// JUnit XML report path template to ingest from each lane. Repeat for multiple reports.
+    #[arg(long = "junit", value_name = "PATH")]
+    junit_reports: Vec<String>,
+    /// Per-attempt timeout, such as 500ms, 30s, 2m, or bare seconds.
+    #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
+    timeout: Option<Duration>,
+    /// Retry failed or timed-out lanes this many times.
+    #[arg(long, default_value_t = 0)]
+    retries: u32,
+    /// Stop still-running lanes after the first successful lane exits 0.
+    #[arg(long)]
+    cancel_on_success: bool,
+    /// Resume an interrupted race from .asp/races/<name>.json.
+    #[arg(long)]
+    resume: bool,
+    /// Optional saved-race action.
+    #[command(subcommand)]
+    action: Option<RaceAction>,
+    /// The command to run in each fork (everything after --).
+    #[arg(last = true, value_name = "RUNNER_COMMAND")]
+    command: Vec<String>,
+}
+
+#[derive(Subcommand)]
+enum RaceAction {
+    /// Re-rank saved race lanes without rerunning commands.
+    Compare {
+        /// Saved race name from .asp/races/<name>.json.
+        #[arg(long, default_value = "race")]
+        name: String,
     },
 }
 
@@ -695,35 +711,30 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
-        Cmd::Race {
-            count,
-            name,
-            labels,
-            env,
-            junit_reports,
-            timeout,
-            retries,
-            cancel_on_success,
-            resume,
-            command,
-        } => race::run(
-            &open(&cli.dir)?,
-            race::RunRequest {
-                count,
-                name: &name,
-                labels: &labels,
-                env_templates: &env,
-                junit_reports: &junit_reports,
-                options: race::RunOptions {
-                    timeout,
-                    retries,
-                    cancel_on_success,
+        Cmd::Race(args) => match args.action {
+            Some(RaceAction::Compare { name }) => {
+                let name = if name == "race" { args.name } else { name };
+                race::compare(&open(&cli.dir)?, &name, json)
+            }
+            None => race::run(
+                &open(&cli.dir)?,
+                race::RunRequest {
+                    count: args.count,
+                    name: &args.name,
+                    labels: &args.labels,
+                    env_templates: &args.env,
+                    junit_reports: &args.junit_reports,
+                    options: race::RunOptions {
+                        timeout: args.timeout,
+                        retries: args.retries,
+                        cancel_on_success: args.cancel_on_success,
+                    },
+                    command: &args.command,
+                    resume: args.resume,
+                    json,
                 },
-                command: &command,
-                resume,
-                json,
-            },
-        ),
+            ),
+        },
         Cmd::Mcp => {
             if let Some(dir) = &cli.dir {
                 std::env::set_current_dir(dir).map_err(|e| {

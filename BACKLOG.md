@@ -329,7 +329,7 @@
   - [x] T26.1.3 Add resumable race metadata for interrupted runs.
 - **S26.2 Result quality**
   - [x] T26.2.1 Add structured per-lane test result ingestion from common formats.
-  - [ ] T26.2.2 Add `asp race compare` to re-rank existing lanes after manual inspection.
+  - [x] T26.2.2 Add `asp race compare` to re-rank existing lanes after manual inspection.
 
 ## EPIC 27 — Enterprise docs and adoption playbooks
 

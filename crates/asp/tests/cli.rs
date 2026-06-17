@@ -430,6 +430,54 @@ fn race_ingests_junit_reports() {
 }
 
 #[test]
+fn race_compare_reranks_saved_lanes() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+
+    let first = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "2",
+            "--name",
+            "ranked",
+            "--label",
+            "fail",
+            "--label",
+            "pass",
+            "--junit",
+            "{label}.xml",
+            "--",
+            "sh",
+            "-c",
+            "if [ \"$ASP_RACE_LABEL\" = pass ]; then printf '%s\\n' '<testsuite tests=\"4\" failures=\"0\" errors=\"0\" skipped=\"0\" time=\"0.10\" />' > \"$ASP_RACE_LABEL.xml\"; echo pass >> src/app.py; else printf '%s\\n' '<testsuite tests=\"4\" failures=\"1\" errors=\"0\" skipped=\"0\" time=\"0.20\" />' > \"$ASP_RACE_LABEL.xml\"; echo fail >> src/app.py; fi",
+        ],
+    );
+    let initial_lanes = first["result"].as_array().unwrap();
+    assert_eq!(initial_lanes[0]["label"], "fail");
+    assert_eq!(initial_lanes[1]["label"], "pass");
+    assert!(initial_lanes[0]["rank"].is_null());
+    let fail_path = PathBuf::from(initial_lanes[0]["path"].as_str().unwrap());
+    std::fs::write(fail_path.join("manual-review.txt"), "needs follow-up\n").unwrap();
+
+    let compared = ok_json(&root, &["race", "compare", "--name", "ranked"]);
+    let lanes = compared["result"].as_array().unwrap();
+    assert_eq!(lanes[0]["label"], "pass");
+    assert_eq!(lanes[0]["rank"], 1);
+    assert_eq!(lanes[0]["tests"]["failures"], 0);
+    assert_eq!(lanes[0]["attempts"], 1);
+    assert_eq!(lanes[1]["label"], "fail");
+    assert_eq!(lanes[1]["rank"], 2);
+    assert_eq!(lanes[1]["tests"]["failures"], 1);
+    assert!(lanes[1]["files_changed"].as_u64().unwrap() >= 3);
+
+    let compared_prefix = ok_json(&root, &["race", "--name", "ranked", "compare"]);
+    assert_eq!(compared_prefix["result"][0]["label"], "pass");
+}
+
+#[test]
 fn promote_via_cli_lands_branch() {
     let (_tmp, root) = project();
     let git = |args: &[&str]| {

@@ -107,6 +107,25 @@ asp race -n 3 --junit reports/{label}.xml -- \
 When a report exists and parses, `asp race --json` includes a `tests` summary
 with report, test, failure, error, skipped, and runtime totals for that lane.
 
+## Comparing Saved Races
+
+After a race finishes, or after you manually inspect/edit lane artifacts, use
+`asp race compare` to re-rank the saved lanes without rerunning commands:
+
+```bash
+asp race compare --name variant
+```
+
+Compare reads `.asp/races/<name>.json`, combines the recorded exit/test data
+with the current fork diffs, and sorts lanes by review usefulness: successful
+uncanceled runs first, then passing JUnit summaries, smaller diffs, lower line
+churn, and faster runtime. The command never changes lane contents or starts
+the runner command again.
+
+`asp race compare --json` returns the same lane result objects as
+`asp race --json`, plus a `rank` field on each lane. Rank `1` is the first lane
+to inspect or promote.
+
 ## Review And Cleanup
 
 Lane logs are written to `<fork>/.asp/race.log`. The parent workspace is not

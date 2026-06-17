@@ -12,6 +12,8 @@
   `.asp/races/<race>.json`.
 - `asp race --junit <path>` ingests per-lane JUnit XML reports and summarizes
   test outcomes in JSON results.
+- `asp race compare --name <race>` re-ranks saved race lanes without rerunning
+  lane commands.
 
 ### Fixed
 
@@ -27,6 +29,8 @@
   unchanged.
 - Additive: `asp race --json` lane result objects may include `tests` when
   JUnit report ingestion is configured. Existing lane fields are unchanged.
+- Additive: `asp race compare --json` lane result objects include `rank` after
+  saved lanes are re-sorted for review. Existing lane fields are unchanged.
 
 ## Automation Contract Rules
 

@@ -351,6 +351,7 @@
           "log_file"
         ],
         "properties": {
+          "rank": { "$ref": "#/$defs/u64" },
           "fork": { "type": "string" },
           "label": { "type": "string" },
           "path": { "type": "string" },

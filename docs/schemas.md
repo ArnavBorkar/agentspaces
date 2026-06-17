@@ -59,6 +59,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp promote --json` | `#/$defs/promoteReport` |
 | `asp discard --json` | `#/$defs/discardResult` |
 | `asp race --json` | `#/$defs/raceLaneResults` |
+| `asp race compare --json` | `#/$defs/raceLaneResults` |
 | `asp setup claude --json` | `#/$defs/setupReport` |
 | `asp doctor --json` | `#/$defs/doctorFindings` |
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
@@ -70,7 +71,8 @@ explicit `--label` for that lane or the fork name when no label was provided,
 `canceled` report whether the final lane state was killed by a timeout or
 cancel-on-success. When JUnit ingestion is configured, lane results may also
 include `tests` with aggregate report/test/failure/error/skipped counts and
-reported test runtime.
+reported test runtime. `asp race compare --json` additionally includes `rank`
+after re-sorting saved lanes for review.
 
 MCP tools return the same payloads in `structuredContent`:
 

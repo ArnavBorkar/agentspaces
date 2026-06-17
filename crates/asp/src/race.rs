@@ -24,6 +24,8 @@ use crate::ui;
 
 #[derive(Debug, Serialize)]
 pub struct LaneResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank: Option<u64>,
     pub fork: String,
     pub label: String,
     pub path: PathBuf,
@@ -247,7 +249,9 @@ fn load_metadata(path: &Path) -> Result<RaceMetadata, Error> {
                 ErrorCode::NothingToDo,
                 format!("no race metadata exists at {}", path.display()),
             )
-            .with_hint("run a race first, or pass --name for the race you want to resume")
+            .with_hint(
+                "run a race first, or pass --name for the race you want to resume or compare",
+            )
         } else {
             Error::new(
                 ErrorCode::Io,
@@ -433,16 +437,7 @@ fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
     let env_templates = parse_env_templates(&metadata.env_templates)?;
     let junit_reports = metadata.junit_reports.clone();
     let options = metadata.options.to_run_options();
-    let lanes: Vec<_> = metadata
-        .lanes
-        .iter()
-        .map(|lane| RaceLane {
-            index: lane.index,
-            fork: lane.fork.clone(),
-            label: lane.label.clone(),
-            path: lane.path.clone(),
-        })
-        .collect();
+    let lanes = lanes_from_metadata(&metadata);
     for lane in &lanes {
         if !lane.path.is_dir() {
             return Err(Error::new(
@@ -464,25 +459,7 @@ fn resume_race(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
             ui::dim(&metadata_path.display().to_string())
         );
     }
-    let completed = metadata
-        .lanes
-        .iter()
-        .filter(|lane| lane.status == RaceLaneStatus::Complete)
-        .map(|lane| {
-            (
-                lane.fork.clone(),
-                LaneRun {
-                    exit_code: lane.exit_code,
-                    duration_ms: lane.duration_ms,
-                    attempts: lane.attempts,
-                    timed_out: lane.timed_out,
-                    canceled: lane.canceled,
-                    tests: lane.tests.clone(),
-                    log_file: lane.log_file.clone(),
-                },
-            )
-        })
-        .collect();
+    let completed = completed_runs_from_metadata(&metadata);
     run_lanes(LaneRunRequest {
         ws,
         name: &race_name,
@@ -564,7 +541,94 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
         exit_by_lane.insert(lane_name, run);
     }
 
-    // Compare lanes against their fork points.
+    let results = lane_results(ws, lanes, &exit_by_lane)?;
+    render_results(name, &results, json, false)
+}
+
+pub fn compare(ws: &Workspace, name: &str, json: bool) -> Result<(), Error> {
+    let metadata_path = race_metadata_path(ws, name);
+    let metadata = load_metadata(&metadata_path)?;
+    let lanes = lanes_from_metadata(&metadata);
+    let runs = recorded_runs_from_metadata(&metadata);
+    let mut results = lane_results(ws, &lanes, &runs)?;
+    rank_results(&mut results);
+
+    if !json {
+        println!(
+            "{} comparing saved race {} from {}",
+            ui::bold("race:"),
+            ui::cyan(&metadata.name),
+            ui::dim(&metadata_path.display().to_string())
+        );
+    }
+    render_results(&metadata.name, &results, json, true)
+}
+
+fn lanes_from_metadata(metadata: &RaceMetadata) -> Vec<RaceLane> {
+    metadata
+        .lanes
+        .iter()
+        .map(|lane| RaceLane {
+            index: lane.index,
+            fork: lane.fork.clone(),
+            label: lane.label.clone(),
+            path: lane.path.clone(),
+        })
+        .collect()
+}
+
+fn recorded_runs_from_metadata(
+    metadata: &RaceMetadata,
+) -> std::collections::HashMap<String, LaneRun> {
+    metadata
+        .lanes
+        .iter()
+        .map(|lane| {
+            (
+                lane.fork.clone(),
+                LaneRun {
+                    exit_code: lane.exit_code,
+                    duration_ms: lane.duration_ms,
+                    attempts: lane.attempts,
+                    timed_out: lane.timed_out,
+                    canceled: lane.canceled || lane.status != RaceLaneStatus::Complete,
+                    tests: lane.tests.clone(),
+                    log_file: lane.log_file.clone(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn completed_runs_from_metadata(
+    metadata: &RaceMetadata,
+) -> std::collections::HashMap<String, LaneRun> {
+    metadata
+        .lanes
+        .iter()
+        .filter(|lane| lane.status == RaceLaneStatus::Complete)
+        .map(|lane| {
+            (
+                lane.fork.clone(),
+                LaneRun {
+                    exit_code: lane.exit_code,
+                    duration_ms: lane.duration_ms,
+                    attempts: lane.attempts,
+                    timed_out: lane.timed_out,
+                    canceled: lane.canceled,
+                    tests: lane.tests.clone(),
+                    log_file: lane.log_file.clone(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn lane_results(
+    ws: &Workspace,
+    lanes: &[RaceLane],
+    exit_by_lane: &std::collections::HashMap<String, LaneRun>,
+) -> Result<Vec<LaneResult>, Error> {
     let compare = ws.fork_compare()?;
     let mut results = Vec::new();
     for lane in lanes {
@@ -582,6 +646,7 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
             });
         let row = compare.iter().find(|r| r.name == lane.fork);
         results.push(LaneResult {
+            rank: None,
             fork: lane.fork.clone(),
             label: lane.label.clone(),
             path: lane.path.clone(),
@@ -597,47 +662,141 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
             log_file: run.log_file,
         });
     }
+    Ok(results)
+}
 
+fn rank_results(results: &mut [LaneResult]) {
+    results.sort_by_key(ranking_key);
+    for (idx, result) in results.iter_mut().enumerate() {
+        result.rank = Some(idx as u64 + 1);
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct RankingKey {
+    outcome: u8,
+    tests: u8,
+    test_failures: u64,
+    test_skipped: u64,
+    files_changed: u64,
+    line_churn: u64,
+    duration_ms: u64,
+    fork: String,
+}
+
+fn ranking_key(result: &LaneResult) -> RankingKey {
+    let test_failures = result
+        .tests
+        .as_ref()
+        .map(|tests| tests.failures + tests.errors)
+        .unwrap_or(0);
+    let test_skipped = result
+        .tests
+        .as_ref()
+        .map(|tests| tests.skipped)
+        .unwrap_or(0);
+    let tests = match (&result.tests, test_failures) {
+        (Some(_), 0) => 0,
+        (None, _) => 1,
+        (Some(_), _) => 2,
+    };
+    RankingKey {
+        outcome: outcome_rank(result),
+        tests,
+        test_failures,
+        test_skipped,
+        files_changed: result.files_changed,
+        line_churn: result.insertions.saturating_add(result.deletions),
+        duration_ms: result.duration_ms,
+        fork: result.fork.clone(),
+    }
+}
+
+fn outcome_rank(result: &LaneResult) -> u8 {
+    if result.canceled {
+        return 4;
+    }
+    if result.timed_out {
+        return 3;
+    }
+    match result.exit_code {
+        Some(0) => 0,
+        Some(_) => 2,
+        None => 3,
+    }
+}
+
+fn render_results(
+    name: &str,
+    results: &[LaneResult],
+    json: bool,
+    ranked: bool,
+) -> Result<(), Error> {
     if json {
         ui::print_json(true, &results);
         return Ok(());
     }
 
-    let mut table = vec![vec![
-        "LANE".to_string(),
-        "LABEL".to_string(),
-        "EXIT".to_string(),
-        "TRIES".to_string(),
-        "TIME".to_string(),
-        "FILES±".to_string(),
-        "+LINES".to_string(),
-        "-LINES".to_string(),
-    ]];
-    for r in &results {
-        let exit = if r.canceled {
-            ui::yellow("canceled")
-        } else if r.timed_out {
-            ui::yellow("timeout")
+    let mut table = if ranked {
+        vec![vec![
+            "RANK".to_string(),
+            "LANE".to_string(),
+            "LABEL".to_string(),
+            "EXIT".to_string(),
+            "TESTS".to_string(),
+            "TRIES".to_string(),
+            "TIME".to_string(),
+            "FILES±".to_string(),
+            "+LINES".to_string(),
+            "-LINES".to_string(),
+        ]]
+    } else {
+        vec![vec![
+            "LANE".to_string(),
+            "LABEL".to_string(),
+            "EXIT".to_string(),
+            "TRIES".to_string(),
+            "TIME".to_string(),
+            "FILES±".to_string(),
+            "+LINES".to_string(),
+            "-LINES".to_string(),
+        ]]
+    };
+    for r in results {
+        if ranked {
+            table.push(vec![
+                r.rank.map(|rank| rank.to_string()).unwrap_or_default(),
+                ui::bold(&r.fork),
+                r.label.clone(),
+                exit_cell(r),
+                tests_cell(r),
+                r.attempts.to_string(),
+                format!("{:.1}s", r.duration_ms as f64 / 1000.0),
+                r.files_changed.to_string(),
+                ui::green(&format!("+{}", r.insertions)),
+                ui::red(&format!("-{}", r.deletions)),
+            ]);
         } else {
-            match r.exit_code {
-                Some(0) => ui::green("0 ✓"),
-                Some(c) => ui::red(&format!("{c} ✗")),
-                None => ui::red("spawn failed"),
-            }
-        };
-        table.push(vec![
-            ui::bold(&r.fork),
-            r.label.clone(),
-            exit,
-            r.attempts.to_string(),
-            format!("{:.1}s", r.duration_ms as f64 / 1000.0),
-            r.files_changed.to_string(),
-            ui::green(&format!("+{}", r.insertions)),
-            ui::red(&format!("-{}", r.deletions)),
-        ]);
+            table.push(vec![
+                ui::bold(&r.fork),
+                r.label.clone(),
+                exit_cell(r),
+                r.attempts.to_string(),
+                format!("{:.1}s", r.duration_ms as f64 / 1000.0),
+                r.files_changed.to_string(),
+                ui::green(&format!("+{}", r.insertions)),
+                ui::red(&format!("-{}", r.deletions)),
+            ]);
+        }
     }
     print!("{}", ui::table(&table));
     println!("\nlogs: {}", ui::dim("<fork>/.asp/race.log"));
+    if ranked {
+        println!(
+            "{}",
+            ui::dim("ranked from saved metadata and current fork diffs; no commands were run")
+        );
+    }
     println!(
         "inspect: {}   promote the winner: {}   clean up: {}",
         ui::cyan("asp diff <#> | git -C <fork-path> diff"),
@@ -645,6 +804,32 @@ fn run_lanes(request: LaneRunRequest<'_>) -> Result<(), Error> {
         ui::cyan(&format!("asp discard {name}-N"))
     );
     Ok(())
+}
+
+fn exit_cell(result: &LaneResult) -> String {
+    if result.canceled {
+        ui::yellow("canceled")
+    } else if result.timed_out {
+        ui::yellow("timeout")
+    } else {
+        match result.exit_code {
+            Some(0) => ui::green("0 ✓"),
+            Some(c) => ui::red(&format!("{c} ✗")),
+            None => ui::red("spawn failed"),
+        }
+    }
+}
+
+fn tests_cell(result: &LaneResult) -> String {
+    let Some(tests) = &result.tests else {
+        return "·".to_string();
+    };
+    let failed = tests.failures + tests.errors;
+    if failed == 0 {
+        ui::green(&format!("{} ok", tests.tests))
+    } else {
+        ui::red(&format!("{failed}/{} failed", tests.tests))
+    }
 }
 
 fn run_lane(
