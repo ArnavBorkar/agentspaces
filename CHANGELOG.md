@@ -73,6 +73,8 @@
   change type in human and JSON output.
 - Fork and race comparison output now includes review signals for tests passed,
   files touched, line churn, and explainable risk markers.
+- `asp review --json` emits a dashboard-ready review packet with workspace
+  status, active fork comparison rows, and a Markdown CI-comment body.
 
 ### Fixed
 
@@ -110,6 +112,8 @@
 - Additive: `asp forks --json` rows and `asp race --json` lane result objects
   include `review` signals for tests passed, touched files, churn, risk score,
   and explicit risk markers. Existing comparison fields are unchanged.
+- Additive: `asp review --json` returns `reviewReport`, a new opt-in result
+  payload for dashboards and CI comments.
 
 ## Automation Contract Rules
 

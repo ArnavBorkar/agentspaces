@@ -117,6 +117,8 @@ enum Cmd {
     },
     /// List forks and compare what each one changed.
     Forks,
+    /// Emit a dashboard/CI-comment review packet for the workspace.
+    Review,
     /// Show what changed between two checkpoints, or a checkpoint and now.
     Diff {
         /// From: #seq or commit prefix.
@@ -322,6 +324,14 @@ struct PolicyValidateReport {
     path: PathBuf,
     valid: bool,
     policy: asp_core::policy::Policy,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ReviewReport {
+    generated_at: String,
+    workspace: asp_core::workspace::StatusReport,
+    forks: Vec<asp_core::workspace::ForkCompareRow>,
+    markdown: String,
 }
 
 fn parse_source(s: &str) -> Result<Source, String> {
@@ -822,6 +832,16 @@ fn run(cli: Cli) -> Result<(), Error> {
                 ui::cyan("asp promote <fork>"),
                 ui::cyan("asp discard <fork>")
             );
+            Ok(())
+        }
+        Cmd::Review => {
+            let ws = open(&cli.dir)?;
+            let report = review_report(&ws)?;
+            if json {
+                ui::print_json(true, &report);
+            } else {
+                print!("{}", report.markdown);
+            }
             Ok(())
         }
         Cmd::Diff { from, to } => {
@@ -1369,9 +1389,78 @@ fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
         + policy.promote.allowed_branch_prefixes.len()
 }
 
-fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {
+fn review_report(ws: &Workspace) -> Result<ReviewReport, Error> {
+    let workspace = ws.status()?;
+    let forks = ws.fork_compare()?;
+    let generated_at = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .map_err(|e| Error::new(ErrorCode::Io, format!("format review timestamp: {e}")))?;
+    let markdown = review_markdown(&workspace, &forks);
+    Ok(ReviewReport {
+        generated_at,
+        workspace,
+        forks,
+        markdown,
+    })
+}
+
+fn review_markdown(
+    workspace: &asp_core::workspace::StatusReport,
+    forks: &[asp_core::workspace::ForkCompareRow],
+) -> String {
+    let last_checkpoint = workspace
+        .last_checkpoint
+        .as_ref()
+        .map(|checkpoint| {
+            let message = checkpoint.message.clone().unwrap_or_default();
+            if message.is_empty() {
+                format!("#{}", checkpoint.seq)
+            } else {
+                format!("#{} {}", checkpoint.seq, message)
+            }
+        })
+        .unwrap_or_else(|| "none".to_string());
+    let mut out = String::new();
+    out.push_str("## agentspaces review\n\n");
+    out.push_str(&format!("- Last checkpoint: {last_checkpoint}\n"));
+    out.push_str(&format!(
+        "- Working tree: {} dirty, {} untracked, {} deleted\n",
+        workspace.dirty_files, workspace.untracked_files, workspace.deleted_files
+    ));
+    out.push_str(&format!("- Active forks: {}\n\n", workspace.active_forks));
+
+    if forks.is_empty() {
+        out.push_str("No active forks.\n");
+        return out;
+    }
+
+    out.push_str("| Fork | Files | Lines | Tests | Risk |\n");
+    out.push_str("| --- | ---: | ---: | --- | --- |\n");
+    for fork in forks {
+        out.push_str(&format!(
+            "| {} | {} | +{} / -{} | {} | {} |\n",
+            markdown_cell(&fork.name),
+            fork.files_changed,
+            fork.insertions,
+            fork.deletions,
+            review_markdown_tests(&fork.review),
+            markdown_cell(&review_risk_label(&fork.review))
+        ));
+    }
+    out
+}
+
+fn review_markdown_tests(review: &asp_core::workspace::ForkReviewSignals) -> &'static str {
+    match review.tests_passed {
+        Some(true) => "pass",
+        Some(false) => "fail",
+        None => "not reported",
+    }
+}
+
+fn review_risk_label(review: &asp_core::workspace::ForkReviewSignals) -> String {
     if review.risk_markers.is_empty() {
-        return ui::green("low");
+        return "low".to_string();
     }
     let label = review
         .risk_markers
@@ -1379,7 +1468,18 @@ fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {
         .map(|marker| marker.kind.as_str())
         .collect::<Vec<_>>()
         .join(",");
-    let cell = format!("{} {}", review.risk_score, label);
+    format!("{} {label}", review.risk_score)
+}
+
+fn markdown_cell(raw: &str) -> String {
+    raw.replace('\n', " ").replace('|', "\\|")
+}
+
+fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {
+    let cell = review_risk_label(review);
+    if review.risk_markers.is_empty() {
+        return ui::green(&cell);
+    }
     if review
         .risk_markers
         .iter()

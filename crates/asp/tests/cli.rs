@@ -147,6 +147,12 @@ fn full_cli_loop() {
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0]["review"]["files_touched"], 1);
     assert!(rows[0]["review"]["tests_passed"].is_null());
+    let review = ok_json(&root, &["review"]);
+    assert_eq!(review["result"]["forks"].as_array().unwrap().len(), 2);
+    assert!(review["result"]["markdown"]
+        .as_str()
+        .unwrap()
+        .contains("| Fork | Files | Lines | Tests | Risk |"));
 
     // discard guard: refuses without --force, json error has code+hint
     let out = asp(&root, &["--json", "discard", "try-1"]);

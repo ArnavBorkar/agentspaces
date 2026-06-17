@@ -59,6 +59,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
+        "cli_review" => include_str!("snapshots/cli_review.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
         "cli_policy_validate" => include_str!("snapshots/cli_policy_validate.json"),
         "cli_error" => include_str!("snapshots/cli_error.json"),
@@ -131,7 +132,7 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         *child = json!("<asp-version>");
                     }
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
-                    "ts" | "generated_at" => *child = json!("<timestamp>"),
+                    "ts" | "generated_at" | "last_activity" => *child = json!("<timestamp>"),
                     "duration_ms" | "store_bytes" | "blob_bytes" | "age_hours"
                         if child.is_number() =>
                     {
@@ -237,6 +238,9 @@ fn cli_json_shapes_match_snapshots() {
         ],
     );
     snapshot("cli_race", normalize(race, &root));
+
+    let review = ok_json(&root, &["review"]);
+    snapshot("cli_review", normalize(review, &root));
 
     let outside = tempfile::tempdir().unwrap();
     let out = asp(outside.path(), &["--json", "status"]);

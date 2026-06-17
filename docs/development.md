@@ -83,6 +83,7 @@ change.
 | `asp restore` | `Workspace::restore` | `workspace_restore` | targeted/full restore tests, path-safety tests |
 | `asp fork` | `Workspace::fork` | `workspace_fork` | fork independence tests, torture fork tests |
 | `asp forks` | `Workspace::fork_compare` | `workspace_forks` | fork comparison tests |
+| `asp review` | CLI status + fork comparison packet | none yet | CLI JSON shape |
 | `asp diff` | `Workspace::diff` | `workspace_diff` | checkpoint/worktree diff tests |
 | `asp promote` | `Workspace::promote` | `workspace_promote` | user-git isolation and branch tests |
 | `asp discard` | `Workspace::discard` | `workspace_discard` | unpromoted-work guard tests |

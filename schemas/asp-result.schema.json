@@ -20,6 +20,7 @@
     { "$ref": "#/$defs/raceLaneResults" },
     { "$ref": "#/$defs/retentionPlan" },
     { "$ref": "#/$defs/restoreReport" },
+    { "$ref": "#/$defs/reviewReport" },
     { "$ref": "#/$defs/schemaReport" },
     { "$ref": "#/$defs/setupReport" },
     { "$ref": "#/$defs/statusReport" },
@@ -720,6 +721,17 @@
             }
           }
         }
+      }
+    },
+    "reviewReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generated_at", "workspace", "forks", "markdown"],
+      "properties": {
+        "generated_at": { "$ref": "#/$defs/dateTime" },
+        "workspace": { "$ref": "#/$defs/statusReport" },
+        "forks": { "$ref": "#/$defs/forkCompareRows" },
+        "markdown": { "type": "string" }
       }
     },
     "setupReport": {

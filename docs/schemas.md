@@ -59,6 +59,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp restore --json` | `#/$defs/restoreReport` |
 | `asp fork --json` | `#/$defs/forkInfos` |
 | `asp forks --json` | `#/$defs/forkCompareRows` |
+| `asp review --json` | `#/$defs/reviewReport` |
 | `asp diff --json` | `#/$defs/diffReport` |
 | `asp promote --json` | `#/$defs/promoteReport` |
 | `asp discard --json` | `#/$defs/discardResult` |
@@ -87,6 +88,10 @@ the per-path detail for exact review tooling.
 `asp forks --json` rows and `asp race --json` lane results may include `review`
 signals with `tests_passed`, touched-file and line-churn counts, a numeric
 `risk_score`, and explicit `risk_markers` for review dashboards.
+
+`asp review --json` returns a dashboard-oriented review packet containing the
+current workspace status, active fork comparison rows, and a Markdown summary
+that can be posted as a CI comment without embedding source code.
 
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,
