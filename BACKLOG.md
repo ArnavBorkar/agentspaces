@@ -137,7 +137,7 @@
   - [ ] T10.1.3 Add an SBOM artifact to every release.
 - **S10.2 Dependency governance**
   - [x] T10.2.1 Add cargo-deny for advisories, licenses, bans, and duplicate dependency policy.
-  - [ ] T10.2.2 Add a scheduled dependency audit workflow with clear maintainer runbooks.
+  - [x] T10.2.2 Add a scheduled dependency audit workflow with clear maintainer runbooks.
 
 ## EPIC 11 — Installer and package distribution
 

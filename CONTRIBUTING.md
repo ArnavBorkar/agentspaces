@@ -21,6 +21,8 @@ cargo deny check                # install with: cargo install --locked cargo-den
 
 CI runs all of the above on macOS and Linux, plus cargo-deny dependency policy and the FICLONE reflink path on a real btrfs volume.
 
+Dependency policy and triage are documented in [docs/dependency-governance.md](docs/dependency-governance.md).
+
 ## Changing the on-disk format
 
 `.asp/format-version` is a contract. Additive JSON fields are fine; anything else needs a version bump, a migration note in [docs/design/format.md](docs/design/format.md), and discussion in an issue first.

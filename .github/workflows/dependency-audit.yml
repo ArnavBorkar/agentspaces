@@ -1,0 +1,23 @@
+name: Dependency audit
+
+on:
+  schedule:
+    # Mondays at 09:17 UTC. The odd minute avoids top-of-hour queue spikes.
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: "1.85.0"
+          manifest-path: ./Cargo.toml
+          command: check
+          arguments: --all-features
