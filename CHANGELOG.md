@@ -1,5 +1,28 @@
 # Changelog
 
+## Automation Contract Rules
+
+CLI `--json` envelopes, CLI result payloads, MCP `structuredContent`, MCP tool
+errors, and `error.code` values are automation contracts. Any release that
+changes them must include an **Automation contract** note.
+
+Classify changes this way:
+
+- **Additive:** new optional fields, new commands or tools, new result variants,
+  new schema entries, or additional diagnostic detail that existing clients can
+  ignore. Changelog note: list the field/tool/schema and whether clients need to
+  opt in.
+- **Breaking:** removed or renamed fields, changed field types, changed
+  nullability, changed envelope shape, changed closed enum values, changed
+  meaning of an existing value, or different MCP tool error wrapping. Changelog
+  note: put it under **Breaking**, name the old and new shapes, include a
+  migration step, and bump the affected schema version reported by
+  `asp schema --json`.
+
+Every automation-contract change must update [docs/schemas.md](docs/schemas.md),
+the files under [schemas/](schemas/), and the JSON snapshot test baselines in
+`crates/asp/tests/snapshots/`.
+
 ## v0.1.1 — 2026-06-11
 
 **Fix (restore correctness on case-insensitive filesystems):** full restore now deletes

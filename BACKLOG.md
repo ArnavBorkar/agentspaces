@@ -317,7 +317,7 @@
   - [x] T25.1.3 Add snapshot tests that prevent accidental JSON shape drift.
 - **S25.2 Versioning**
   - [x] T25.2.1 Add `asp schema` command to print supported schema versions.
-  - [ ] T25.2.2 Add changelog rules for breaking vs additive JSON changes.
+  - [x] T25.2.2 Add changelog rules for breaking vs additive JSON changes.
 
 ## EPIC 26 — Race workflow upgrades
 
