@@ -42,6 +42,30 @@ jobs:
       - name: Test (includes kill -9 torture suite)
         run: cargo test --workspace
 
+  windows-unsupported:
+    name: windows unsupported gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build workspace
+        run: cargo build --workspace
+      - name: Unit guard reports intentional unsupported platform
+        run: cargo test -p asp-core windows_fails_with_actionable_hint
+      - name: CLI guard reports unsupported_platform
+        shell: pwsh
+        run: |
+          $env:NO_COLOR = "1"
+          & .\target\debug\asp.exe --json init > asp-windows.json
+          if ($LASTEXITCODE -eq 0) {
+            Get-Content asp-windows.json
+            throw "asp init unexpectedly succeeded on Windows"
+          }
+          Get-Content asp-windows.json
+          Select-String -Path asp-windows.json -Pattern '"code": "unsupported_platform"'
+          Select-String -Path asp-windows.json -Pattern 'WSL2'
+
   linux-reflink:
     name: linux reflink path (btrfs)
     runs-on: ubuntu-latest

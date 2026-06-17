@@ -14,7 +14,7 @@ The CLI reports `unsupported_platform` on Windows with a hint to use WSL2 and
 track native support through the
 [Windows issue list](https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows).
 
-Before native Windows is marked supported, the project needs CI that proves one
-of two intentional outcomes: either the workspace builds and the Windows support
-suite passes, or the binary fails early with the documented `unsupported_platform`
-error.
+CI includes a Windows unsupported gate. It builds the workspace, runs the
+Windows-specific unit guard, and checks that `asp init --json` exits nonzero with
+the documented `unsupported_platform` code and WSL2 hint. Before native Windows
+is marked supported, that job must be replaced by a real Windows behavior suite.
