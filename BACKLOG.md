@@ -278,7 +278,7 @@
 - **S22.1 Local metrics**
   - [x] T22.1.1 Add `asp stats` for store size, checkpoint count, fork count, blob count, and last operation timings.
   - [x] T22.1.2 Add `asp stats --json` for scripts and CI.
-  - [ ] T22.1.3 Add per-command timing fields to journal entries where missing.
+  - [x] T22.1.3 Add per-command timing fields to journal entries where missing.
 - **S22.2 Diagnostics bundles**
   - [ ] T22.2.1 Add `asp diagnostics` that redacts paths/secrets by default.
   - [ ] T22.2.2 Add docs for attaching diagnostics to issues safely.

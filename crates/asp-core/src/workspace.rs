@@ -862,6 +862,7 @@ impl Workspace {
         paths: &[String],
         source: Option<Source>,
     ) -> Result<RestoreReport> {
+        let t0 = Instant::now();
         let _lock = StoreLock::acquire(&self.layout)?;
         self.journal.heal()?;
         let (target_seq, target_commit) = self.resolve_checkpoint(spec)?;
@@ -1034,6 +1035,7 @@ impl Workspace {
 
         let mut entry = Entry::new(Op::Restore);
         entry.source = source;
+        entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
         entry.detail = Some(serde_json::json!({
             "target_seq": target_seq,
             "target_commit": target_commit,
@@ -1262,6 +1264,7 @@ impl Workspace {
         let fork_journal = Journal::new(fork_layout.journal());
         let mut fe = Entry::new(Op::Fork);
         fe.source = source.clone();
+        fe.duration_ms = Some(t0.elapsed().as_millis() as u64);
         fe.detail = Some(serde_json::json!({
             "role": "child", "name": name, "fork_point_seq": fork_point_seq,
             "parent_workspace": self.meta.id,
@@ -1279,6 +1282,7 @@ impl Workspace {
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Fork);
         entry.source = source;
+        entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
         entry.detail = Some(serde_json::json!({
             "role": "parent", "name": name, "path": dst,
             "fork_point_seq": fork_point_seq, "method": method,
@@ -1445,6 +1449,7 @@ impl Workspace {
     /// Land a fork's work as an ordinary branch in the user's git repo.
     /// Never touches HEAD, never force-pushes, never runs user hooks.
     pub fn promote(&self, fork_name: &str, branch: Option<String>) -> Result<PromoteReport> {
+        let t0 = Instant::now();
         let _lock = StoreLock::acquire(&self.layout)?;
         let mut registry = self.fork_registry()?;
         let rec = registry
@@ -1503,6 +1508,7 @@ impl Workspace {
         rec.status = ForkStatus::Promoted;
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Promote);
+        entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
         entry.detail = Some(serde_json::json!({
             "fork": fork_name, "branch": branch, "commit": commit,
         }));
@@ -1518,6 +1524,7 @@ impl Workspace {
     // -------------------------------------------------------------- discard
 
     pub fn discard(&self, fork_name: &str, force: bool) -> Result<()> {
+        let t0 = Instant::now();
         let _lock = StoreLock::acquire(&self.layout)?;
         let mut registry = self.fork_registry()?;
         let rec = registry
@@ -1556,6 +1563,7 @@ impl Workspace {
         rec.status = ForkStatus::Discarded;
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Discard);
+        entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
         entry.detail = Some(serde_json::json!({ "fork": fork_name, "forced": force }));
         self.journal.append(&entry)?;
         Ok(())

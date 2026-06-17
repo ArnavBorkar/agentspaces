@@ -84,12 +84,57 @@ fn stats_reports_local_store_counts() {
     assert_eq!(stats.forks_promoted, 0);
     assert_eq!(stats.forks_discarded, 0);
     assert_eq!(stats.last_operation.as_ref().unwrap().op, Op::Fork);
+    assert!(stats.last_operation.as_ref().unwrap().duration_ms.is_some());
     assert!(stats
         .recent_operations
         .iter()
         .any(|op| op.op == Op::Checkpoint && op.duration_ms.is_some()));
     assert!(stats.store_bytes >= initial.store_bytes);
     assert!(fork.path.exists());
+}
+
+#[test]
+fn mutating_journal_entries_include_durations() {
+    let (_tmp, root) = project();
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "u@example.com"]);
+    git(&["config", "user.name", "U"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "init"]);
+
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    write(&root, "src/main.rs", "changed\n");
+    cp(&ws, "changed").unwrap();
+    ws.restore("1", &[], None).unwrap();
+    let fork = ws.fork(Some("timed".into()), None).unwrap();
+    write(&fork.path, "timed.txt", "promote me\n");
+    ws.promote("timed", Some("asp/timed".into())).unwrap();
+    ws.discard("timed", false).unwrap();
+
+    let entries = ws.journal().read().unwrap().entries;
+    for op in [Op::Restore, Op::Fork, Op::Promote, Op::Discard] {
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.op == op && entry.duration_ms.is_some()),
+            "missing duration for {op:?}: {entries:?}"
+        );
+    }
 }
 
 #[test]
