@@ -95,6 +95,8 @@
   metadata before users or agents run `asp doctor --fix`.
 - `docs/design/sync-protocol.md` defines the first BYO-bucket sync protocol
   for immutable git objects, CAS blobs, conditional refs, and conflicts.
+- `asp-core` now includes a deterministic local filesystem sync remote with
+  safe key validation, immutable puts, reads, and sorted listing.
 
 ### Fixed
 

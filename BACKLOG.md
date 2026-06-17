@@ -253,7 +253,7 @@
 
 - **S20.1 Sync design**
   - [x] T20.1.1 Write the sync protocol design for immutable objects, CAS blobs, refs, and conflict handling.
-  - [ ] T20.1.2 Add a local filesystem remote implementation for deterministic tests.
+  - [x] T20.1.2 Add a local filesystem remote implementation for deterministic tests.
   - [ ] T20.1.3 Add conditional-write semantics to the remote trait.
 - **S20.2 First sync command**
   - [ ] T20.2.1 Add `asp sync push` for checkpoints and blobs to a local remote.

@@ -13,6 +13,7 @@ pub mod gitx;
 pub mod journal;
 pub mod policy;
 pub mod store;
+pub mod sync;
 pub mod workspace;
 
 pub use error::{Error, ErrorCode, Result};
