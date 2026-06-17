@@ -22,6 +22,7 @@ cargo deny check                # install with: cargo install --locked cargo-den
 CI runs all of the above on macOS and Linux, plus cargo-deny dependency policy and the FICLONE reflink path on a real btrfs volume.
 
 Dependency policy and triage are documented in [docs/dependency-governance.md](docs/dependency-governance.md).
+The contributor command map and focused test guide live in [docs/development.md](docs/development.md).
 
 ## Changing the on-disk format
 

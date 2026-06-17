@@ -300,7 +300,7 @@
 **Done when:** outside contributors can find good first issues, run the right tests, and avoid trust-model mistakes.
 
 - **S24.1 Development docs**
-  - [ ] T24.1.1 Add `docs/development.md` with architecture map, command map, and test guide.
+  - [x] T24.1.1 Add `docs/development.md` with architecture map, command map, and test guide.
   - [ ] T24.1.2 Add module-level ownership notes for `asp-core` vs CLI/MCP code.
   - [ ] T24.1.3 Add a PR checklist aligned with crash safety, JSON output, hints, and docs.
 - **S24.2 Issue flow**
