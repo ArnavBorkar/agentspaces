@@ -14,9 +14,13 @@
   test outcomes in JSON results.
 - `asp race compare --name <race>` re-ranks saved race lanes without rerunning
   lane commands.
+- `docs/evaluation.md` gives teams a 30-minute pilot guide with explicit
+  success criteria and go/no-go signals.
 
 ### Fixed
 
+- Checkpoint staging preserves case-only path renames on case-insensitive
+  filesystems by removing stale index spellings before adding the real path.
 - Shadow-git commands retry transient index-lock collisions left by killed git
   subprocesses during crash recovery.
 

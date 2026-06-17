@@ -18,6 +18,16 @@ fn read(root: &Path, rel: &str) -> String {
     std::fs::read_to_string(root.join(rel)).unwrap()
 }
 
+fn child_names(root: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(root)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .collect();
+    names.sort();
+    names
+}
+
 /// Project dir with a few files, inside a fresh tempdir.
 fn project() -> (tempfile::TempDir, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
@@ -925,5 +935,28 @@ fn restore_handles_case_only_renames() {
     // Round-trip back to the lowercase state too (explicit restore — undo
     // correctly walks BACKWARD from the restored position, not forward).
     ws.restore("2", &[], None).unwrap();
+    assert!(child_names(&root).contains(&"l".to_string()));
+    assert!(!child_names(&root).contains(&"L".to_string()));
     assert_eq!(read(&root, "l/a"), "lower content\n");
+}
+
+#[test]
+fn restore_handles_top_level_case_only_renames() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    write(&root, "U", "upper content\n");
+    let c1 = cp(&ws, "upper").unwrap();
+
+    std::fs::remove_file(root.join("U")).unwrap();
+    write(&root, "u", "lower content\n");
+    cp(&ws, "lower").unwrap();
+
+    ws.restore(&c1.seq.to_string(), &[], None).unwrap();
+    assert!(child_names(&root).contains(&"U".to_string()));
+    assert!(!child_names(&root).contains(&"u".to_string()));
+    assert_eq!(read(&root, "U"), "upper content\n");
+    ws.restore("2", &[], None).unwrap();
+    assert!(child_names(&root).contains(&"u".to_string()));
+    assert!(!child_names(&root).contains(&"U".to_string()));
+    assert_eq!(read(&root, "u"), "lower content\n");
 }

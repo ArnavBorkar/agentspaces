@@ -336,7 +336,7 @@
 **Done when:** teams can evaluate agentspaces with clear workflows, risks, and migration paths.
 
 - **S27.1 Evaluation guides**
-  - [ ] T27.1.1 Add a 30-minute team evaluation guide with success criteria.
+  - [x] T27.1.1 Add a 30-minute team evaluation guide with success criteria.
   - [ ] T27.1.2 Add playbooks for bug-fix fleets, test-generation races, docs generation, and CI repair.
   - [ ] T27.1.3 Add a trust-model whitepaper suitable for security review.
 - **S27.2 Operations docs**

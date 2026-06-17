@@ -236,6 +236,10 @@ struct ScanResult {
     /// worktree differs from the index for it (index-only changes — e.g.
     /// staged deletions after a restore's read-tree — need no `git add`).
     changed: Vec<(String, bool)>,
+    /// Index paths whose on-disk spelling changed only by case. Remove the
+    /// stale spelling before `git add`, or case-insensitive filesystems keep
+    /// the old tree entry while updating only the blob content.
+    case_index_removals: Vec<String>,
     bigfiles: BigFiles,
     /// Paths with non-UTF-8 names exist (legal on Linux): they cannot ride
     /// a UTF-8 pathspec, so staging falls back to a full `git add -A .`.
@@ -721,6 +725,7 @@ impl Workspace {
     fn stage_tree(&self) -> Result<(String, BigFiles)> {
         let ScanResult {
             changed,
+            case_index_removals,
             bigfiles,
             force_full_scan,
         } = self.scan_changes()?;
@@ -745,6 +750,14 @@ impl Workspace {
         // Stage what changed. Above the threshold a full scan is cheaper
         // than a giant pathspec; big files never go through `add`.
         const FULL_SCAN_THRESHOLD: usize = 2000;
+        if !case_index_removals.is_empty() {
+            let rm_input: String = case_index_removals
+                .iter()
+                .map(|path| format!("0 {}\t{path}\n", "0".repeat(40)))
+                .collect();
+            self.shadow
+                .run_with_stdin(&["update-index", "--index-info"], &rm_input)?;
+        }
         let to_add: Vec<&str> = changed
             .iter()
             .filter(|(p, needs_add)| *needs_add && !bigfiles.files.contains_key(p.as_str()))
@@ -826,6 +839,7 @@ impl Workspace {
             .shadow
             .run_raw(&["status", "--porcelain", "-z", "-uall"])?;
         let mut changed: Vec<(String, bool)> = Vec::new();
+        let mut case_index_removals = Vec::new();
         let mut force_full_scan = false;
         let mut iter = raw.split(|&b| b == 0).filter(|s| !s.is_empty());
         while let Some(entry) = iter.next() {
@@ -836,7 +850,7 @@ impl Workspace {
             // Y != ' ' means the worktree differs from the index; '??' is
             // untracked. Everything else is already staged in the index.
             let needs_add = xy == b"??" || xy[1] != b' ';
-            let Ok(path) = std::str::from_utf8(&entry[3..]).map(str::to_string) else {
+            let Ok(mut path) = std::str::from_utf8(&entry[3..]).map(str::to_string) else {
                 // Non-UTF-8 filename: git itself handles the raw bytes via a
                 // full-tree add; it just can't ride our pathspec.
                 force_full_scan = true;
@@ -845,6 +859,14 @@ impl Workspace {
                 }
                 continue;
             };
+            if needs_add {
+                if let Some(actual) = actual_worktree_case(&self.layout.root, &path) {
+                    if actual != path {
+                        case_index_removals.push(path);
+                        path = actual;
+                    }
+                }
+            }
             if xy.contains(&b'R') || xy.contains(&b'C') {
                 // Rename/copy: the following record is the source path; its
                 // staged deletion is already in the index.
@@ -941,6 +963,7 @@ impl Workspace {
         }
         Ok(ScanResult {
             changed,
+            case_index_removals,
             bigfiles: bf,
             force_full_scan,
         })
@@ -2221,6 +2244,35 @@ fn dir_file_bytes(root: &Path) -> Result<u64> {
         }
     }
     Ok(bytes)
+}
+
+fn actual_worktree_case(root: &Path, rel: &str) -> Option<String> {
+    let mut dir = root.to_path_buf();
+    let mut actual_parts = Vec::new();
+    for component in Path::new(rel).components() {
+        let std::path::Component::Normal(wanted) = component else {
+            return None;
+        };
+        let mut found = None;
+        for entry in std::fs::read_dir(&dir).ok()?.filter_map(|entry| entry.ok()) {
+            let name = entry.file_name();
+            if name.as_os_str() == wanted {
+                found = Some(name);
+                break;
+            }
+            if found.is_none()
+                && name
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&wanted.to_string_lossy())
+            {
+                found = Some(name);
+            }
+        }
+        let name = found?;
+        dir.push(&name);
+        actual_parts.push(name.to_string_lossy().to_string());
+    }
+    Some(actual_parts.join("/"))
 }
 
 /// Run git in the USER repo (their config applies; we only add safety flags).
