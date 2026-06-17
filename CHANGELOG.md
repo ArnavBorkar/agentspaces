@@ -93,6 +93,8 @@
   for every health finding.
 - `asp doctor --json` now previews safe automatic repairs with `repair_plan`
   metadata before users or agents run `asp doctor --fix`.
+- `docs/design/sync-protocol.md` defines the first BYO-bucket sync protocol
+  for immutable git objects, CAS blobs, conditional refs, and conflicts.
 
 ### Fixed
 

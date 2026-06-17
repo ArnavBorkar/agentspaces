@@ -252,7 +252,7 @@
 **Done when:** the local format can sync to user-owned object storage without custody, hidden telemetry, or lock-in.
 
 - **S20.1 Sync design**
-  - [ ] T20.1.1 Write the sync protocol design for immutable objects, CAS blobs, refs, and conflict handling.
+  - [x] T20.1.1 Write the sync protocol design for immutable objects, CAS blobs, refs, and conflict handling.
   - [ ] T20.1.2 Add a local filesystem remote implementation for deterministic tests.
   - [ ] T20.1.3 Add conditional-write semantics to the remote trait.
 - **S20.2 First sync command**

@@ -122,7 +122,8 @@ write-to-temp + atomic rename, under the lock.
 
 Loose objects, CAS blobs, and refs-as-files are all content-addressed or tiny; a future sync
 engine maps them onto S3/R2 with conditional writes (refs) + immutable puts (objects/blobs).
-Capability-token fields (`scope`, `ttl`) are reserved in workspace.json but unenforced in v1.
+The first protocol is sketched in [sync-protocol.md](sync-protocol.md). Capability-token fields
+(`scope`, `ttl`) are reserved in workspace.json but unenforced in v1.
 
 ## Versioning
 
