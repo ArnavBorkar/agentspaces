@@ -7,6 +7,7 @@
 pub mod blobs;
 pub mod config;
 pub mod error;
+pub mod file_state;
 pub mod fork;
 pub mod gitx;
 pub mod journal;

@@ -113,6 +113,38 @@ fn init_checkpoint_log_roundtrip() {
 }
 
 #[test]
+fn checkpoint_maintains_rebuildable_file_state_index() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    let c1 = cp(&ws, "base").unwrap();
+    let index_path = root.join(".asp/file-state.json");
+
+    let index: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+    assert_eq!(index["v"], 1);
+    assert_eq!(index["head"], c1.commit);
+    assert!(index["entries"]["src/main.rs"]["mtime_ms"].is_number());
+    assert!(index["entries"].get(".asp/format-version").is_none());
+
+    std::fs::write(&index_path, b"{").unwrap();
+    assert!(cp(&ws, "noop").is_none());
+    let rebuilt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+    assert_eq!(rebuilt["head"], c1.commit);
+    assert!(rebuilt["entries"]["README.md"]["size"].is_number());
+
+    write(
+        &root,
+        "src/main.rs",
+        "fn main() { println!(\"indexed\"); }\n",
+    );
+    let c2 = cp(&ws, "change").unwrap();
+    let updated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+    assert_eq!(updated["head"], c2.commit);
+}
+
+#[test]
 fn retention_plan_retains_latest_and_active_fork_points() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();

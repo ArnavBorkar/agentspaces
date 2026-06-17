@@ -49,6 +49,9 @@ impl Layout {
     pub fn journal(&self) -> PathBuf {
         self.asp.join("journal.jsonl")
     }
+    pub fn file_state_index(&self) -> PathBuf {
+        self.asp.join("file-state.json")
+    }
     pub fn blobs(&self) -> PathBuf {
         self.asp.join("blobs")
     }

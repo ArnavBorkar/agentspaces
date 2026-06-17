@@ -65,6 +65,8 @@
   binary repositories, deep trees, and rename-heavy workloads.
 - `asp bench self` reports local platform and filesystem capabilities relevant
   to fork/checkpoint benchmarks.
+- Checkpoints now maintain a rebuildable `.asp/file-state.json` path stamp
+  cache with crash-safe atomic writes.
 
 ### Fixed
 

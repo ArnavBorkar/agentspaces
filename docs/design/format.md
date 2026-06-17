@@ -13,6 +13,7 @@
     lock                           # advisory exclusive lock for mutations (fs2)
     shadow.git/                    # bare git dir — the checkpoint store
     shadow.index                   # git index for the shadow repo
+    file-state.json                # optional rebuildable file stamp cache
     journal.jsonl                  # append-only operation journal, CRC-prefixed lines
     blobs/                         # large-file CAS: files named <blake3-hex> (CoW'd in)
     forks.json                     # fork registry (atomic-rename updates)
@@ -68,6 +69,21 @@ Files larger than `capture.blob_threshold_mb` (default 50) are not stored as git
 
 Restore reverses it: `checkout-index`, then clonefile CAS → real path for each pointer.
 CAS entries are immutable; garbage collection only via `asp doctor --gc` (post-v1).
+
+## File-state cache
+
+`.asp/file-state.json` is a rebuildable checkpoint cache:
+
+```json
+{"v":1,"head":"<checkpoint-commit>","entries":{"src/app.rs":{"kind":"file","size":123,"mtime_ms":1780000000000}}}
+```
+
+The engine writes it with temp-file + fsync + atomic rename after checkpoints,
+and refreshes it opportunistically on no-op checkpoints when it is missing,
+stale, or corrupt. It is never authoritative: deleting or corrupting it must not
+affect stock-git recovery, checkpoint refs, CAS blobs, or the journal. Because
+it is optional and rebuildable, adding fields to this cache does not require an
+on-disk format-version bump.
 
 ## Journal
 

@@ -13,6 +13,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use crate::blobs::{self, BigFiles, Manifest, ManifestEntry};
 use crate::config::Config;
 use crate::error::{Error, ErrorCode, Result};
+use crate::file_state::{self, FileStateEntry, FileStateIndex, FILE_STATE_VERSION};
 use crate::fork::{clone_tree, CloneMethod};
 use crate::gitx::Shadow;
 use crate::journal::{Entry, Journal, Op, Source};
@@ -785,6 +786,7 @@ impl Workspace {
         let (tree, bigfiles) = self.stage_tree()?;
         if let Some(ref p) = parent {
             if self.shadow.tree_of(p)? == tree {
+                let _ = self.refresh_file_state_index_if_needed(p);
                 return Ok(None);
             }
         }
@@ -839,6 +841,7 @@ impl Workspace {
         entry.detail = Some(serde_json::json!({ "paths": changed_paths }));
         self.journal.append(&entry)?;
         self.shadow.update_ref(HEAD_REF, &commit)?;
+        let _ = self.write_file_state_index(&commit);
 
         // Large captures leave tens of thousands of loose objects, which
         // makes whole-tree fork clones pay for every inode. Repack once so
@@ -854,6 +857,34 @@ impl Workspace {
             duration_ms: t0.elapsed().as_millis() as u64,
             message,
         }))
+    }
+
+    fn refresh_file_state_index_if_needed(&self, head: &str) -> Result<()> {
+        let path = self.layout.file_state_index();
+        match file_state::load(&path) {
+            Ok(index) if index.v == FILE_STATE_VERSION && index.head == head => Ok(()),
+            _ => self.write_file_state_index(head),
+        }
+    }
+
+    fn write_file_state_index(&self, head: &str) -> Result<()> {
+        let raw = self
+            .shadow
+            .run_raw(&["ls-tree", "-r", "-z", "--name-only", head])?;
+        let mut index = FileStateIndex::new(head);
+        for path in paths_from_nul(&raw) {
+            let abs = crate::store::safe_rel_path(&self.layout.root, &path)?;
+            match std::fs::symlink_metadata(&abs) {
+                Ok(md) => {
+                    index
+                        .entries
+                        .insert(path, FileStateEntry::from_metadata(&md));
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        file_state::save(&self.layout.file_state_index(), &index)
     }
 
     /// Pointer-aware staging: one status scan drives change detection, big-
