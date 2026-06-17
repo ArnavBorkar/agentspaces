@@ -111,6 +111,250 @@
 - [x] T8.3 Adversarial review: 28 agents / 5 dimensions / 0 refuted → 4 unique criticals + 12 majors + 17 minors confirmed (docs/design/review-findings-v0.1.json); ALL criticals+majors fixed in 2 waves with regression tests (shrink data-loss, promote .asp leak, store path traversal, doctor rm -rf safety via Pending intent journaling, undo ping-pong, status big-file blindness, journal read/heal race, CAS TOCTOU, non-UTF8 filenames, musl static builds, git 2.32 gate, .env docs honesty, +more)
 - [x] T8.4 Final gate PASSED: full suite + torture green locally and in CI (incl. btrfs reflink assert); **v0.1.0 tagged and released** — 4 targets built (macOS arm64/x86_64, Linux x86_64/aarch64 musl static), checksums verified, downloaded artifact smoke-tested end-to-end
 
+## Enterprise adoption roadmap (100 concrete tasks)
+
+**PM intent:** Turn the strong local engine into a high-adoption open-source project that teams can trust, operate, extend, and recommend. These are post-v0.1 tasks; each implementation task must include tests, docs when user-facing, and a commit pushed after validation.
+
+## EPIC 9 — Public repo readiness and positioning
+
+**Done when:** a new contributor can understand the project without internal strategy residue, competitor framing, or private-launch ambiguity.
+
+- **S9.1 Public narrative**
+  - [x] T9.1.1 Remove or rewrite internal market-research artifacts that make the repo read like a derivative project.
+  - [x] T9.1.2 Keep the product brief focused on agentspaces principles, trust boundaries, and v1 scope.
+  - [ ] T9.1.3 Add a one-page architecture overview for first-time contributors.
+- **S9.2 Launch hygiene**
+  - [ ] T9.2.1 Verify all README claims map to reproducible docs, tests, or benchmark scripts.
+  - [ ] T9.2.2 Add a release-readiness checklist for public visibility flips, package publication, and post-launch triage.
+
+## EPIC 10 — Supply-chain and release trust
+
+**Done when:** enterprise users can verify what they download, audit dependencies, and reproduce release artifacts.
+
+- **S10.1 Artifact integrity**
+  - [ ] T10.1.1 Sign release checksums with cosign or minisign and document verification.
+  - [ ] T10.1.2 Publish provenance attestations for release artifacts.
+  - [ ] T10.1.3 Add an SBOM artifact to every release.
+- **S10.2 Dependency governance**
+  - [ ] T10.2.1 Add cargo-deny for advisories, licenses, bans, and duplicate dependency policy.
+  - [ ] T10.2.2 Add a scheduled dependency audit workflow with clear maintainer runbooks.
+
+## EPIC 11 — Installer and package distribution
+
+**Done when:** users can install asp from standard channels without weakening the no-sudo, verifiable install path.
+
+- **S11.1 Package channels**
+  - [ ] T11.1.1 Publish to crates.io with package metadata, categories, keywords, and README validation.
+  - [ ] T11.1.2 Create a Homebrew tap formula with checksum verification.
+  - [ ] T11.1.3 Add an npm/npx wrapper that downloads verified native binaries.
+- **S11.2 Installer resilience**
+  - [ ] T11.2.1 Add installer tests for macOS arm64/x86_64 and Linux x86_64/aarch64 selection.
+  - [ ] T11.2.2 Add checksum failure, unsupported platform, and offline-mode diagnostics.
+
+## EPIC 12 — Cross-harness integrations
+
+**Done when:** agentspaces works naturally across major coding-agent harnesses through explicit setup commands and tested docs.
+
+- **S12.1 Codex integration**
+  - [ ] T12.1.1 Add `asp setup codex` that writes documented MCP/config entries without clobbering user settings.
+  - [ ] T12.1.2 Add hook or wrapper guidance for Codex file and shell checkpoints where supported.
+  - [ ] T12.1.3 Add an end-to-end Codex setup smoke test using a temporary HOME.
+- **S12.2 Other harnesses**
+  - [ ] T12.2.1 Add `asp setup opencode` with idempotent install/remove behavior.
+  - [ ] T12.2.2 Add generic MCP client instructions and schema examples for unsupported harnesses.
+
+## EPIC 13 — MCP maturity
+
+**Done when:** the MCP server is discoverable, well-specified, robust under bad clients, and pleasant for models.
+
+- **S13.1 Protocol completeness**
+  - [ ] T13.1.1 Add MCP capability metadata, server version, and tool schema snapshots.
+  - [ ] T13.1.2 Add tests for malformed JSON-RPC, unknown ids, bad params, and partial lines.
+  - [ ] T13.1.3 Add stable error-code documentation for all MCP tools.
+- **S13.2 Model ergonomics**
+  - [ ] T13.2.1 Add tool descriptions with examples of when not to call destructive operations.
+  - [ ] T13.2.2 Add a replayable transcript test that asserts model-facing outputs stay concise and actionable.
+
+## EPIC 14 — Team policy and governance
+
+**Done when:** teams can encode local workspace rules without a hosted control plane.
+
+- **S14.1 Policy file**
+  - [ ] T14.1.1 Add `.asp/policy.toml` with schema, validation, and helpful errors.
+  - [ ] T14.1.2 Support policy for max fork count, max checkpoint age, protected paths, and promote requirements.
+  - [ ] T14.1.3 Add `asp policy validate --json`.
+- **S14.2 Enforcement**
+  - [ ] T14.2.1 Enforce protected path prompts or hard blocks for promote and restore.
+  - [ ] T14.2.2 Add tests proving invalid policy cannot make destructive operations less safe.
+
+## EPIC 15 — Audit, retention, and compliance exports
+
+**Done when:** a team can answer who changed what, when, with which tool, and export evidence without a SaaS dependency.
+
+- **S15.1 Audit views**
+  - [ ] T15.1.1 Add `asp audit` with filters for session, tool, operation, path, and time range.
+  - [ ] T15.1.2 Add JSONL and CSV export formats for audit events.
+  - [ ] T15.1.3 Add checkpoint-to-path attribution for changed files in audit output.
+- **S15.2 Retention**
+  - [ ] T15.2.1 Add configurable checkpoint retention policies with dry-run output.
+  - [ ] T15.2.2 Add tests proving retention never removes reachable promoted or recovery-required data.
+
+## EPIC 16 — Large repository performance
+
+**Done when:** performance claims remain honest and improve for monorepos with many files, large blobs, and hook storms.
+
+- **S16.1 Measurement**
+  - [ ] T16.1.1 Add benchmark baselines to CI as non-blocking trend artifacts.
+  - [ ] T16.1.2 Add benchmark fixtures for many small files, large binaries, deep trees, and rename-heavy workloads.
+  - [ ] T16.1.3 Add a `asp bench self` command that reports local filesystem capabilities.
+- **S16.2 Optimizations**
+  - [ ] T16.2.1 Add a persistent file-state index guarded by crash-safe writes.
+  - [ ] T16.2.2 Add regression tests for no-op checkpoint latency and changed-path staging behavior.
+
+## EPIC 17 — Diff and review excellence
+
+**Done when:** humans can compare agent attempts quickly enough that best-of-N becomes a daily workflow.
+
+- **S17.1 Better summaries**
+  - [ ] T17.1.1 Add path-grouped diff summaries with counts by language and change type.
+  - [ ] T17.1.2 Add fork comparison scoring hooks for tests passed, files touched, and risk markers.
+  - [ ] T17.1.3 Add JSON output suitable for dashboards and CI comments.
+- **S17.2 Review artifacts**
+  - [ ] T17.2.1 Add `asp diff --patch` and `--stat` modes for checkpoint and fork comparisons.
+  - [ ] T17.2.2 Add HTML diff export for offline review.
+
+## EPIC 18 — Promote-to-PR workflow
+
+**Done when:** a winning fork can become a normal reviewable branch or draft PR with minimal friction and no history surprises.
+
+- **S18.1 Branch polish**
+  - [ ] T18.1.1 Add configurable branch naming templates for promote.
+  - [ ] T18.1.2 Add promote output that clearly states the fork directory remains on disk and how to clean it.
+  - [ ] T18.1.3 Add tests for protected branch-name collisions and unsafe ref names.
+- **S18.2 GitHub flow**
+  - [ ] T18.2.1 Add `asp promote --push` with explicit remote/branch confirmation and JSON output.
+  - [ ] T18.2.2 Add `asp promote --pr-draft` using gh when available, with graceful fallback instructions.
+
+## EPIC 19 — Doctor and self-healing
+
+**Done when:** `asp doctor` is the trusted first stop for every broken workspace report.
+
+- **S19.1 Detection**
+  - [ ] T19.1.1 Add checks for stale locks, missing git binary, unsupported git versions, and config drift.
+  - [ ] T19.1.2 Add optional deep CAS verification that re-hashes sidecar blobs.
+  - [ ] T19.1.3 Add checks for orphan fork directories and promoted fork cleanup candidates.
+- **S19.2 Repair UX**
+  - [ ] T19.2.1 Add `asp doctor --explain` with human-readable cause and next action per finding.
+  - [ ] T19.2.2 Add JSON repair plans before applying `--fix`.
+
+## EPIC 20 — BYO-bucket sync foundation
+
+**Done when:** the local format can sync to user-owned object storage without custody, hidden telemetry, or lock-in.
+
+- **S20.1 Sync design**
+  - [ ] T20.1.1 Write the sync protocol design for immutable objects, CAS blobs, refs, and conflict handling.
+  - [ ] T20.1.2 Add a local filesystem remote implementation for deterministic tests.
+  - [ ] T20.1.3 Add conditional-write semantics to the remote trait.
+- **S20.2 First sync command**
+  - [ ] T20.2.1 Add `asp sync push` for checkpoints and blobs to a local remote.
+  - [ ] T20.2.2 Add `asp sync fetch` that restores refs without overwriting newer local state.
+
+## EPIC 21 — Security hardening
+
+**Done when:** threat models are documented, tests cover known file-system attacks, and security-sensitive behavior fails closed.
+
+- **S21.1 Threat coverage**
+  - [ ] T21.1.1 Expand SECURITY.md with threat model diagrams and non-goals.
+  - [ ] T21.1.2 Add symlink and hardlink attack regression tests around store paths and fork cleanup.
+  - [ ] T21.1.3 Add fuzzing harnesses for config, journal, MCP params, and hook payload parsing.
+- **S21.2 Secret safety**
+  - [ ] T21.2.1 Add `asp secrets scan` for common accidental checkpoint inclusions.
+  - [ ] T21.2.2 Add configurable deny patterns that block checkpoint with a corrective hint.
+
+## EPIC 22 — Observability without telemetry
+
+**Done when:** users can inspect local health and performance while the project remains no-phone-home.
+
+- **S22.1 Local metrics**
+  - [ ] T22.1.1 Add `asp stats` for store size, checkpoint count, fork count, blob count, and last operation timings.
+  - [ ] T22.1.2 Add `asp stats --json` for scripts and CI.
+  - [ ] T22.1.3 Add per-command timing fields to journal entries where missing.
+- **S22.2 Diagnostics bundles**
+  - [ ] T22.2.1 Add `asp diagnostics` that redacts paths/secrets by default.
+  - [ ] T22.2.2 Add docs for attaching diagnostics to issues safely.
+
+## EPIC 23 — Windows and filesystem portability
+
+**Done when:** unsupported platforms fail kindly today and Windows has a tested path to support.
+
+- **S23.1 Unsupported-platform UX**
+  - [ ] T23.1.1 Improve Windows error messages with current limitations and tracking issue links.
+  - [ ] T23.1.2 Add CI that ensures Windows builds either pass or fail with intentional cfg gates.
+  - [ ] T23.1.3 Document filesystem feature detection across APFS, btrfs, XFS, ext4, tmpfs, and network filesystems.
+- **S23.2 Windows plan**
+  - [ ] T23.2.1 Spike block cloning and copy fallback behavior on ReFS/NTFS.
+  - [ ] T23.2.2 Write a Windows support design note covering symlinks, permissions, and git behavior.
+
+## EPIC 24 — Contributor experience
+
+**Done when:** outside contributors can find good first issues, run the right tests, and avoid trust-model mistakes.
+
+- **S24.1 Development docs**
+  - [ ] T24.1.1 Add `docs/development.md` with architecture map, command map, and test guide.
+  - [ ] T24.1.2 Add module-level ownership notes for `asp-core` vs CLI/MCP code.
+  - [ ] T24.1.3 Add a PR checklist aligned with crash safety, JSON output, hints, and docs.
+- **S24.2 Issue flow**
+  - [ ] T24.2.1 Add issue forms for performance reports, crash-safety bugs, integration requests, and docs fixes.
+  - [ ] T24.2.2 Add labels and triage docs for maintainers.
+
+## EPIC 25 — Config and schema stability
+
+**Done when:** config, policy, JSON output, and on-disk data have schemas that automation can trust.
+
+- **S25.1 Schemas**
+  - [ ] T25.1.1 Publish JSON Schemas for CLI JSON envelopes and MCP tool results.
+  - [ ] T25.1.2 Publish TOML schema docs for `.asp/config.toml`.
+  - [ ] T25.1.3 Add snapshot tests that prevent accidental JSON shape drift.
+- **S25.2 Versioning**
+  - [ ] T25.2.1 Add `asp schema` command to print supported schema versions.
+  - [ ] T25.2.2 Add changelog rules for breaking vs additive JSON changes.
+
+## EPIC 26 — Race workflow upgrades
+
+**Done when:** `asp race` supports real best-of-N agent work with resumability, clear logs, and safe cleanup.
+
+- **S26.1 Runner controls**
+  - [ ] T26.1.1 Add per-lane environment variable templates and labels.
+  - [ ] T26.1.2 Add timeout, retry, and cancellation behavior with tests.
+  - [ ] T26.1.3 Add resumable race metadata for interrupted runs.
+- **S26.2 Result quality**
+  - [ ] T26.2.1 Add structured per-lane test result ingestion from common formats.
+  - [ ] T26.2.2 Add `asp race compare` to re-rank existing lanes after manual inspection.
+
+## EPIC 27 — Enterprise docs and adoption playbooks
+
+**Done when:** teams can evaluate agentspaces with clear workflows, risks, and migration paths.
+
+- **S27.1 Evaluation guides**
+  - [ ] T27.1.1 Add a 30-minute team evaluation guide with success criteria.
+  - [ ] T27.1.2 Add playbooks for bug-fix fleets, test-generation races, docs generation, and CI repair.
+  - [ ] T27.1.3 Add a trust-model whitepaper suitable for security review.
+- **S27.2 Operations docs**
+  - [ ] T27.2.1 Add backup and disaster-recovery docs for `.asp/`.
+  - [ ] T27.2.2 Add monorepo tuning docs for excludes, blob thresholds, and filesystem choice.
+
+## EPIC 28 — Hosted-adjacent optional services boundary
+
+**Done when:** future hosted work is clearly additive and cannot weaken the open-source local engine.
+
+- **S28.1 Boundary contracts**
+  - [ ] T28.1.1 Write an open-core boundary policy with non-negotiable OSS guarantees.
+  - [ ] T28.1.2 Add a governance note for features that must remain in the local engine.
+  - [ ] T28.1.3 Add design constraints for any future control plane: zero custody by default, opt-in sync, exportability.
+- **S28.2 Team features on paper**
+  - [ ] T28.2.1 Draft team audit, policy, and approval workflows that can run locally first.
+  - [ ] T28.2.2 Draft enterprise support/SLA boundaries without adding telemetry or mandatory accounts.
+
 ---
 
 ## Decision log (newest first)
