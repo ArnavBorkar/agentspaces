@@ -44,6 +44,8 @@
   tools such as undo, restore, promote, and discard.
 - MCP now has a replayable transcript snapshot that guards concise tool
   descriptions and actionable error responses.
+- New workspaces now include a validation-only `.asp/policy.toml` template,
+  with strict parsing, schema docs, and helpful errors for invalid policy.
 
 ### Fixed
 

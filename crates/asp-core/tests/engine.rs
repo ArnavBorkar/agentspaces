@@ -51,6 +51,7 @@ fn cp(ws: &Workspace, msg: &str) -> Option<asp_core::workspace::CheckpointInfo> 
 fn init_checkpoint_log_roundtrip() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();
+    assert!(root.join(".asp/policy.toml").is_file());
 
     let c1 = cp(&ws, "first").expect("first checkpoint captures everything");
     assert_eq!(c1.seq, 1);
@@ -71,6 +72,20 @@ fn init_checkpoint_log_roundtrip() {
     let status = ws.status().unwrap();
     assert_eq!(status.last_checkpoint.as_ref().unwrap().seq, 2);
     assert_eq!(status.dirty_files + status.untracked_files, 0);
+}
+
+#[test]
+fn invalid_policy_blocks_workspace_open() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    assert_eq!(ws.policy.forks.max_active, None);
+    drop(ws);
+
+    std::fs::write(root.join(".asp/policy.toml"), "[forks]\nmax_active = 0\n").unwrap();
+    let err = Workspace::open(&root).unwrap_err();
+    assert_eq!(err.code, ErrorCode::StoreCorrupt);
+    assert!(err.message.contains("forks.max_active"));
+    assert!(err.hint.unwrap().contains("policy.toml"));
 }
 
 #[test]

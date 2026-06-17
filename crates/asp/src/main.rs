@@ -969,6 +969,12 @@ fn schema_report() -> SchemaReport {
                 path: "docs/config.md",
             },
             SchemaInfo {
+                name: "workspace_policy_toml",
+                version: 1,
+                kind: "toml_schema_doc",
+                path: "docs/policy.md",
+            },
+            SchemaInfo {
                 name: "on_disk_format",
                 version: FORMAT_VERSION,
                 kind: "store_format",

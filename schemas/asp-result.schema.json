@@ -426,6 +426,7 @@
                   "result_payloads",
                   "mcp_tool_result",
                   "workspace_config_toml",
+                  "workspace_policy_toml",
                   "on_disk_format"
                 ]
               },

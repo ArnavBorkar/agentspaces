@@ -28,6 +28,12 @@
         "version": 1
       },
       {
+        "kind": "toml_schema_doc",
+        "name": "workspace_policy_toml",
+        "path": "docs/policy.md",
+        "version": 1
+      },
+      {
         "kind": "store_format",
         "name": "on_disk_format",
         "path": "docs/design/format.md",

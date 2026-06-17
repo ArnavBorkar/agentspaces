@@ -27,6 +27,7 @@ Important engine modules:
 | `fork.rs` | Platform-specific whole-tree clone/reflink/copy behavior. |
 | `blobs.rs` | Large-file content-addressed sidecar and restore helpers. |
 | `config.rs` | Capture excludes and `.asp/config.toml` defaults. See [docs/config.md](config.md) for the public schema. |
+| `policy.rs` | Local `.asp/policy.toml` schema and validation. See [docs/policy.md](policy.md) for the public schema. |
 
 Important binary modules:
 
@@ -51,6 +52,7 @@ Use these boundaries when deciding where a change belongs:
 | `asp-core::fork` | Platform clone methods, symlink copy semantics, permissions preservation, and copy fallback. | Fork registry lifecycle; that stays in `workspace`. |
 | `asp-core::blobs` | Large-file CAS storage, pointer encoding, blob restore, and blob integrity checks. | Capture policy decisions such as which paths are excluded. |
 | `asp-core::config` | Config schema, defaults, and capture exclude expansion. | CLI defaults that do not affect engine behavior. |
+| `asp-core::policy` | Policy schema, defaults, and validation for local team controls. | Enforcing a policy without engine-level tests proving the safe failure mode. |
 | `crates/asp/src/main.rs` | CLI command names, clap flags, human/JSON output routing, and process exit behavior. | Storage mutation details or recovery invariants. |
 | `crates/asp/src/mcp.rs` | MCP tool names, JSON-RPC protocol handling, model-facing descriptions, and tool argument schemas. | Engine-only data validation that CLI users also need. |
 | `crates/asp/src/hooks.rs` | Claude Code hook installation, removal, and hook event translation into checkpoint provenance. | General checkpoint semantics. |
@@ -149,7 +151,8 @@ Before opening a PR or pushing to `main`, verify the same items captured in
   [schemas/](../schemas/).
 - Additive or breaking automation-contract changes follow
   [CHANGELOG.md](../CHANGELOG.md#automation-contract-rules).
-- `.asp/config.toml` changes update [docs/config.md](config.md).
+- `.asp/config.toml` changes update [docs/config.md](config.md); `.asp/policy.toml`
+  changes update [docs/policy.md](policy.md).
 - Storage changes include regression or torture coverage.
 - README performance claims still match measured benchmark docs.
 

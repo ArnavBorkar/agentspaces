@@ -17,6 +17,7 @@ Back up the entire `.asp/` directory as one unit:
 | `.asp/format-version` | Tells future `asp` versions how to open the store. |
 | `.asp/workspace.json` | Workspace identity and fork ancestry. |
 | `.asp/config.toml` | Checkpoint excludes and large-file threshold policy. |
+| `.asp/policy.toml` | Local team policy for fork, checkpoint, path, and promote controls. |
 | `.asp/shadow.git/` | Ordinary git repository that stores checkpoint commits. |
 | `.asp/journal.jsonl` | Append-only operation and provenance log. |
 | `.asp/blobs/` | Content-addressed large-file sidecar. |

@@ -10,6 +10,7 @@ pub mod error;
 pub mod fork;
 pub mod gitx;
 pub mod journal;
+pub mod policy;
 pub mod store;
 pub mod workspace;
 

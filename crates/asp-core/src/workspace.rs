@@ -15,6 +15,7 @@ use crate::error::{Error, ErrorCode, Result};
 use crate::fork::{clone_tree, CloneMethod};
 use crate::gitx::Shadow;
 use crate::journal::{Entry, Journal, Op, Source};
+use crate::policy::Policy;
 use crate::store::{
     atomic_write, atomic_write_json, find_root, read_json, ForkRecord, ForkRegistry, ForkStatus,
     Layout, ParentRef, StoreLock, WorkspaceMeta, FORMAT_VERSION,
@@ -30,6 +31,7 @@ pub struct Workspace {
     layout: Layout,
     pub meta: WorkspaceMeta,
     pub config: Config,
+    pub policy: Policy,
     shadow: Shadow,
     journal: Journal,
 }
@@ -296,6 +298,7 @@ impl Workspace {
         }
         let meta: WorkspaceMeta = read_json(&layout.workspace_json())?;
         let config = Config::load(&layout.config_toml())?;
+        let policy = Policy::load(&layout.policy_toml())?;
         let shadow = Shadow::new(
             layout.shadow_git(),
             layout.root.clone(),
@@ -308,6 +311,7 @@ impl Workspace {
             layout,
             meta,
             config,
+            policy,
             shadow,
             journal,
         })
@@ -355,6 +359,7 @@ impl Workspace {
             parent: None,
         };
         let config = Config::default();
+        let policy = Policy::default();
 
         let shadow = Shadow::new(
             layout.shadow_git(),
@@ -366,6 +371,7 @@ impl Workspace {
 
         atomic_write_json(&layout.workspace_json(), &meta)?;
         atomic_write(&layout.config_toml(), Config::template().as_bytes())?;
+        atomic_write(&layout.policy_toml(), Policy::template().as_bytes())?;
         atomic_write_json(
             &layout.forks_json(),
             &ForkRegistry {
@@ -385,6 +391,7 @@ impl Workspace {
             layout,
             meta,
             config,
+            policy,
             shadow,
             journal,
         })

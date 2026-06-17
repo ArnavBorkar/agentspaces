@@ -34,6 +34,9 @@ impl Layout {
     pub fn config_toml(&self) -> PathBuf {
         self.asp.join("config.toml")
     }
+    pub fn policy_toml(&self) -> PathBuf {
+        self.asp.join("policy.toml")
+    }
     pub fn lock_file(&self) -> PathBuf {
         self.asp.join("lock")
     }

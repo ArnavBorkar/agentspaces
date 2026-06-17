@@ -180,7 +180,7 @@
 **Done when:** teams can encode local workspace rules without a hosted control plane.
 
 - **S14.1 Policy file**
-  - [ ] T14.1.1 Add `.asp/policy.toml` with schema, validation, and helpful errors.
+  - [x] T14.1.1 Add `.asp/policy.toml` with schema, validation, and helpful errors.
   - [ ] T14.1.2 Support policy for max fork count, max checkpoint age, protected paths, and promote requirements.
   - [ ] T14.1.3 Add `asp policy validate --json`.
 - **S14.2 Enforcement**
