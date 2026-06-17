@@ -133,7 +133,8 @@ model.
 
 ## Change Checklist
 
-Before opening a PR or pushing to `main`, verify:
+Before opening a PR or pushing to `main`, verify the same items captured in
+[.github/pull_request_template.md](../.github/pull_request_template.md):
 
 - The change preserves stock-git recovery for checkpoints.
 - Any new mutation is atomic rename, append-only with CRC, or git's own

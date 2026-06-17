@@ -302,7 +302,7 @@
 - **S24.1 Development docs**
   - [x] T24.1.1 Add `docs/development.md` with architecture map, command map, and test guide.
   - [x] T24.1.2 Add module-level ownership notes for `asp-core` vs CLI/MCP code.
-  - [ ] T24.1.3 Add a PR checklist aligned with crash safety, JSON output, hints, and docs.
+  - [x] T24.1.3 Add a PR checklist aligned with crash safety, JSON output, hints, and docs.
 - **S24.2 Issue flow**
   - [ ] T24.2.1 Add issue forms for performance reports, crash-safety bugs, integration requests, and docs fixes.
   - [ ] T24.2.2 Add labels and triage docs for maintainers.
