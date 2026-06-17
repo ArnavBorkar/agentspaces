@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use asp_core::journal::Op;
+use asp_core::journal::{Entry, Op};
 use asp_core::store::ForkStatus;
 use asp_core::workspace::CheckpointOpts;
 use asp_core::{ErrorCode, Workspace};
@@ -16,6 +16,30 @@ fn write(root: &Path, rel: &str, content: &str) {
 
 fn read(root: &Path, rel: &str) -> String {
     std::fs::read_to_string(root.join(rel)).unwrap()
+}
+
+fn git(root: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+fn init_user_git(root: &Path) {
+    git(root, &["init", "-q"]);
+    git(root, &["config", "user.email", "u@example.com"]);
+    git(root, &["config", "user.name", "U"]);
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "init"]);
 }
 
 fn child_names(root: &Path) -> Vec<String> {
@@ -45,6 +69,16 @@ fn cp(ws: &Workspace, msg: &str) -> Option<asp_core::workspace::CheckpointInfo> 
         ..Default::default()
     })
     .unwrap()
+}
+
+fn append_stale_checkpoint_entry(ws: &Workspace, seq: u64) {
+    let commit = ws.checkpoint_refs().unwrap().get(&seq).unwrap().clone();
+    let mut entry = Entry::new(Op::Checkpoint);
+    entry.ts = "1970-01-01T00:00:00Z".to_string();
+    entry.seq = Some(seq);
+    entry.commit = Some(commit);
+    entry.message = Some("stale checkpoint marker".to_string());
+    ws.journal().append(&entry).unwrap();
 }
 
 #[test]
@@ -86,6 +120,122 @@ fn invalid_policy_blocks_workspace_open() {
     assert_eq!(err.code, ErrorCode::StoreCorrupt);
     assert!(err.message.contains("forks.max_active"));
     assert!(err.hint.unwrap().contains("policy.toml"));
+}
+
+#[test]
+fn policy_enforces_max_active_forks() {
+    let (_tmp, root) = project();
+    Workspace::init(&root, None).unwrap();
+    std::fs::write(root.join(".asp/policy.toml"), "[forks]\nmax_active = 1\n").unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let first = ws.fork(Some("one".into()), None).unwrap();
+    assert!(first.path.exists());
+    let err = ws.fork(Some("two".into()), None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("forks.max_active"));
+    assert!(!root.parent().unwrap().join("proj@two").exists());
+}
+
+#[test]
+fn policy_enforces_checkpoint_age_before_risky_operations() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    append_stale_checkpoint_entry(&ws, 1);
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[checkpoints]\nmax_age_hours = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let err = ws.fork(Some("late".into()), None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("checkpoints.max_age_hours"));
+    assert!(err.hint.unwrap().contains("asp checkpoint"));
+    assert!(!root.parent().unwrap().join("proj@late").exists());
+}
+
+#[test]
+fn policy_blocks_restore_of_protected_paths() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    write(&root, "src/main.rs", "broken\n");
+    cp(&ws, "damage").unwrap();
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[paths]\nprotected = [\"src/**\"]\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let err = ws.restore("1", &[], None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("protected path"));
+    assert_eq!(read(&root, "src/main.rs"), "broken\n");
+}
+
+#[test]
+fn policy_blocks_promote_of_protected_paths() {
+    let (_tmp, root) = project();
+    init_user_git(&root);
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(&fork.path, "src/main.rs", "fn main() { /* protected */ }\n");
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[paths]\nprotected = [\"src/**\"]\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let err = ws.promote("winner", None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("protected path"));
+    let missing = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["show-ref", "--verify", "--quiet", "refs/heads/asp/winner"])
+        .output()
+        .unwrap();
+    assert!(
+        !missing.status.success(),
+        "protected promote created a branch"
+    );
+}
+
+#[test]
+fn policy_enforces_promote_clean_status_and_branch_prefix() {
+    let (_tmp, root) = project();
+    init_user_git(&root);
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("winner".into()), None).unwrap();
+    write(&fork.path, "feature.txt", "ship it\n");
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[promote]\nrequire_clean_status = true\nallowed_branch_prefixes = [\"review/\"]\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    write(&root, "dirty.txt", "main workspace change\n");
+    let err = ws
+        .promote("winner", Some("review/winner".into()))
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("require_clean_status"));
+
+    cp(&ws, "clean main").unwrap();
+    let err = ws.promote("winner", Some("asp/winner".into())).unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("allowed_branch_prefixes"));
+
+    let ok = ws.promote("winner", Some("review/winner".into())).unwrap();
+    assert_eq!(ok.branch, "review/winner");
 }
 
 #[test]

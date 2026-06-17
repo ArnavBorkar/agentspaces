@@ -1,7 +1,7 @@
 //! Local workspace policy (`.asp/policy.toml`).
 //!
-//! The first policy slice is validation-only: teams can commit and review a
-//! local policy file now, while enforcement hooks land in later tasks.
+//! The policy file is local-first: teams can commit and review it like any
+//! other repo file, and the engine enforces it before risky mutations.
 
 use std::path::Path;
 
@@ -72,20 +72,18 @@ impl Policy {
 
     pub fn template() -> &'static str {
         r#"# asp local policy. Every setting is optional.
-# This release validates the file so teams can review policy locally; enforcement
-# of these controls lands behind explicit tests in follow-up releases.
+# When set, these controls are enforced locally before risky workspace changes.
 
 [forks]
-# Maximum active sibling forks allowed before new fork creation should be blocked:
+# Maximum active sibling forks allowed before new fork creation is blocked:
 # max_active = 8
 
 [checkpoints]
-# Maximum acceptable age for the latest checkpoint before risky work:
+# Maximum acceptable age for the latest checkpoint before fork/restore/promote:
 # max_age_hours = 24
 
 [paths]
-# Path patterns that future policy enforcement should protect from restore,
-# discard, or promote flows without explicit approval:
+# Path patterns protected from restore and promote:
 # protected = ["src/security/**", ".github/workflows/**"]
 
 [promote]

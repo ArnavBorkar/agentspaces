@@ -2,12 +2,13 @@
 //! fork, diff, restore, promote, discard against it. CLI and MCP server are
 //! thin shells over this type.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
 use serde::Serialize;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::blobs::{self, BigFiles, Manifest, ManifestEntry};
 use crate::config::Config;
@@ -1002,6 +1003,17 @@ impl Workspace {
         Ok(raw.split(|&b| b == 0).filter(|s| !s.is_empty()).count() as u64)
     }
 
+    fn changed_paths_between(&self, from: &str, to: &str) -> Result<Vec<String>> {
+        let raw = self
+            .shadow
+            .run_raw(&["diff-tree", "-r", "-z", "--name-only", from, to])?;
+        Ok(raw
+            .split(|&b| b == 0)
+            .filter(|s| !s.is_empty())
+            .map(|path| String::from_utf8_lossy(path).to_string())
+            .collect())
+    }
+
     /// Next checkpoint seq: max(journal, refs) + 1 — robust to a crash
     /// between update-ref and journal append.
     fn next_seq(&self) -> Result<u64> {
@@ -1061,6 +1073,132 @@ impl Workspace {
         }
     }
 
+    fn enforce_checkpoint_age_policy(&self, operation: &str) -> Result<()> {
+        let Some(max_hours) = self.policy.checkpoints.max_age_hours else {
+            return Ok(());
+        };
+        let checkpoint = self.last_checkpoint()?.ok_or_else(|| {
+            policy_violation(
+                format!("policy blocks {operation}: no checkpoint exists"),
+                format!("run `asp checkpoint` before `{operation}`, or edit .asp/policy.toml"),
+            )
+        })?;
+        let checkpoint_time = OffsetDateTime::parse(&checkpoint.ts, &Rfc3339).map_err(|e| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!(
+                    "checkpoint #{} has an unreadable timestamp: {e}",
+                    checkpoint.seq
+                ),
+            )
+            .with_hint(
+                "run `asp doctor`; if the journal cannot be repaired, create a fresh checkpoint",
+            )
+        })?;
+        let age_hours = (OffsetDateTime::now_utc() - checkpoint_time).whole_hours();
+        if i128::from(age_hours) > i128::from(max_hours) {
+            return Err(policy_violation(
+                format!(
+                    "policy blocks {operation}: latest checkpoint #{} is {age_hours}h old, exceeding checkpoints.max_age_hours={max_hours}",
+                    checkpoint.seq
+                ),
+                format!("run `asp checkpoint` before `{operation}`, or raise checkpoints.max_age_hours in .asp/policy.toml"),
+            ));
+        }
+        Ok(())
+    }
+
+    fn enforce_fork_count_policy(&self, registry: &ForkRegistry) -> Result<()> {
+        let Some(max_active) = self.policy.forks.max_active else {
+            return Ok(());
+        };
+        let active = registry
+            .forks
+            .iter()
+            .filter(|fork| fork.status == ForkStatus::Active)
+            .count() as u64;
+        if active >= max_active {
+            return Err(policy_violation(
+                format!(
+                    "policy blocks fork: {active} active forks already meet forks.max_active={max_active}"
+                ),
+                "discard or promote an active fork, or raise forks.max_active in .asp/policy.toml",
+            ));
+        }
+        Ok(())
+    }
+
+    fn enforce_promote_policy(
+        &self,
+        branch: &str,
+        protected_paths: impl IntoIterator<Item = String>,
+    ) -> Result<()> {
+        self.enforce_checkpoint_age_policy("promote")?;
+        if self.policy.promote.require_checkpoint && self.last_checkpoint()?.is_none() {
+            return Err(policy_violation(
+                "policy blocks promote: promote.require_checkpoint is true but no checkpoint exists",
+                "run `asp checkpoint` before `asp promote`, or edit .asp/policy.toml",
+            ));
+        }
+        if self.policy.promote.require_clean_status {
+            let status = self.status()?;
+            let dirty = status.dirty_files + status.untracked_files + status.deleted_files;
+            if dirty > 0 {
+                return Err(policy_violation(
+                    format!(
+                        "policy blocks promote: promote.require_clean_status is true and the main workspace has {dirty} dirty paths"
+                    ),
+                    "run `asp checkpoint` or clean the main workspace before `asp promote`",
+                ));
+            }
+        }
+        if !self.policy.promote.allowed_branch_prefixes.is_empty()
+            && !self
+                .policy
+                .promote
+                .allowed_branch_prefixes
+                .iter()
+                .any(|prefix| branch.starts_with(prefix))
+        {
+            return Err(policy_violation(
+                format!("policy blocks promote: branch '{branch}' does not match promote.allowed_branch_prefixes"),
+                "choose an allowed branch prefix, or edit .asp/policy.toml after review",
+            ));
+        }
+        self.enforce_unprotected_paths("promote", protected_paths)
+    }
+
+    fn enforce_unprotected_paths(
+        &self,
+        operation: &str,
+        paths: impl IntoIterator<Item = String>,
+    ) -> Result<()> {
+        if self.policy.paths.protected.is_empty() {
+            return Ok(());
+        }
+        let mut unique_paths = BTreeSet::new();
+        for path in paths {
+            unique_paths.insert(path);
+        }
+        for path in unique_paths {
+            if let Some(pattern) = self
+                .policy
+                .paths
+                .protected
+                .iter()
+                .find(|pattern| policy_path_matches(pattern, &path))
+            {
+                return Err(policy_violation(
+                    format!(
+                        "policy blocks {operation}: protected path '{path}' matches '{pattern}'"
+                    ),
+                    "review the change, narrow the command to unprotected paths, or edit .asp/policy.toml",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Timeline entries, newest first.
     pub fn log(&self, limit: usize) -> Result<Vec<Entry>> {
         let mut entries = self.journal.read()?.entries;
@@ -1083,21 +1221,42 @@ impl Workspace {
         let _lock = StoreLock::acquire(&self.layout)?;
         self.journal.heal()?;
         let (target_seq, target_commit) = self.resolve_checkpoint(spec)?;
+        self.enforce_checkpoint_age_policy("restore")?;
 
         // Validate targeted paths up front — a friendly error beats raw git.
-        for p in paths {
-            let listed = self
-                .shadow
-                .run(&["ls-tree", "--name-only", &target_commit, "--", p])?;
-            if listed.is_empty() {
-                return Err(Error::new(
-                    ErrorCode::CheckpointNotFound,
-                    format!("path '{p}' does not exist in checkpoint #{target_seq}"),
-                )
-                .with_hint(format!(
-                    "see what that checkpoint contains: asp diff {target_seq}"
-                )));
+        if paths.is_empty() {
+            let (current_tree, _) = self.stage_tree()?;
+            let touched = self.changed_paths_between(&current_tree, &target_commit)?;
+            self.enforce_unprotected_paths("restore", touched)?;
+        } else {
+            let mut touched = Vec::new();
+            for p in paths {
+                let listed = self.shadow.run_raw(&[
+                    "ls-tree",
+                    "-r",
+                    "-z",
+                    "--name-only",
+                    &target_commit,
+                    "--",
+                    p,
+                ])?;
+                let listed_paths: Vec<String> = listed
+                    .split(|&b| b == 0)
+                    .filter(|s| !s.is_empty())
+                    .map(|path| String::from_utf8_lossy(path).to_string())
+                    .collect();
+                if listed_paths.is_empty() {
+                    return Err(Error::new(
+                        ErrorCode::CheckpointNotFound,
+                        format!("path '{p}' does not exist in checkpoint #{target_seq}"),
+                    )
+                    .with_hint(format!(
+                        "see what that checkpoint contains: asp diff {target_seq}"
+                    )));
+                }
+                touched.extend(listed_paths);
             }
+            self.enforce_unprotected_paths("restore", touched)?;
         }
 
         let safety = self.checkpoint_locked(CheckpointOpts {
@@ -1382,6 +1541,25 @@ impl Workspace {
         let _lock = StoreLock::acquire(&self.layout)?;
         let t0 = Instant::now();
 
+        let mut registry = self.fork_registry()?;
+        let name = match &label {
+            Some(l) => sanitize_name(l),
+            None => format!("fork-{}", registry.forks.len() + 1),
+        };
+        if registry
+            .forks
+            .iter()
+            .any(|f| f.name == name && f.status == ForkStatus::Active)
+        {
+            return Err(Error::new(
+                ErrorCode::ForkExists,
+                format!("an active fork named '{name}' already exists"),
+            )
+            .with_hint(format!("pick another name, or `asp discard {name}` first")));
+        }
+        self.enforce_checkpoint_age_policy("fork")?;
+        self.enforce_fork_count_policy(&registry)?;
+
         // The fork point must be a real checkpoint.
         let cp = self.checkpoint_locked(CheckpointOpts {
             message: Some("auto: fork point".into()),
@@ -1402,23 +1580,6 @@ impl Workspace {
                     )
                 })?,
         };
-
-        let mut registry = self.fork_registry()?;
-        let name = match &label {
-            Some(l) => sanitize_name(l),
-            None => format!("fork-{}", registry.forks.len() + 1),
-        };
-        if registry
-            .forks
-            .iter()
-            .any(|f| f.name == name && f.status == ForkStatus::Active)
-        {
-            return Err(Error::new(
-                ErrorCode::ForkExists,
-                format!("an active fork named '{name}' already exists"),
-            )
-            .with_hint(format!("pick another name, or `asp discard {name}` first")));
-        }
 
         let dir_name = self
             .layout
@@ -1663,16 +1824,34 @@ impl Workspace {
 
     // -------------------------------------------------------------- promote
 
+    fn fork_changed_paths_for_policy(&self, rec: &ForkRecord) -> Result<Vec<String>> {
+        let fork_ws = Workspace::open_root(&rec.path)?;
+        let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
+        let base = fork_ws
+            .checkpoint_refs()?
+            .get(&rec.fork_point_seq)
+            .cloned()
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("fork '{}' is missing its fork-point checkpoint", rec.name),
+                )
+                .with_hint("run `asp doctor` inside the fork")
+            })?;
+        let (tree, _) = fork_ws.stage_tree()?;
+        fork_ws.changed_paths_between(&format!("{base}^{{tree}}"), &tree)
+    }
+
     /// Land a fork's work as an ordinary branch in the user's git repo.
     /// Never touches HEAD, never force-pushes, never runs user hooks.
     pub fn promote(&self, fork_name: &str, branch: Option<String>) -> Result<PromoteReport> {
         let t0 = Instant::now();
         let _lock = StoreLock::acquire(&self.layout)?;
         let mut registry = self.fork_registry()?;
-        let rec = registry
+        let rec_index = registry
             .forks
-            .iter_mut()
-            .find(|f| f.name == fork_name && f.status == ForkStatus::Active)
+            .iter()
+            .position(|f| f.name == fork_name && f.status == ForkStatus::Active)
             .ok_or_else(|| {
                 Error::new(
                     ErrorCode::ForkNotFound,
@@ -1680,6 +1859,7 @@ impl Workspace {
                 )
                 .with_hint("run `asp forks` to list forks")
             })?;
+        let rec = registry.forks[rec_index].clone();
         if !rec.path.exists() {
             return Err(Error::new(
                 ErrorCode::ForkNotFound,
@@ -1704,6 +1884,8 @@ impl Workspace {
             )
             .with_hint("pass a different name: `asp promote <fork> --branch <name>`"));
         }
+        let protected_paths = self.fork_changed_paths_for_policy(&rec)?;
+        self.enforce_promote_policy(&branch, protected_paths)?;
 
         // Build a commit in the FORK's user repo via plumbing (no checkout,
         // no HEAD move, no hooks), then fetch it into the original repo.
@@ -1722,7 +1904,7 @@ impl Workspace {
         let _ = run_user_git(&rec.path, &["update-ref", "-d", &tmp_ref]);
         fetch_result?;
 
-        rec.status = ForkStatus::Promoted;
+        registry.forks[rec_index].status = ForkStatus::Promoted;
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Promote);
         entry.duration_ms = Some(t0.elapsed().as_millis() as u64);
@@ -2280,6 +2462,64 @@ fn actual_worktree_case(root: &Path, rel: &str) -> Option<String> {
         actual_parts.push(name.to_string_lossy().to_string());
     }
     Some(actual_parts.join("/"))
+}
+
+fn policy_violation(message: impl Into<String>, hint: impl Into<String>) -> Error {
+    Error::new(ErrorCode::PolicyViolation, message).with_hint(hint)
+}
+
+fn policy_path_matches(pattern: &str, path: &str) -> bool {
+    let pattern_parts: Vec<&str> = pattern.split('/').filter(|part| !part.is_empty()).collect();
+    let path_parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    glob_parts_match(&pattern_parts, &path_parts)
+}
+
+fn glob_parts_match(pattern: &[&str], path: &[&str]) -> bool {
+    match (pattern.split_first(), path.split_first()) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some((&"**", rest)), _) => {
+            glob_parts_match(rest, path)
+                || path
+                    .split_first()
+                    .is_some_and(|(_, tail)| glob_parts_match(pattern, tail))
+        }
+        (Some((part, rest)), Some((path_part, path_rest))) => {
+            glob_segment_match(part, path_part) && glob_parts_match(rest, path_rest)
+        }
+        (Some(_), None) => false,
+    }
+}
+
+fn glob_segment_match(pattern: &str, text: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+    let pattern_chars: Vec<char> = pattern.chars().collect();
+    let text_chars: Vec<char> = text.chars().collect();
+    let (mut pi, mut ti) = (0usize, 0usize);
+    let mut star: Option<usize> = None;
+    let mut star_text = 0usize;
+    while ti < text_chars.len() {
+        if pi < pattern_chars.len() && pattern_chars[pi] == text_chars[ti] {
+            pi += 1;
+            ti += 1;
+        } else if pi < pattern_chars.len() && pattern_chars[pi] == '*' {
+            star = Some(pi);
+            pi += 1;
+            star_text = ti;
+        } else if let Some(star_index) = star {
+            pi = star_index + 1;
+            star_text += 1;
+            ti = star_text;
+        } else {
+            return false;
+        }
+    }
+    while pi < pattern_chars.len() && pattern_chars[pi] == '*' {
+        pi += 1;
+    }
+    pi == pattern_chars.len()
 }
 
 /// Run git in the USER repo (their config applies; we only add safety flags).

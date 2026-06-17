@@ -5,8 +5,8 @@ field is optional, and a missing or empty policy file means no local policy.
 
 The parser is strict: unknown tables or keys are rejected with a
 `store_corrupt` error and a hint to fix the TOML or delete the file to disable
-local policy. This release validates the file and records the schema; later
-policy tasks will enforce the controls below.
+local policy. Valid policy values are enforced locally before risky workspace
+mutations.
 
 ## Schema
 
@@ -28,12 +28,12 @@ allowed_branch_prefixes = ["asp/"]
 
 | TOML path | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `forks.max_active` | positive integer or omitted | unset | Maximum active sibling forks future enforcement should allow. |
-| `checkpoints.max_age_hours` | positive integer or omitted | unset | Maximum acceptable age for the latest checkpoint before risky work. |
-| `paths.protected` | array of workspace-relative strings | `[]` | Path patterns future enforcement should protect from restore, discard, or promote flows without approval. |
-| `promote.require_clean_status` | boolean | `false` | Whether future promotion policy should require the main workspace to be clean. |
-| `promote.require_checkpoint` | boolean | `false` | Whether future promotion policy should require a current checkpoint before landing fork work. |
-| `promote.allowed_branch_prefixes` | array of strings | `[]` | Branch prefixes future promotion policy should allow; empty means unrestricted. |
+| `forks.max_active` | positive integer or omitted | unset | Maximum active sibling forks allowed before new fork creation is blocked. |
+| `checkpoints.max_age_hours` | positive integer or omitted | unset | Maximum acceptable age for the latest checkpoint before `fork`, `restore`, or `promote`. |
+| `paths.protected` | array of workspace-relative strings | `[]` | Path patterns protected from restore and promote. |
+| `promote.require_clean_status` | boolean | `false` | Whether promotion requires the main workspace to have no dirty, deleted, or untracked paths. |
+| `promote.require_checkpoint` | boolean | `false` | Whether promotion requires at least one checkpoint. |
+| `promote.allowed_branch_prefixes` | array of strings | `[]` | Branch prefixes promotion may create; empty means unrestricted. |
 
 ## Validation Rules
 
@@ -47,10 +47,23 @@ allowed_branch_prefixes = ["asp/"]
 
 ## Enforcement Status
 
-`asp` validates `.asp/policy.toml` on workspace open so broken policy cannot sit
-silently beside agent work. The current release does not block operations based
-on the policy values yet. Enforcement for fork count, checkpoint age, protected
-paths, and promote requirements is tracked in `BACKLOG.md` under EPIC 14.
+Policy violations fail with the stable `policy_violation` error code and a
+hint describing the next action. Enforcement happens before the risky part of
+the operation:
+
+- `forks.max_active` is checked before fork-point checkpoint capture or clone
+  creation.
+- `checkpoints.max_age_hours` is checked before `fork`, `restore`, and
+  `promote`. Run `asp checkpoint` to refresh the latest checkpoint.
+- `paths.protected` blocks full or targeted restores that would write/delete a
+  matching path, and blocks promotes whose fork changes a matching path.
+- `promote.require_clean_status`, `promote.require_checkpoint`, and
+  `promote.allowed_branch_prefixes` are checked before the promoted branch is
+  created.
+
+Protected path patterns are workspace-relative. `*` matches within one path
+segment; `**` matches across path segments. For example, `src/security/**`
+matches `src/security/auth.rs` and deeper files under that directory.
 
 ## Examples
 

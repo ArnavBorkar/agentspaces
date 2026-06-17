@@ -181,10 +181,10 @@
 
 - **S14.1 Policy file**
   - [x] T14.1.1 Add `.asp/policy.toml` with schema, validation, and helpful errors.
-  - [ ] T14.1.2 Support policy for max fork count, max checkpoint age, protected paths, and promote requirements.
+  - [x] T14.1.2 Support policy for max fork count, max checkpoint age, protected paths, and promote requirements.
   - [ ] T14.1.3 Add `asp policy validate --json`.
 - **S14.2 Enforcement**
-  - [ ] T14.2.1 Enforce protected path prompts or hard blocks for promote and restore.
+  - [x] T14.2.1 Enforce protected path prompts or hard blocks for promote and restore.
   - [ ] T14.2.2 Add tests proving invalid policy cannot make destructive operations less safe.
 
 ## EPIC 15 — Audit, retention, and compliance exports
