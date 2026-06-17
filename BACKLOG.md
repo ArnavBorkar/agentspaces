@@ -133,7 +133,7 @@
 
 - **S10.1 Artifact integrity**
   - [x] T10.1.1 Sign release checksums with cosign or minisign and document verification.
-  - [ ] T10.1.2 Publish provenance attestations for release artifacts.
+  - [x] T10.1.2 Publish provenance attestations for release artifacts.
   - [ ] T10.1.3 Add an SBOM artifact to every release.
 - **S10.2 Dependency governance**
   - [x] T10.2.1 Add cargo-deny for advisories, licenses, bans, and duplicate dependency policy.

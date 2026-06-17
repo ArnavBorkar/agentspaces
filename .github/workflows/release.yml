@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -59,6 +60,10 @@ jobs:
           for checksum in asp-*.sha256; do
             cosign sign-blob --yes --bundle "$checksum.sigstore.json" "$checksum"
           done
+      - name: Attest release archive provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: asp-*.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: asp-${{ matrix.target }}

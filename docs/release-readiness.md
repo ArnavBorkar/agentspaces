@@ -26,6 +26,7 @@ trust model before it asks users to trust the binary.
 - [ ] Release workflow dry run or tagged release workflow green
 - [ ] Checksums generated for every binary artifact
 - [ ] Sigstore bundles generated for every checksum file
+- [ ] GitHub provenance attestations generated for every release archive
 - [ ] Downloaded release artifact smoke-tested outside the build tree
 
 ## Public repo readiness

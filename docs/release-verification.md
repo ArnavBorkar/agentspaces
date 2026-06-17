@@ -11,10 +11,11 @@ Verify the bundle first, then use the signed checksum to verify the archive.
 
 ## Prerequisites
 
-Install `cosign` from Sigstore:
+Install `cosign` from Sigstore and GitHub CLI:
 
 ```bash
 cosign version
+gh --version
 ```
 
 ## Verify a release
@@ -43,12 +44,22 @@ shasum -a 256 -c "${ASSET}.sha256"
 
 On Linux, `sha256sum -c "${ASSET}.sha256"` is also fine.
 
+Finally, verify the GitHub provenance attestation for the archive:
+
+```bash
+gh attestation verify "${ASSET}" \
+  -R ArnavBorkar/agentspaces \
+  --signer-workflow "github.com/ArnavBorkar/agentspaces/.github/workflows/release.yml"
+```
+
 ## What this proves
 
 - the checksum file was signed by GitHub Actions running the tagged
   `release.yml` workflow for `ArnavBorkar/agentspaces`;
 - Sigstore recorded the signing event in the transparency log;
 - the downloaded archive matches the signed checksum.
+- GitHub has a SLSA provenance attestation linking the archive to this
+  repository's release workflow.
 
 It does not prove that the source is bug-free or that your machine is trusted.
 It does make tampering with release assets visible.
