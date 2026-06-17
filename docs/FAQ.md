@@ -10,7 +10,7 @@ The store self-heals: journal writes are CRC-checked and torn tails truncate on 
 Source files are stored once per unique content (git objects, compression off for speed). Files over 50 MB are stored once per unique content in a CoW sidecar — on APFS/btrfs/XFS that costs almost nothing until the original changes. Derived state (`node_modules/`, `target/`, `build/`…) is excluded from checkpoints by default (configurable in `.asp/config.toml`) — forks still carry it physically.
 
 **Are forks free?**
-Nearly. A fork shares all file bytes with its parent via copy-on-write; you pay for inode metadata (~32 MB for 100k files) and only for bytes that subsequently diverge. Forks must live on the same volume as the workspace.
+Nearly, when the filesystem supports copy-on-write. A fork shares file bytes with its parent via APFS clonefile or Linux reflink; otherwise it falls back to byte copy. You pay for inode metadata (~32 MB for 100k files) and only for bytes that subsequently diverge on CoW filesystems. Forks must live on the same volume as the workspace. See [filesystem detection](filesystems.md) to probe your machine.
 
 **Can I use asp without the Claude Code integration?**
 Yes — `asp` is a plain CLI; `checkpoint`/`fork`/`undo`/`race` work with any agent (or no agent). The hooks just automate checkpointing; the MCP server (`asp mcp`) works with any MCP-capable harness.
@@ -31,7 +31,7 @@ The first capture stores every source file (one-time). On a 100k-file monorepo i
 Symlinks are preserved in forks and checkpoints (as symlinks, like git). Execute bits are preserved. Empty directories aren't checkpointed (git semantics) but survive in forks.
 
 **Windows?**
-Not yet. macOS (APFS) and Linux (btrfs/XFS reflink; other filesystems fall back to copy with a warning) ship first.
+Not yet. macOS (APFS) and Linux (btrfs/XFS reflink; other filesystems fall back to copy) ship first. See [Windows status](windows.md).
 
 **What if two asp processes run at once?**
 Mutations take an exclusive advisory lock per workspace; concurrent readers are lock-free. A crashed process's lock clears automatically.

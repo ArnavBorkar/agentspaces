@@ -29,6 +29,8 @@
 Forks land at `<parent dir>/<dirname>@<fork-name>` (same volume — required for CoW). Each fork
 is a complete workspace: the cloned `.asp` shares shadow objects via CoW and diverges
 independently; `workspace.json` is rewritten post-clone with a fresh id + parent pointer.
+See [filesystem detection](../filesystems.md) for the platform/filesystem matrix and probe
+commands.
 
 ## Shadow repo
 

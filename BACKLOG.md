@@ -290,7 +290,7 @@
 - **S23.1 Unsupported-platform UX**
   - [x] T23.1.1 Improve Windows error messages with current limitations and tracking issue links.
   - [x] T23.1.2 Add CI that ensures Windows builds either pass or fail with intentional cfg gates.
-  - [ ] T23.1.3 Document filesystem feature detection across APFS, btrfs, XFS, ext4, tmpfs, and network filesystems.
+  - [x] T23.1.3 Document filesystem feature detection across APFS, btrfs, XFS, ext4, tmpfs, and network filesystems.
 - **S23.2 Windows plan**
   - [ ] T23.2.1 Spike block cloning and copy fallback behavior on ReFS/NTFS.
   - [ ] T23.2.2 Write a Windows support design note covering symlinks, permissions, and git behavior.
