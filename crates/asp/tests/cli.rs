@@ -56,6 +56,13 @@ fn full_cli_loop() {
     let cp = ok_json(&root, &["checkpoint", "-m", "base"]);
     assert_eq!(cp["result"]["seq"], 1);
 
+    let stats = ok_json(&root, &["stats"]);
+    assert_eq!(stats["result"]["checkpoints"], 1);
+    assert_eq!(stats["result"]["forks_total"], 0);
+    assert!(stats["result"]["store_bytes"].as_u64().unwrap() > 0);
+    assert_eq!(stats["result"]["last_operation"]["op"], "checkpoint");
+    assert!(ok(&root, &["stats"]).contains("checkpoints"));
+
     // no-op checkpoint exits 0
     let noop = ok_json(&root, &["checkpoint"]);
     assert_eq!(noop["result"]["no_changes"], true);

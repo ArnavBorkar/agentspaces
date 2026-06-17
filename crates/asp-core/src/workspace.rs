@@ -19,6 +19,7 @@ use crate::store::{
     atomic_write, atomic_write_json, find_root, read_json, ForkRecord, ForkRegistry, ForkStatus,
     Layout, ParentRef, StoreLock, WorkspaceMeta, FORMAT_VERSION,
 };
+use walkdir::WalkDir;
 
 pub const CHECKPOINT_REF_PREFIX: &str = "refs/asp/checkpoints/";
 pub const HEAD_REF: &str = "refs/asp/head";
@@ -52,6 +53,34 @@ pub struct StatusReport {
     pub last_checkpoint: Option<LastCheckpoint>,
     pub active_forks: u64,
     pub is_fork: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StatsReport {
+    pub root: PathBuf,
+    pub workspace_id: String,
+    pub checkpoints: u64,
+    pub journal_entries: u64,
+    pub forks_total: u64,
+    pub forks_pending: u64,
+    pub forks_active: u64,
+    pub forks_promoted: u64,
+    pub forks_discarded: u64,
+    pub blobs: u64,
+    pub blob_bytes: u64,
+    pub store_bytes: u64,
+    pub last_operation: Option<StatsOperation>,
+    pub recent_operations: Vec<StatsOperation>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StatsOperation {
+    pub op: Op,
+    pub ts: String,
+    pub seq: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub files_changed: Option<u64>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -358,6 +387,50 @@ impl Workspace {
                     message: e.message.clone(),
                 })
             }))
+    }
+
+    // --------------------------------------------------------------- stats
+
+    pub fn stats(&self) -> Result<StatsReport> {
+        let refs = self.checkpoint_refs()?;
+        let journal_entries = self.journal.read()?.entries;
+        let registry = self.fork_registry()?;
+        let (mut forks_pending, mut forks_active, mut forks_promoted, mut forks_discarded) =
+            (0u64, 0u64, 0u64, 0u64);
+        for rec in &registry.forks {
+            match rec.status {
+                ForkStatus::Pending => forks_pending += 1,
+                ForkStatus::Active => forks_active += 1,
+                ForkStatus::Promoted => forks_promoted += 1,
+                ForkStatus::Discarded => forks_discarded += 1,
+            }
+        }
+        let (blobs, blob_bytes) = blob_stats(&self.layout.blobs())?;
+        let store_bytes = dir_file_bytes(&self.layout.asp)?;
+        let last_operation = journal_entries.last().map(stats_operation);
+        let recent_operations = journal_entries
+            .iter()
+            .rev()
+            .take(10)
+            .map(stats_operation)
+            .collect();
+
+        Ok(StatsReport {
+            root: self.layout.root.clone(),
+            workspace_id: self.meta.id.clone(),
+            checkpoints: refs.len() as u64,
+            journal_entries: journal_entries.len() as u64,
+            forks_total: registry.forks.len() as u64,
+            forks_pending,
+            forks_active,
+            forks_promoted,
+            forks_discarded,
+            blobs,
+            blob_bytes,
+            store_bytes,
+            last_operation,
+            recent_operations,
+        })
     }
 
     // ----------------------------------------------------------- checkpoint
@@ -1802,6 +1875,64 @@ fn sanitize_name(label: &str) -> String {
     } else {
         s
     }
+}
+
+fn stats_operation(entry: &Entry) -> StatsOperation {
+    StatsOperation {
+        op: entry.op.clone(),
+        ts: entry.ts.clone(),
+        seq: entry.seq,
+        duration_ms: entry.duration_ms,
+        files_changed: entry.files_changed,
+        message: entry.message.clone(),
+    }
+}
+
+fn blob_stats(blobs_dir: &Path) -> Result<(u64, u64)> {
+    let mut count = 0u64;
+    let mut bytes = 0u64;
+    if !blobs_dir.exists() {
+        return Ok((0, 0));
+    }
+    for entry in std::fs::read_dir(blobs_dir)? {
+        let entry = entry?;
+        if entry.file_name().to_string_lossy().starts_with(".tmp-") {
+            continue;
+        }
+        let md = entry.metadata()?;
+        if md.is_file() {
+            count += 1;
+            bytes += md.len();
+        }
+    }
+    Ok((count, bytes))
+}
+
+fn dir_file_bytes(root: &Path) -> Result<u64> {
+    let mut bytes = 0u64;
+    for entry in WalkDir::new(root) {
+        let entry = entry.map_err(|e| {
+            Error::new(
+                ErrorCode::Io,
+                format!("walk {} while computing store stats: {e}", root.display()),
+            )
+        })?;
+        if entry.file_type().is_file() {
+            bytes += entry
+                .metadata()
+                .map_err(|e| {
+                    Error::new(
+                        ErrorCode::Io,
+                        format!(
+                            "stat {} while computing store stats: {e}",
+                            entry.path().display()
+                        ),
+                    )
+                })?
+                .len();
+        }
+    }
+    Ok(bytes)
 }
 
 /// Run git in the USER repo (their config applies; we only add safety flags).

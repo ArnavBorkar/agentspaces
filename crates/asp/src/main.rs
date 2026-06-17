@@ -57,6 +57,8 @@ enum Cmd {
     },
     /// Workspace summary: dirty files, last checkpoint, active forks.
     Status,
+    /// Local store statistics: checkpoints, forks, blobs, size, recent timings.
+    Stats,
     /// Capture the current state as a checkpoint (no-op if nothing changed).
     #[command(visible_alias = "cp")]
     Checkpoint {
@@ -279,6 +281,66 @@ fn run(cli: Cli) -> Result<(), Error> {
             println!("  active forks:    {}", st.active_forks);
             if st.is_fork {
                 println!("  {}", ui::dim("this workspace is itself a fork"));
+            }
+            Ok(())
+        }
+        Cmd::Stats => {
+            let ws = open(&cli.dir)?;
+            let stats = ws.stats()?;
+            if json {
+                ui::print_json(true, &stats);
+                return Ok(());
+            }
+            println!(
+                "{}",
+                ui::bold(&format!("workspace {}", stats.root.display()))
+            );
+            println!("  checkpoints:    {}", stats.checkpoints);
+            println!("  journal entries: {}", stats.journal_entries);
+            println!(
+                "  forks:          {} active / {} promoted / {} discarded / {} pending / {} total",
+                stats.forks_active,
+                stats.forks_promoted,
+                stats.forks_discarded,
+                stats.forks_pending,
+                stats.forks_total
+            );
+            println!(
+                "  blobs:          {} ({})",
+                stats.blobs,
+                human_bytes(stats.blob_bytes)
+            );
+            println!("  store size:     {}", human_bytes(stats.store_bytes));
+            if let Some(last) = &stats.last_operation {
+                println!(
+                    "  last operation: {} {}",
+                    op_name(&last.op),
+                    last.duration_ms
+                        .map(|ms| format!("({ms} ms)"))
+                        .unwrap_or_else(|| "(timing not recorded)".to_string())
+                );
+            }
+            if !stats.recent_operations.is_empty() {
+                let mut rows = vec![vec![
+                    "WHEN".to_string(),
+                    "OP".to_string(),
+                    "#".to_string(),
+                    "FILES".to_string(),
+                    "MS".to_string(),
+                    "MESSAGE".to_string(),
+                ]];
+                for op in &stats.recent_operations {
+                    rows.push(vec![
+                        op.ts.clone(),
+                        op_name(&op.op).to_string(),
+                        op.seq.map(|s| format!("#{s}")).unwrap_or_default(),
+                        op.files_changed.map(|v| v.to_string()).unwrap_or_default(),
+                        op.duration_ms.map(|v| v.to_string()).unwrap_or_default(),
+                        op.message.clone().unwrap_or_default(),
+                    ]);
+                }
+                println!();
+                print!("{}", ui::table(&rows));
             }
             Ok(())
         }
@@ -694,4 +756,31 @@ fn detail_summary(detail: &serde_json::Value) -> String {
         return format!("fork '{f}'");
     }
     String::new()
+}
+
+fn op_name(op: &Op) -> &'static str {
+    match op {
+        Op::Init => "init",
+        Op::Checkpoint => "checkpoint",
+        Op::Fork => "fork",
+        Op::Restore => "restore",
+        Op::Undo => "undo",
+        Op::Promote => "promote",
+        Op::Discard => "discard",
+    }
+}
+
+fn human_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} {}", UNITS[unit])
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
 }

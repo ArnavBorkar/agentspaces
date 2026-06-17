@@ -276,8 +276,8 @@
 **Done when:** users can inspect local health and performance while the project remains no-phone-home.
 
 - **S22.1 Local metrics**
-  - [ ] T22.1.1 Add `asp stats` for store size, checkpoint count, fork count, blob count, and last operation timings.
-  - [ ] T22.1.2 Add `asp stats --json` for scripts and CI.
+  - [x] T22.1.1 Add `asp stats` for store size, checkpoint count, fork count, blob count, and last operation timings.
+  - [x] T22.1.2 Add `asp stats --json` for scripts and CI.
   - [ ] T22.1.3 Add per-command timing fields to journal entries where missing.
 - **S22.2 Diagnostics bundles**
   - [ ] T22.2.1 Add `asp diagnostics` that redacts paths/secrets by default.

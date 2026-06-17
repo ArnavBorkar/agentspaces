@@ -64,6 +64,35 @@ fn init_checkpoint_log_roundtrip() {
 }
 
 #[test]
+fn stats_reports_local_store_counts() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+
+    let initial = ws.stats().unwrap();
+    assert_eq!(initial.checkpoints, 0);
+    assert_eq!(initial.journal_entries, 1);
+    assert_eq!(initial.last_operation.as_ref().unwrap().op, Op::Init);
+    assert!(initial.store_bytes > 0);
+
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("measure".into()), None).unwrap();
+    let stats = ws.stats().unwrap();
+    assert_eq!(stats.checkpoints, 1);
+    assert_eq!(stats.forks_total, 1);
+    assert_eq!(stats.forks_active, 1);
+    assert_eq!(stats.forks_pending, 0);
+    assert_eq!(stats.forks_promoted, 0);
+    assert_eq!(stats.forks_discarded, 0);
+    assert_eq!(stats.last_operation.as_ref().unwrap().op, Op::Fork);
+    assert!(stats
+        .recent_operations
+        .iter()
+        .any(|op| op.op == Op::Checkpoint && op.duration_ms.is_some()));
+    assert!(stats.store_bytes >= initial.store_bytes);
+    assert!(fork.path.exists());
+}
+
+#[test]
 fn init_is_guarded() {
     let (_tmp, root) = project();
     Workspace::init(&root, None).unwrap();
