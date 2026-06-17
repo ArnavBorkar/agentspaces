@@ -33,6 +33,8 @@ Every lane process receives these metadata variables:
 | `ASP_RACE_FORK` | fork name, such as `fix-2` |
 | `ASP_RACE_LABEL` | explicit label or fork name |
 | `ASP_RACE_PATH` | lane working directory |
+| `ASP_RACE_ATTEMPT` | current 1-based attempt number |
+| `ASP_RACE_MAX_ATTEMPTS` | first attempt plus configured retries |
 
 Add repeated `--env KEY=VALUE` flags for custom lane variables. Values may use
 these placeholders: `{lane}`, `{fork}`, `{label}`, `{path}`, `{name}`.
@@ -49,6 +51,31 @@ asp race -n 2 --name variant \
 Environment keys must start with a letter or `_` and contain only letters,
 digits, and `_`. Invalid labels or templates are rejected before forks are
 created.
+
+## Runner Controls
+
+Use `--timeout` to cap each attempt. Durations accept `ms`, `s`, `m`, or bare
+seconds. Timed-out attempts are killed, logged, and reported with
+`timed_out: true` when no later retry succeeds.
+
+```bash
+asp race -n 3 --timeout 5m -- claude -p "make the tests pass"
+```
+
+Use `--retries N` to rerun failed, timed-out, or spawn-failed attempts inside
+the same lane directory. This lets a lane keep local attempt artifacts while
+still reporting the final diff against the fork point.
+
+```bash
+asp race -n 3 --retries 1 --timeout 2m -- pytest
+```
+
+Use `--cancel-on-success` when the first exit-code-0 lane is good enough and
+slower lanes should stop spending time or agent budget.
+
+```bash
+asp race -n 5 --cancel-on-success -- claude -p "fix the flaky test"
+```
 
 ## Review And Cleanup
 

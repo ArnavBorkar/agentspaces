@@ -10,6 +10,7 @@ mod race;
 mod ui;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use asp_core::journal::{Op, Source};
 use asp_core::store::{atomic_write, FORMAT_VERSION};
@@ -134,6 +135,15 @@ enum Cmd {
         /// Per-lane environment template: KEY=VALUE, with {lane}, {fork}, {label}, {path}, {name}.
         #[arg(long = "env", value_name = "KEY=VALUE")]
         env: Vec<String>,
+        /// Per-attempt timeout, such as 500ms, 30s, 2m, or bare seconds.
+        #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
+        timeout: Option<Duration>,
+        /// Retry failed or timed-out lanes this many times.
+        #[arg(long, default_value_t = 0)]
+        retries: u32,
+        /// Stop still-running lanes after the first successful lane exits 0.
+        #[arg(long)]
+        cancel_on_success: bool,
         /// The command to run in each fork (everything after --).
         #[arg(last = true, required = true)]
         command: Vec<String>,
@@ -684,15 +694,25 @@ fn run(cli: Cli) -> Result<(), Error> {
             name,
             labels,
             env,
+            timeout,
+            retries,
+            cancel_on_success,
             command,
         } => race::run(
             &open(&cli.dir)?,
-            count,
-            &name,
-            &labels,
-            &env,
-            &command,
-            json,
+            race::RunRequest {
+                count,
+                name: &name,
+                labels: &labels,
+                env_templates: &env,
+                options: race::RunOptions {
+                    timeout,
+                    retries,
+                    cancel_on_success,
+                },
+                command: &command,
+                json,
+            },
         ),
         Cmd::Mcp => {
             if let Some(dir) = &cli.dir {
@@ -872,6 +892,33 @@ fn op_name(op: &Op) -> &'static str {
     }
 }
 
+fn parse_duration(raw: &str) -> Result<Duration, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("duration cannot be empty".to_string());
+    }
+    let digit_len = raw.find(|c: char| !c.is_ascii_digit()).unwrap_or(raw.len());
+    if digit_len == 0 {
+        return Err("duration must start with a positive integer".to_string());
+    }
+    let value: u64 = raw[..digit_len]
+        .parse()
+        .map_err(|_| "duration value is too large".to_string())?;
+    if value == 0 {
+        return Err("duration must be greater than zero".to_string());
+    }
+    let unit = raw[digit_len..].trim();
+    match unit {
+        "" | "s" | "sec" | "secs" | "second" | "seconds" => Ok(Duration::from_secs(value)),
+        "ms" | "millisecond" | "milliseconds" => Ok(Duration::from_millis(value)),
+        "m" | "min" | "mins" | "minute" | "minutes" => value
+            .checked_mul(60)
+            .map(Duration::from_secs)
+            .ok_or_else(|| "duration value is too large".to_string()),
+        _ => Err("duration unit must be ms, s, or m".to_string()),
+    }
+}
+
 fn schema_report() -> SchemaReport {
     SchemaReport {
         asp_version: asp_core::version(),
@@ -950,4 +997,21 @@ fn write_json_file<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), Er
 fn json_pretty<T: serde::Serialize>(value: &T) -> Result<String, Error> {
     serde_json::to_string_pretty(value)
         .map_err(|e| Error::new(ErrorCode::Io, format!("diagnostics encode: {e}")).with_source(e))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::parse_duration;
+
+    #[test]
+    fn race_timeout_duration_parser_accepts_common_units() {
+        assert_eq!(parse_duration("250ms").unwrap(), Duration::from_millis(250));
+        assert_eq!(parse_duration("2s").unwrap(), Duration::from_secs(2));
+        assert_eq!(parse_duration("3").unwrap(), Duration::from_secs(3));
+        assert_eq!(parse_duration("4m").unwrap(), Duration::from_secs(240));
+        assert!(parse_duration("0s").is_err());
+        assert!(parse_duration("1h").is_err());
+    }
 }

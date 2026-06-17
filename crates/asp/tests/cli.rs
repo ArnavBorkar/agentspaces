@@ -231,6 +231,95 @@ fn race_labels_and_env_templates_reach_lanes() {
 }
 
 #[test]
+fn race_timeout_retry_and_cancel_controls() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+
+    let timed = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "1",
+            "--name",
+            "slow",
+            "--timeout",
+            "100ms",
+            "--",
+            "sh",
+            "-c",
+            "exec sleep 5",
+        ],
+    );
+    let timed_lane = &timed["result"].as_array().unwrap()[0];
+    assert!(timed_lane["exit_code"].is_null());
+    assert_eq!(timed_lane["attempts"], 1);
+    assert_eq!(timed_lane["timed_out"], true);
+    assert_eq!(timed_lane["canceled"], false);
+    assert!(timed_lane["duration_ms"].as_u64().unwrap() < 3_000);
+    let timed_log =
+        std::fs::read_to_string(PathBuf::from(timed_lane["log_file"].as_str().unwrap())).unwrap();
+    assert!(timed_log.contains("timed out"));
+
+    let retried = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "1",
+            "--name",
+            "retry",
+            "--retries",
+            "1",
+            "--",
+            "sh",
+            "-c",
+            "if [ ! -f attempt ]; then echo first; touch attempt; exit 7; fi; echo retry >> src/app.py",
+        ],
+    );
+    let retry_lane = &retried["result"].as_array().unwrap()[0];
+    assert_eq!(retry_lane["exit_code"], 0);
+    assert_eq!(retry_lane["attempts"], 2);
+    assert_eq!(retry_lane["timed_out"], false);
+    assert_eq!(retry_lane["canceled"], false);
+    let retry_log =
+        std::fs::read_to_string(PathBuf::from(retry_lane["log_file"].as_str().unwrap())).unwrap();
+    assert!(retry_log.contains("attempt 1/2"));
+    assert!(retry_log.contains("attempt 2/2"));
+
+    let canceled = ok_json(
+        &root,
+        &[
+            "race",
+            "-n",
+            "2",
+            "--name",
+            "cancel",
+            "--label",
+            "fast",
+            "--label",
+            "slow",
+            "--cancel-on-success",
+            "--",
+            "sh",
+            "-c",
+            "if [ \"$ASP_RACE_LABEL\" = fast ]; then echo fast >> src/app.py; else exec sleep 5; fi",
+        ],
+    );
+    let lanes = canceled["result"].as_array().unwrap();
+    let fast = lanes.iter().find(|lane| lane["label"] == "fast").unwrap();
+    let slow = lanes.iter().find(|lane| lane["label"] == "slow").unwrap();
+    assert_eq!(fast["exit_code"], 0);
+    assert_eq!(fast["attempts"], 1);
+    assert_eq!(fast["canceled"], false);
+    assert!(slow["exit_code"].is_null());
+    assert_eq!(slow["canceled"], true);
+    assert_eq!(slow["timed_out"], false);
+    assert!(slow["duration_ms"].as_u64().unwrap() < 3_000);
+}
+
+#[test]
 fn promote_via_cli_lands_branch() {
     let (_tmp, root) = project();
     let git = |args: &[&str]| {

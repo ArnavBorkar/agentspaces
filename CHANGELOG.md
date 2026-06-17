@@ -6,11 +6,16 @@
 
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
+- `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner
+  controls for bounded best-of-N agent work.
 
 ### Automation contract
 
 - Additive: `asp race --json` lane result objects include `label` when emitted
   by this version. Existing lane fields are unchanged.
+- Additive: `asp race --json` lane result objects include `attempts`,
+  `timed_out`, and `canceled` runner metadata. Existing lane fields are
+  unchanged.
 
 ## Automation Contract Rules
 
