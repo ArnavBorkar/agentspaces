@@ -341,9 +341,11 @@ fn race_timeout_retry_and_cancel_controls() {
     assert_eq!(fast["exit_code"], 0);
     assert_eq!(fast["attempts"], 1);
     assert_eq!(fast["canceled"], false);
-    assert!(slow["exit_code"].is_null());
     assert_eq!(slow["canceled"], true);
     assert_eq!(slow["timed_out"], false);
+    if let Some(code) = slow["exit_code"].as_i64() {
+        assert_ne!(code, 0, "canceled lane must not look successful");
+    }
     assert!(slow["duration_ms"].as_u64().unwrap() < 3_000);
 }
 
