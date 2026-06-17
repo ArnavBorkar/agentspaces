@@ -781,6 +781,20 @@ fn promote_via_cli_lands_branch() {
     git(&["config", "user.name", "U"]);
     git(&["add", "-A"]);
     git(&["commit", "-qm", "init"]);
+    let remote = root.parent().unwrap().join("origin.git");
+    let remote_init = Command::new("git")
+        .arg("init")
+        .arg("--bare")
+        .arg("-q")
+        .arg(&remote)
+        .output()
+        .unwrap();
+    assert!(
+        remote_init.status.success(),
+        "git init --bare: {}",
+        String::from_utf8_lossy(&remote_init.stderr)
+    );
+    git(&["remote", "add", "origin", remote.to_str().unwrap()]);
 
     ok(&root, &["init"]);
     std::fs::write(
@@ -825,6 +839,66 @@ fn promote_via_cli_lands_branch() {
     assert_eq!(err["ok"], false);
     assert_eq!(err["error"]["code"], "invalid_branch");
     assert!(err["error"]["hint"].as_str().unwrap().contains("--branch"));
+
+    let forks = ok_json(&root, &["fork", "--name", "pushme"]);
+    let push_path = PathBuf::from(forks["result"][0]["path"].as_str().unwrap());
+    std::fs::write(push_path.join("src/app.py"), "print('pushed')\n").unwrap();
+    let out = asp(
+        &root,
+        &[
+            "--json",
+            "promote",
+            "pushme",
+            "--branch",
+            "review/proj/pushme",
+            "--push",
+        ],
+    );
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["error"]["code"], "nothing_to_do");
+    assert!(err["error"]["hint"].as_str().unwrap().contains("--remote"));
+
+    let pushed = ok_json(
+        &root,
+        &[
+            "promote",
+            "pushme",
+            "--branch",
+            "review/proj/pushme",
+            "--push",
+            "--remote",
+            "origin",
+        ],
+    );
+    assert_eq!(pushed["result"]["branch"], "review/proj/pushme");
+    assert_eq!(pushed["result"]["push"]["pushed"], true);
+    assert_eq!(pushed["result"]["push"]["remote"], "origin");
+    assert_eq!(pushed["result"]["push"]["branch"], "review/proj/pushme");
+    assert_eq!(
+        pushed["result"]["push"]["refspec"],
+        "refs/heads/review/proj/pushme:refs/heads/review/proj/pushme"
+    );
+    assert!(pushed["result"]["push"]["command"]
+        .as_str()
+        .unwrap()
+        .contains("git push origin"));
+    let remote_show = Command::new("git")
+        .arg("--git-dir")
+        .arg(&remote)
+        .args(["show", "refs/heads/review/proj/pushme:src/app.py"])
+        .output()
+        .unwrap();
+    assert!(
+        remote_show.status.success(),
+        "git show remote branch: {}",
+        String::from_utf8_lossy(&remote_show.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&remote_show.stdout).trim(),
+        "print('pushed')"
+    );
 }
 
 #[test]

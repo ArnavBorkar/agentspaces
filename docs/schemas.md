@@ -91,7 +91,9 @@ returns `diffHtmlOutputResult` after writing an offline HTML review artifact.
 
 `asp promote --json` returns `promoteReport` with the created branch and
 retained-fork cleanup metadata: `fork_path`, `fork_retained: true`, and
-`cleanup_command` (`asp discard <fork>`).
+`cleanup_command` (`asp discard <fork>`). When `asp promote --push --remote
+<remote>` succeeds, `promoteReport.push` includes `remote`, `branch`, `refspec`,
+and the exact `git push` command used.
 
 `asp forks --json` rows and `asp race --json` lane results may include `review`
 signals with `tests_passed`, touched-file and line-churn counts, a numeric

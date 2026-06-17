@@ -338,6 +338,17 @@ pub struct PromoteReport {
     pub branch: String,
     pub commit: String,
     pub cleanup_command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push: Option<PromotePushReport>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PromotePushReport {
+    pub pushed: bool,
+    pub remote: String,
+    pub branch: String,
+    pub refspec: String,
+    pub command: String,
 }
 
 struct ScanResult {
@@ -2267,6 +2278,36 @@ impl Workspace {
             branch,
             commit,
             cleanup_command,
+            push: None,
+        })
+    }
+
+    pub fn push_promoted_branch(&self, remote: &str, branch: &str) -> Result<PromotePushReport> {
+        let remote = remote.trim();
+        if remote.is_empty() || remote.chars().any(char::is_whitespace) {
+            return Err(Error::new(
+                ErrorCode::NothingToDo,
+                "promote --push needs a non-empty remote name",
+            )
+            .with_hint("retry with an explicit remote, for example `asp promote <fork> --push --remote origin`"));
+        }
+        validate_user_branch_name(&self.layout.root, branch)?;
+
+        let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+        run_user_git(&self.layout.root, &["push", "--porcelain", remote, &refspec]).map_err(
+            |err| {
+                err.with_hint(format!(
+                    "the local branch '{branch}' still exists; check remote '{remote}' and retry `git push {remote} {refspec}`"
+                ))
+            },
+        )?;
+
+        Ok(PromotePushReport {
+            pushed: true,
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+            command: format!("git push {remote} {refspec}"),
+            refspec,
         })
     }
 

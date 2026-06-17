@@ -647,7 +647,20 @@
         "fork_retained": { "const": true },
         "branch": { "type": "string" },
         "commit": { "$ref": "#/$defs/gitOid" },
-        "cleanup_command": { "type": "string" }
+        "cleanup_command": { "type": "string" },
+        "push": { "$ref": "#/$defs/promotePushReport" }
+      }
+    },
+    "promotePushReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pushed", "remote", "branch", "refspec", "command"],
+      "properties": {
+        "pushed": { "const": true },
+        "remote": { "type": "string" },
+        "branch": { "type": "string" },
+        "refspec": { "type": "string" },
+        "command": { "type": "string" }
       }
     },
     "raceLaneResults": {

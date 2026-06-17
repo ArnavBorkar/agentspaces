@@ -158,6 +158,11 @@ git diff main...asp/<issue-or-task>
 
 The branch should go through normal code review. `asp promote` is not a review
 bypass; it is the handoff from local agent work to normal git workflow.
+To promote and publish in one step, use an explicit remote:
+
+```bash
+asp promote <winner> --branch asp/<issue-or-task> --push --remote origin
+```
 
 ### Cleanup
 

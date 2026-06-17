@@ -85,6 +85,8 @@
   the exact `asp discard <fork>` cleanup command.
 - `asp promote` now validates target branch names before writing and returns an
   actionable `invalid_branch` error for unsafe Git refs.
+- `asp promote --push --remote <remote>` now pushes the promoted branch with an
+  exact branch refspec and reports the push target in human and JSON output.
 
 ### Fixed
 
@@ -132,6 +134,8 @@
   `fork_path`, `fork_retained`, and `cleanup_command` cleanup metadata.
 - Additive: promote failures may return the new `invalid_branch` error code
   when the requested branch name is not a valid Git branch ref.
+- Additive: `asp promote --json --push --remote <remote>` includes a `push`
+  object with `pushed`, `remote`, `branch`, `refspec`, and `command`.
 
 ## Automation Contract Rules
 

@@ -148,6 +148,12 @@ enum Cmd {
         /// Branch name to create (default: promote.branch_template in .asp/config.toml).
         #[arg(long)]
         branch: Option<String>,
+        /// Push the created branch after promoting it.
+        #[arg(long)]
+        push: bool,
+        /// Remote to push to with --push (for example: origin).
+        #[arg(long, value_name = "REMOTE")]
+        remote: Option<String>,
     },
     /// Delete a fork (refuses if it has unpromoted work, unless --force).
     Discard {
@@ -966,9 +972,19 @@ fn run(cli: Cli) -> Result<(), Error> {
             print_diff_report(&report);
             Ok(())
         }
-        Cmd::Promote { fork, branch } => {
+        Cmd::Promote {
+            fork,
+            branch,
+            push,
+            remote,
+        } => {
+            validate_promote_push(push, remote.as_deref())?;
             let ws = open(&cli.dir)?;
-            let report = ws.promote(&fork, branch)?;
+            let mut report = ws.promote(&fork, branch)?;
+            if push {
+                let remote = remote.as_deref().expect("validated push remote");
+                report.push = Some(ws.push_promoted_branch(remote, &report.branch)?);
+            }
             if json {
                 ui::print_json(true, &report);
             } else {
@@ -988,6 +1004,14 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::cyan(&report.fork_path.display().to_string()),
                     ui::cyan(&report.cleanup_command)
                 );
+                if let Some(push) = &report.push {
+                    println!(
+                        "  pushed: remote {} branch {} ({})",
+                        ui::cyan(&push.remote),
+                        ui::cyan(&push.branch),
+                        ui::cyan(&push.command)
+                    );
+                }
             }
             Ok(())
         }
@@ -1571,6 +1595,25 @@ fn validate_diff_mode(
         return Err(
             Error::new(ErrorCode::NothingToDo, "--output is only used with --html")
                 .with_hint("add `--html`, or remove --output"),
+        );
+    }
+    Ok(())
+}
+
+fn validate_promote_push(push: bool, remote: Option<&str>) -> Result<(), Error> {
+    if push {
+        let has_remote = remote.is_some_and(|remote| !remote.trim().is_empty());
+        if !has_remote {
+            return Err(Error::new(
+                ErrorCode::NothingToDo,
+                "--push needs an explicit --remote <REMOTE>",
+            )
+            .with_hint("retry with the remote to push to, for example `asp promote <fork> --push --remote origin`"));
+        }
+    } else if remote.is_some() {
+        return Err(
+            Error::new(ErrorCode::NothingToDo, "--remote is only used with --push")
+                .with_hint("add --push to push after promote, or remove --remote"),
         );
     }
     Ok(())
