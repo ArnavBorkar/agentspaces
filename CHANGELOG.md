@@ -36,6 +36,8 @@
   that avoid mandatory telemetry, accounts, or source custody.
 - MCP `initialize` now reports asp capability metadata, and `tools/list` entries
   include model-facing safety annotations guarded by snapshots.
+- MCP JSON-RPC handling now rejects malformed request ids and bad `tools/call`
+  params with protocol errors while continuing to serve later requests.
 
 ### Fixed
 

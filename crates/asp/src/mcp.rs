@@ -36,27 +36,64 @@ pub fn serve() -> std::io::Result<()> {
         let msg: Value = match serde_json::from_str(line.trim_end()) {
             Ok(v) => v,
             Err(e) => {
-                let resp = json!({
-                    "jsonrpc": "2.0", "id": null,
-                    "error": { "code": -32700, "message": format!("parse error: {e}") }
-                });
+                let resp = error_response(
+                    Value::Null,
+                    -32700,
+                    format!("parse error: {e}; send one valid JSON-RPC 2.0 object per line"),
+                );
                 writeln!(out, "{resp}")?;
                 out.flush()?;
                 continue;
             }
         };
+        if !msg.is_object() {
+            let resp = error_response(
+                Value::Null,
+                -32600,
+                "invalid request: expected a JSON-RPC 2.0 object",
+            );
+            writeln!(out, "{resp}")?;
+            out.flush()?;
+            continue;
+        }
+
         let id = msg.get("id").cloned();
-        let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
 
         // Notifications (no id) get no response.
         let Some(id) = id else { continue };
+        if !valid_request_id(&id) {
+            let resp = error_response(
+                Value::Null,
+                -32600,
+                "invalid request: id must be a string, number, or null",
+            );
+            writeln!(out, "{resp}")?;
+            out.flush()?;
+            continue;
+        }
+        if msg.get("jsonrpc").and_then(|v| v.as_str()) != Some("2.0") {
+            let resp = error_response(
+                id,
+                -32600,
+                "invalid request: jsonrpc must be exactly \"2.0\"",
+            );
+            writeln!(out, "{resp}")?;
+            out.flush()?;
+            continue;
+        }
+        let Some(method) = msg.get("method").and_then(|m| m.as_str()) else {
+            let resp = error_response(id, -32600, "invalid request: method must be a string");
+            writeln!(out, "{resp}")?;
+            out.flush()?;
+            continue;
+        };
 
         let result = match method {
             "initialize" => Ok(initialize_result(&params)),
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tool_definitions() })),
-            "tools/call" => Ok(handle_tool_call(&params)),
+            "tools/call" => handle_tool_call(&params),
             other => Err(json!({
                 "code": -32601,
                 "message": format!("method not found: {other}")
@@ -70,6 +107,22 @@ pub fn serve() -> std::io::Result<()> {
         out.flush()?;
     }
     Ok(())
+}
+
+fn valid_request_id(id: &Value) -> bool {
+    matches!(id, Value::String(_) | Value::Number(_) | Value::Null)
+}
+
+fn rpc_error(code: i64, message: impl Into<String>) -> Value {
+    json!({ "code": code, "message": message.into() })
+}
+
+fn error_response(id: Value, code: i64, message: impl Into<String>) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": rpc_error(code, message) })
+}
+
+fn invalid_params(message: impl Into<String>) -> Value {
+    rpc_error(-32602, format!("invalid params: {}", message.into()))
 }
 
 fn initialize_result(params: &Value) -> Value {
@@ -272,24 +325,37 @@ pub fn tool_definitions() -> Vec<Value> {
     ]
 }
 
-fn handle_tool_call(params: &Value) -> Value {
-    let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+fn handle_tool_call(params: &Value) -> Result<Value, Value> {
+    if !params.is_object() {
+        return Err(invalid_params(
+            "tools/call params must be an object with a string 'name'",
+        ));
+    }
+    let name = params
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| invalid_params("tools/call requires a string 'name'"))?;
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
+    if !args.is_object() {
+        return Err(invalid_params(
+            "tools/call 'arguments' must be an object when present",
+        ));
+    }
     match call_tool(name, &args) {
-        Ok(payload) => json!({
+        Ok(payload) => Ok(json!({
             "content": [{ "type": "text", "text": payload.to_string() }],
             "structuredContent": payload,
             "isError": false,
-        }),
+        })),
         Err(e) => {
             let mut text = e.message.clone();
             if let Some(hint) = &e.hint {
                 text.push_str(&format!("\nnext step: {hint}"));
             }
-            json!({
+            Ok(json!({
                 "content": [{ "type": "text", "text": text }],
                 "isError": true,
-            })
+            }))
         }
     }
 }

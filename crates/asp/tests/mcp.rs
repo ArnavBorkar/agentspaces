@@ -3,6 +3,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
 struct McpClient {
     child: Child,
@@ -34,16 +36,31 @@ impl McpClient {
 
     fn request(&mut self, method: &str, params: serde_json::Value) -> serde_json::Value {
         self.next_id += 1;
+        let id = self.next_id;
         let msg = serde_json::json!({
-            "jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params
+            "jsonrpc": "2.0", "id": id, "method": method, "params": params
         });
+        let resp = self.request_value(msg);
+        assert_eq!(resp["id"], id, "response id matches");
+        resp
+    }
+
+    fn request_value(&mut self, msg: serde_json::Value) -> serde_json::Value {
         writeln!(self.stdin, "{msg}").unwrap();
         self.stdin.flush().unwrap();
+        self.read_response()
+    }
+
+    fn write_raw(&mut self, bytes: &[u8]) {
+        self.stdin.write_all(bytes).unwrap();
+        self.stdin.flush().unwrap();
+    }
+
+    fn read_response(&mut self) -> serde_json::Value {
         let mut line = String::new();
-        self.stdout.read_line(&mut line).unwrap();
-        let resp: serde_json::Value = serde_json::from_str(&line).expect("valid json response");
-        assert_eq!(resp["id"], self.next_id, "response id matches");
-        resp
+        let read = self.stdout.read_line(&mut line).unwrap();
+        assert!(read > 0, "mcp server closed stdout");
+        serde_json::from_str(&line).expect("valid json response")
     }
 
     fn call_tool(&mut self, name: &str, args: serde_json::Value) -> serde_json::Value {
@@ -199,4 +216,91 @@ fn explicit_directory_argument() {
         serde_json::json!({ "directory": dir, "message": "remote" }),
     );
     assert_eq!(cp["structuredContent"]["seq"], 1);
+}
+
+#[test]
+fn malformed_json_rpc_errors_are_recoverable() {
+    let (_tmp, root) = project();
+    let mut mcp = McpClient::start(&root);
+
+    mcp.write_raw(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\xff}\n");
+    let err = mcp.read_response();
+    assert_eq!(err["id"], serde_json::Value::Null);
+    assert_eq!(err["error"]["code"], -32700);
+    assert!(err["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("valid JSON-RPC 2.0 object"));
+
+    let pong = mcp.request("ping", serde_json::json!({}));
+    assert!(pong["result"].is_object());
+}
+
+#[test]
+fn invalid_ids_notifications_and_unknown_methods_are_handled() {
+    let (_tmp, root) = project();
+    let mut mcp = McpClient::start(&root);
+
+    mcp.write_raw(b"[]\n");
+    let not_object = mcp.read_response();
+    assert_eq!(not_object["id"], serde_json::Value::Null);
+    assert_eq!(not_object["error"]["code"], -32600);
+
+    mcp.write_raw(br#"{"jsonrpc":"2.0","id":{"bad":true},"method":"ping"}"#);
+    mcp.write_raw(b"\n");
+    let bad_id = mcp.read_response();
+    assert_eq!(bad_id["id"], serde_json::Value::Null);
+    assert_eq!(bad_id["error"]["code"], -32600);
+    assert!(bad_id["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("id must be"));
+
+    mcp.write_raw(br#"{"jsonrpc":"2.0","method":"ping"}"#);
+    mcp.write_raw(b"\n");
+    let pong = mcp.request("ping", serde_json::json!({}));
+    assert!(pong["result"].is_object());
+
+    let unknown = mcp.request_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "client-string-id",
+        "method": "bogus/method"
+    }));
+    assert_eq!(unknown["id"], "client-string-id");
+    assert_eq!(unknown["error"]["code"], -32601);
+}
+
+#[test]
+fn bad_tools_call_params_return_invalid_params() {
+    let (_tmp, root) = project();
+    let mut mcp = McpClient::start(&root);
+
+    for params in [
+        serde_json::Value::Null,
+        serde_json::json!({}),
+        serde_json::json!({ "name": 42 }),
+        serde_json::json!({ "name": "workspace_status", "arguments": [] }),
+    ] {
+        let resp = mcp.request("tools/call", params);
+        assert_eq!(resp["error"]["code"], -32602, "{resp}");
+        assert!(resp["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid params"));
+    }
+}
+
+#[test]
+fn partial_lines_are_buffered_until_newline() {
+    let (_tmp, root) = project();
+    let mut mcp = McpClient::start(&root);
+
+    mcp.write_raw(br#"{"jsonrpc":"2.0","id":77,"method":"ping","#);
+    thread::sleep(Duration::from_millis(20));
+    mcp.write_raw(br#""params":{}}"#);
+    mcp.write_raw(b"\n");
+
+    let resp = mcp.read_response();
+    assert_eq!(resp["id"], 77);
+    assert!(resp["result"].is_object());
 }
