@@ -18,3 +18,8 @@ CI includes a Windows unsupported gate. It builds the workspace, runs the
 Windows-specific unit guard, and checks that `asp init --json` exits nonzero with
 the documented `unsupported_platform` code and WSL2 hint. Before native Windows
 is marked supported, that job must be replaced by a real Windows behavior suite.
+
+The first filesystem spike is documented in
+[docs/design/windows-block-clone-spike.md](design/windows-block-clone-spike.md):
+ReFS is the candidate for block cloning, while NTFS stays on byte-copy fallback
+unless Microsoft documents and CI proves a safe local clone path.

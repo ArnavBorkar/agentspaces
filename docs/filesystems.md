@@ -12,6 +12,10 @@ platform and the filesystem under the workspace root:
 | Linux tmpfs | `copy` | Useful for tests, but no durable CoW sharing. |
 | Network or virtual filesystems | `copy` or error | NFS, SMB, Docker bind mounts, and cloud sync folders vary; probe before relying on CoW. |
 
+Native Windows is currently disabled. The planned behavior is ReFS block clone
+where proven and NTFS byte-copy fallback; see the
+[Windows block clone spike](design/windows-block-clone-spike.md).
+
 The source of truth is the JSON output from a probe fork:
 
 ```bash
