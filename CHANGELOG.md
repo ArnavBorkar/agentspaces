@@ -42,6 +42,8 @@
   with stable recovery guidance documented in `docs/mcp-error-codes.md`.
 - MCP tool descriptions now tell models when not to call risky state-changing
   tools such as undo, restore, promote, and discard.
+- MCP now has a replayable transcript snapshot that guards concise tool
+  descriptions and actionable error responses.
 
 ### Fixed
 

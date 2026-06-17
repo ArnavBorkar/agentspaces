@@ -60,6 +60,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_error" => include_str!("snapshots/cli_error.json"),
         "mcp_initialize" => include_str!("snapshots/mcp_initialize.json"),
         "mcp_tools" => include_str!("snapshots/mcp_tools.json"),
+        "mcp_transcript" => include_str!("snapshots/mcp_transcript.json"),
         "mcp_status" => include_str!("snapshots/mcp_status.json"),
         "mcp_error" => include_str!("snapshots/mcp_error.json"),
         other => panic!("unknown snapshot {other}"),
@@ -95,7 +96,9 @@ fn normalize_value(value: &mut Value, root: &Path) {
                     }
                     "workspace_id" => *child = json!("<workspace-id>"),
                     "asp_version" | "serverVersion" => *child = json!("<asp-version>"),
-                    "version" if child.is_string() => *child = json!("<asp-version>"),
+                    "version" if child.as_str() == Some(env!("CARGO_PKG_VERSION")) => {
+                        *child = json!("<asp-version>");
+                    }
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
                     "ts" | "generated_at" => *child = json!("<timestamp>"),
                     "duration_ms" | "store_bytes" | "blob_bytes" if child.is_number() => {
@@ -226,21 +229,25 @@ impl McpClient {
         }
     }
 
-    fn request(&mut self, method: &str, params: Value) -> Value {
+    fn exchange(&mut self, method: &str, params: Value) -> (Value, Value) {
         self.next_id += 1;
-        let msg = json!({
+        let request = json!({
             "jsonrpc": "2.0",
             "id": self.next_id,
             "method": method,
             "params": params,
         });
-        writeln!(self.stdin, "{msg}").unwrap();
+        writeln!(self.stdin, "{request}").unwrap();
         self.stdin.flush().unwrap();
         let mut line = String::new();
         self.stdout.read_line(&mut line).unwrap();
         let resp: Value = serde_json::from_str(&line).expect("valid mcp response");
         assert_eq!(resp["id"], self.next_id);
-        resp
+        (request, resp)
+    }
+
+    fn request(&mut self, method: &str, params: Value) -> Value {
+        self.exchange(method, params).1
     }
 
     fn call_tool(&mut self, name: &str, args: Value) -> Value {
@@ -254,6 +261,51 @@ impl Drop for McpClient {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+fn assert_tool_list_is_concise_and_actionable(tools: &[Value]) {
+    assert!(tools.len() <= 16, "unexpected tool sprawl: {}", tools.len());
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        let description = tool["description"].as_str().unwrap();
+        assert!(
+            description.len() <= 560,
+            "{name} description is too long for tool selection: {} chars",
+            description.len()
+        );
+        assert!(
+            !description.contains('\n'),
+            "{name} description should be a compact paragraph"
+        );
+        let risky = tool["annotations"]["destructiveHint"] == true || name == "workspace_promote";
+        if risky {
+            assert!(
+                description.contains("Do not"),
+                "{name} must say when not to call it"
+            );
+        }
+    }
+}
+
+fn assert_tool_error_is_actionable(result: &Value) {
+    assert_eq!(result["isError"], true);
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.len() <= 520,
+        "tool error text is too long for a model turn: {} chars",
+        text.len()
+    );
+    assert!(text.contains("next step:"), "tool error lacks next step");
+    assert!(result["structuredContent"]["error"]["code"].is_string());
+    assert!(result["structuredContent"]["error"]["hint"].is_string());
+}
+
+fn transcript_tool(tool: &Value) -> Value {
+    json!({
+        "name": tool["name"],
+        "description": tool["description"],
+        "annotations": tool["annotations"],
+    })
 }
 
 #[test]
@@ -284,4 +336,61 @@ fn mcp_tool_result_shapes_match_snapshots() {
 
     let status = mcp.call_tool("workspace_status", json!({}));
     snapshot("mcp_status", normalize(status, &root));
+}
+
+#[test]
+fn mcp_transcript_stays_concise_and_actionable() {
+    let (_tmp, root) = project();
+    let mut mcp = McpClient::start(&root);
+
+    let (init_req, init_resp) = mcp.exchange(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": { "name": "transcript", "version": "0" }
+        }),
+    );
+    let instructions = init_resp["result"]["instructions"].as_str().unwrap();
+    assert!(instructions.len() <= 900);
+    assert!(instructions.contains("workspace_checkpoint"));
+    assert!(instructions.contains("workspace_undo"));
+
+    let (tools_req, tools_resp) = mcp.exchange("tools/list", json!({}));
+    let tools = tools_resp["result"]["tools"].as_array().unwrap();
+    assert_tool_list_is_concise_and_actionable(tools);
+    let tools_transcript_resp = json!({
+        "jsonrpc": "2.0",
+        "id": tools_resp["id"],
+        "result": {
+            "tools": tools.iter().map(transcript_tool).collect::<Vec<_>>()
+        }
+    });
+
+    let (status_req, status_resp) = mcp.exchange(
+        "tools/call",
+        json!({ "name": "workspace_status", "arguments": {} }),
+    );
+    assert_tool_error_is_actionable(&status_resp["result"]);
+
+    let (init_tool_req, init_tool_resp) = mcp.exchange(
+        "tools/call",
+        json!({ "name": "workspace_init", "arguments": {} }),
+    );
+    assert_eq!(init_tool_resp["result"]["isError"], false);
+
+    let (checkpoint_req, checkpoint_resp) = mcp.exchange(
+        "tools/call",
+        json!({ "name": "workspace_checkpoint", "arguments": { "message": "base" } }),
+    );
+    assert_eq!(checkpoint_resp["result"]["structuredContent"]["seq"], 1);
+
+    let transcript = json!([
+        { "label": "initialize", "request": init_req, "response": init_resp },
+        { "label": "tools/list", "request": tools_req, "response": tools_transcript_resp },
+        { "label": "status before init", "request": status_req, "response": status_resp },
+        { "label": "init workspace", "request": init_tool_req, "response": init_tool_resp },
+        { "label": "checkpoint base", "request": checkpoint_req, "response": checkpoint_resp }
+    ]);
+    snapshot("mcp_transcript", normalize(transcript, &root));
 }

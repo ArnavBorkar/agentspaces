@@ -1,0 +1,285 @@
+[
+  {
+    "label": "initialize",
+    "request": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "method": "initialize",
+      "params": {
+        "capabilities": {},
+        "clientInfo": {
+          "name": "transcript",
+          "version": "0"
+        },
+        "protocolVersion": "2025-06-18"
+      }
+    },
+    "response": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "experimental": {
+            "asp": {
+              "formatVersion": 1,
+              "jsonSchemas": {
+                "cliEnvelope": "schemas/cli-json-envelope.schema.json",
+                "mcpToolResult": "schemas/mcp-tool-result.schema.json",
+                "sharedResults": "schemas/asp-result.schema.json"
+              },
+              "localOnlyByDefault": true,
+              "protocolVersion": "2025-06-18",
+              "serverVersion": "<asp-version>",
+              "stockGitRecovery": true,
+              "toolAnnotations": true,
+              "toolCount": 11
+            }
+          },
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "instructions": "asp gives this session durable, branchable state over the real working directory. Checkpoint before risky changes (workspace_checkpoint), undo damage including bash side-effects (workspace_undo / workspace_restore), fork the whole directory to try N approaches in parallel (workspace_fork), compare them (workspace_forks), and land the winner as an ordinary git branch (workspace_promote). Checkpoints capture untracked files too — everything is recoverable with stock git.",
+        "protocolVersion": "2025-06-18",
+        "serverInfo": {
+          "name": "agentspaces",
+          "title": "agentspaces — branchable agent workspaces",
+          "version": "<asp-version>"
+        }
+      }
+    }
+  },
+  {
+    "label": "tools/list",
+    "request": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "method": "tools/list",
+      "params": {}
+    },
+    "response": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "tools": [
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true,
+              "title": "Workspace status"
+            },
+            "description": "Summarize the asp workspace: files changed since the last checkpoint, last checkpoint info, active forks. Use this first to orient yourself. If the directory is not an asp workspace yet, the error will say so — call workspace_init then.",
+            "name": "workspace_status"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Initialize workspace"
+            },
+            "description": "Adopt a directory as an asp workspace. Instant; touches nothing — it only creates a .asp sidecar. Call once per project, before any other workspace tool.",
+            "name": "workspace_init"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Checkpoint workspace"
+            },
+            "description": "Capture the current state of every file (untracked included) as a checkpoint. Cheap (sub-second) and a no-op if nothing changed — call it freely before and after risky operations so workspace_undo always has a point to return to.",
+            "name": "workspace_checkpoint"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true,
+              "title": "Workspace log"
+            },
+            "description": "Timeline of checkpoints and operations (newest first) with what caused each one. Use it to find a checkpoint number for workspace_restore or workspace_diff.",
+            "name": "workspace_log"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Undo workspace"
+            },
+            "description": "Step back: if there are uncommitted changes since the last checkpoint (including bash side-effects like deleted or generated files), revert them; if the tree is clean, go back one checkpoint. The pre-undo state is saved automatically, so undo is always safe. Do not call just to inspect history or compare states; use workspace_log or workspace_diff. If the user named a checkpoint, call workspace_restore instead.",
+            "name": "workspace_undo"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Restore workspace"
+            },
+            "description": "Restore the working tree (or specific paths) to a checkpoint from workspace_log. The current state is safety-checkpointed first, so nothing is ever lost. Do not call to browse history; use workspace_log or workspace_diff first. Prefer paths when the user asked to recover only specific files.",
+            "name": "workspace_restore"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Fork workspace"
+            },
+            "description": "Create instant copy-on-write fork(s) of the WHOLE directory — untracked files, node_modules, build artifacts, everything — each a fully runnable sibling directory. Use forks to try multiple approaches in parallel or to experiment without touching the main tree. Returns each fork's path; run commands there.",
+            "name": "workspace_fork"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true,
+              "title": "Compare forks"
+            },
+            "description": "Compare all active forks against their fork points: files changed, lines added/removed, last activity. Use after running work in forks to decide which to promote.",
+            "name": "workspace_forks"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": true,
+              "title": "Diff workspace"
+            },
+            "description": "What changed between two checkpoints, or between a checkpoint and the current working tree (omit 'to'). File-level summary with +/- line counts.",
+            "name": "workspace_diff"
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Promote fork"
+            },
+            "description": "Land a fork's work as an ordinary git branch in the main repository (never touches HEAD or the user's worktree). Use after workspace_forks shows a winner. The result names the branch; suggest a PR or merge to the user afterwards. Do not call before comparing forks or when the user only asked to inspect alternatives.",
+            "name": "workspace_promote"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+              "title": "Discard fork"
+            },
+            "description": "Delete a fork. Refuses if the fork has work that was never promoted — pass force=true only when the user has confirmed the work should be thrown away. Do not force discard work that may matter; promote it first or ask for confirmation.",
+            "name": "workspace_discard"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "label": "status before init",
+    "request": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {},
+        "name": "workspace_status"
+      }
+    },
+    "response": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "<text>",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "structuredContent": {
+          "error": {
+            "code": "not_a_workspace",
+            "hint": "run `asp init` in your project root to create one",
+            "message": "no asp workspace found at or above <workspace-root>"
+          }
+        }
+      }
+    }
+  },
+  {
+    "label": "init workspace",
+    "request": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {},
+        "name": "workspace_init"
+      }
+    },
+    "response": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "<text>",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "note": "workspace created; nothing captured yet — call workspace_checkpoint to take the first checkpoint",
+          "root": "<workspace-root>"
+        }
+      }
+    }
+  },
+  {
+    "label": "checkpoint base",
+    "request": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "message": "base"
+        },
+        "name": "workspace_checkpoint"
+      }
+    },
+    "response": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "<text>",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "structuredContent": {
+          "commit": "<git-oid>",
+          "duration_ms": 0,
+          "files_changed": 2,
+          "message": "base",
+          "seq": 1
+        }
+      }
+    }
+  }
+]
