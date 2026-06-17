@@ -24,6 +24,8 @@
   and disaster-recovery runbook.
 - `docs/monorepo-tuning.md` documents large-repository tuning for checkpoint
   excludes, blob thresholds, and filesystem choice.
+- `docs/open-core-boundary.md` defines non-negotiable OSS guarantees and the
+  allowed boundary for optional hosted services.
 
 ### Fixed
 

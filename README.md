@@ -89,6 +89,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **FAQ** — [docs/FAQ.md](docs/FAQ.md)
 - **Architecture** — [docs/architecture.md](docs/architecture.md)
 - **Trust model whitepaper** — [docs/trust-model.md](docs/trust-model.md)
+- **Open-core boundary policy** — [docs/open-core-boundary.md](docs/open-core-boundary.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)
@@ -118,7 +119,7 @@ Release checksum signatures can be verified with Sigstore; see [docs/release-ver
 
 ## Project status & open-core boundary
 
-`asp` is young software under active development; the format is versioned (`.asp/format-version`) and the trust suite runs on every commit. **The engine, CLI, MCP server, and on-disk format in this repository are MIT/Apache-2.0 forever — they will never be relicensed.** If a hosted offering ever exists (e.g. managed sync/control plane), it will be a separate proprietary service; nothing in this repo will be moved behind it.
+`asp` is young software under active development; the format is versioned (`.asp/format-version`) and the trust suite runs on every commit. **The engine, CLI, MCP server, and on-disk format in this repository are MIT/Apache-2.0 forever — they will never be relicensed.** If a hosted offering ever exists (e.g. managed sync/control plane), it will be a separate proprietary service; nothing in this repo will be moved behind it. The detailed boundary is documented in [docs/open-core-boundary.md](docs/open-core-boundary.md).
 
 ## License
 

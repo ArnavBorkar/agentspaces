@@ -24,6 +24,7 @@ CI runs all of the above on macOS and Linux, plus cargo-deny dependency policy a
 Dependency policy and triage are documented in [docs/dependency-governance.md](docs/dependency-governance.md).
 The contributor command map and focused test guide live in [docs/development.md](docs/development.md).
 Maintainer issue triage is documented in [docs/triage.md](docs/triage.md).
+The open-core boundary policy is documented in [docs/open-core-boundary.md](docs/open-core-boundary.md).
 
 ## Changing the on-disk format
 
