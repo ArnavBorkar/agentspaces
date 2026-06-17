@@ -1,0 +1,44 @@
+name: Integration request
+description: Request support for a coding-agent harness, editor, CI system, or MCP client.
+title: "integration: "
+labels: ["enhancement", "integration", "needs-triage"]
+body:
+  - type: input
+    id: target
+    attributes:
+      label: Tool or platform
+      description: Name the agent harness, editor, MCP client, CI system, or workflow.
+      placeholder: Codex, OpenCode, Cursor, VS Code, GitHub Actions, ...
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: What should `asp` do for this integration?
+      placeholder: "Example: install MCP config without clobbering user settings, then checkpoint after shell commands."
+    validations:
+      required: true
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: Current workaround
+      description: What do users do today instead?
+    validations:
+      required: false
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config or docs
+      description: Link to official integration docs or paste a minimal config example.
+      render: yaml
+    validations:
+      required: false
+  - type: checkboxes
+    id: expectations
+    attributes:
+      label: Integration expectations
+      options:
+        - label: The integration should preserve existing user settings.
+        - label: The integration needs a remove/uninstall path.
+        - label: The integration needs JSON/MCP behavior for agents.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security or sensitive data report
+    url: https://github.com/ArnavBorkar/agentspaces/security/advisories/new
+    about: Please report vulnerabilities or sensitive-data exposure privately.
+  - name: Product roadmap
+    url: https://github.com/ArnavBorkar/agentspaces/blob/main/BACKLOG.md
+    about: Check the active roadmap before opening a new request.

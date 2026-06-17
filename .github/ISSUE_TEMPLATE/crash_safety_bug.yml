@@ -1,0 +1,60 @@
+name: Crash-safety or data bug
+description: Report lost state, bad restore, broken doctor repair, or unsafe store behavior.
+title: "crash-safety: "
+labels: ["bug", "crash-safety", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when `asp` may have lost data, restored the wrong bytes, left unrecoverable state, or violated the trust model.
+        If secrets or private data are involved, use private security reporting instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the visible failure and the command or agent action that triggered it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: Describe the recovery, restore, or safety behavior you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest command sequence that triggers the problem.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: asp doctor output
+      description: Run `asp doctor --fix` if safe, then paste the output. Use `asp doctor --deep` for possible CAS/blob corruption.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include `asp --version`, `git --version`, OS, filesystem, and whether this happened in a fork.
+      value: |
+        asp version:
+        git version:
+        OS:
+        filesystem:
+        workspace in fork?:
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I kept the affected `.asp/` directory available for inspection if possible.
+        - label: This report does not include secrets or private repository content.

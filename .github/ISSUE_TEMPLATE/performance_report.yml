@@ -1,0 +1,69 @@
+name: Performance report
+description: Report slow checkpoint, fork, restore, doctor, MCP, hook, or install behavior.
+title: "perf: "
+labels: ["performance", "needs-triage"]
+body:
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Operation
+      options:
+        - asp checkpoint
+        - asp fork
+        - asp restore/undo
+        - asp status/stats
+        - asp doctor
+        - asp race
+        - hooks/MCP
+        - install/release artifact
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include timing, CPU, memory, disk, or output that shows the slowdown.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction commands
+      description: Include the smallest command sequence or benchmark invocation that reproduces it.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: repository-shape
+    attributes:
+      label: Repository shape
+      description: File counts, repository size, large files, node_modules/target/build dirs, and whether the repo is on a local or network filesystem.
+      value: |
+        files:
+        total size:
+        large files:
+        derived dirs:
+        local/network filesystem:
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include `asp --version`, `git --version`, OS, filesystem, CPU, and storage type.
+      value: |
+        asp version:
+        git version:
+        OS:
+        filesystem:
+        CPU/storage:
+    validations:
+      required: true
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Baseline or expected result
+      description: If available, compare against `cp -R`, git worktree, a previous `asp` version, or `scripts/bench/run.py`.
+    validations:
+      required: false

@@ -1,0 +1,38 @@
+name: Docs fix
+description: Report unclear, stale, missing, or misleading documentation.
+title: "docs: "
+labels: ["documentation", "needs-triage"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page or section
+      description: Link to the file/heading, README section, or command help text.
+      placeholder: docs/development.md#focused-test-guide
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is confusing or wrong?
+      description: Explain what you expected to learn and where the docs fell short.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested fix
+      description: Share wording, examples, commands, or links that would make this clearer.
+    validations:
+      required: false
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks install or first run
+        - Could cause data loss or unsafe operation
+        - Makes contributor workflow harder
+        - Minor typo or wording issue
+    validations:
+      required: true
