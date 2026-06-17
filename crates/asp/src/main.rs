@@ -122,11 +122,17 @@ enum Cmd {
     /// Show what changed between two checkpoints, or a checkpoint and now.
     Diff {
         /// Show a unified patch instead of the summary table.
-        #[arg(long, conflicts_with = "stat")]
+        #[arg(long)]
         patch: bool,
         /// Show git-style diffstat instead of the summary table.
-        #[arg(long, conflicts_with = "patch")]
+        #[arg(long)]
         stat: bool,
+        /// Write an offline HTML diff review artifact.
+        #[arg(long)]
+        html: bool,
+        /// Output path for --html (relative paths resolve inside the workspace).
+        #[arg(long, value_name = "FILE")]
+        output: Option<PathBuf>,
         /// Compare a fork against its fork point.
         #[arg(long, value_name = "NAME")]
         fork: Option<String>,
@@ -341,6 +347,15 @@ struct ReviewReport {
     workspace: asp_core::workspace::StatusReport,
     forks: Vec<asp_core::workspace::ForkCompareRow>,
     markdown: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DiffHtmlOutputResult {
+    from: String,
+    to: String,
+    summary: asp_core::workspace::DiffSummary,
+    path: PathBuf,
+    bytes: u64,
 }
 
 fn parse_source(s: &str) -> Result<Source, String> {
@@ -856,11 +871,54 @@ fn run(cli: Cli) -> Result<(), Error> {
         Cmd::Diff {
             patch,
             stat,
+            html,
+            output,
             fork,
             from,
             to,
         } => {
             let ws = open(&cli.dir)?;
+            validate_diff_mode(patch, stat, html, output.as_ref())?;
+            if html {
+                let output = output.expect("validated --html output");
+                let report = if let Some(fork) = fork {
+                    if from.is_some() || to.is_some() {
+                        return Err(Error::new(
+                            ErrorCode::NothingToDo,
+                            "`asp diff --fork` does not accept checkpoint arguments",
+                        )
+                        .with_hint("run `asp diff --fork <name>` or `asp diff <from> [to]`"));
+                    }
+                    ws.diff_fork_text(&fork, DiffTextMode::Patch)?
+                } else {
+                    let from = from.ok_or_else(|| {
+                        Error::new(ErrorCode::NothingToDo, "diff needs a checkpoint or fork")
+                            .with_hint("run `asp diff <from> [to]` or `asp diff --fork <name>`")
+                    })?;
+                    ws.diff_text(&from, to.as_deref(), DiffTextMode::Patch)?
+                };
+                let path = resolve_output_path(ws.root(), output);
+                let html = render_diff_html(&report);
+                write_bytes_file(&path, html.as_bytes())?;
+                let result = DiffHtmlOutputResult {
+                    from: report.from,
+                    to: report.to,
+                    summary: report.summary,
+                    path: path.clone(),
+                    bytes: html.len() as u64,
+                };
+                if json {
+                    ui::print_json(true, &result);
+                } else {
+                    println!(
+                        "{} wrote HTML diff {} ({} bytes)",
+                        ui::green("✓"),
+                        ui::cyan(&path.display().to_string()),
+                        result.bytes
+                    );
+                }
+                return Ok(());
+            }
             let mode = diff_text_mode(patch, stat);
             if let Some(fork) = fork {
                 if from.is_some() || to.is_some() {
@@ -1485,6 +1543,34 @@ fn markdown_cell(raw: &str) -> String {
     raw.replace('\n', " ").replace('|', "\\|")
 }
 
+fn validate_diff_mode(
+    patch: bool,
+    stat: bool,
+    html: bool,
+    output: Option<&PathBuf>,
+) -> Result<(), Error> {
+    let modes = u8::from(patch) + u8::from(stat) + u8::from(html);
+    if modes > 1 {
+        return Err(
+            Error::new(ErrorCode::NothingToDo, "choose only one diff output mode")
+                .with_hint("use one of --patch, --stat, or --html"),
+        );
+    }
+    if html && output.is_none() {
+        return Err(
+            Error::new(ErrorCode::NothingToDo, "--html needs an output path")
+                .with_hint("pass `--output review.html`"),
+        );
+    }
+    if !html && output.is_some() {
+        return Err(
+            Error::new(ErrorCode::NothingToDo, "--output is only used with --html")
+                .with_hint("add `--html`, or remove --output"),
+        );
+    }
+    Ok(())
+}
+
 fn diff_text_mode(patch: bool, stat: bool) -> Option<DiffTextMode> {
     if patch {
         Some(DiffTextMode::Patch)
@@ -1493,6 +1579,82 @@ fn diff_text_mode(patch: bool, stat: bool) -> Option<DiffTextMode> {
     } else {
         None
     }
+}
+
+fn render_diff_html(report: &asp_core::workspace::DiffTextReport) -> String {
+    let mut out = String::new();
+    out.push_str("<!doctype html>\n<html lang=\"en\">\n<head>\n");
+    out.push_str("<meta charset=\"utf-8\">\n");
+    out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+    out.push_str("<title>agentspaces diff review</title>\n");
+    out.push_str(
+        "<style>
+body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;margin:0;background:#f7f7f4;color:#191a1f}
+main{max-width:1120px;margin:0 auto;padding:32px}
+h1{font-size:28px;margin:0 0 8px}
+.meta{color:#5b5f6a;margin:0 0 24px}
+.summary{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 24px}
+.pill{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px 10px}
+pre{background:#111318;color:#e8e8e8;border-radius:8px;overflow:auto;padding:16px;line-height:1.45}
+.add{color:#8ee391}.del{color:#ff9b9b}.hunk{color:#8bb8ff}.file{color:#ffd479}
+</style>\n",
+    );
+    out.push_str("</head>\n<body>\n<main>\n");
+    out.push_str("<h1>agentspaces diff review</h1>\n");
+    out.push_str(&format!(
+        "<p class=\"meta\"><strong>{}</strong> to <strong>{}</strong></p>\n",
+        html_escape(&report.from),
+        html_escape(&report.to)
+    ));
+    out.push_str("<section class=\"summary\">\n");
+    out.push_str(&format!(
+        "<div class=\"pill\"><strong>{}</strong> files</div>\n",
+        report.summary.files
+    ));
+    out.push_str(&format!(
+        "<div class=\"pill\"><strong>+{}</strong> insertions</div>\n",
+        report.summary.insertions
+    ));
+    out.push_str(&format!(
+        "<div class=\"pill\"><strong>-{}</strong> deletions</div>\n",
+        report.summary.deletions
+    ));
+    out.push_str("</section>\n<pre>");
+    for line in report.text.lines() {
+        let class = if line.starts_with("+++") || line.starts_with("---") {
+            "file"
+        } else if line.starts_with('+') {
+            "add"
+        } else if line.starts_with('-') {
+            "del"
+        } else if line.starts_with("@@") {
+            "hunk"
+        } else if line.starts_with("diff --git") || line.starts_with("index ") {
+            "file"
+        } else {
+            ""
+        };
+        if class.is_empty() {
+            out.push_str(&html_escape(line));
+        } else {
+            out.push_str(&format!(
+                "<span class=\"{}\">{}</span>",
+                class,
+                html_escape(line)
+            ));
+        }
+        out.push('\n');
+    }
+    out.push_str("</pre>\n</main>\n</body>\n</html>\n");
+    out
+}
+
+fn html_escape(raw: &str) -> String {
+    raw.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn print_diff_report(report: &asp_core::workspace::DiffReport) {
@@ -1683,6 +1845,17 @@ fn write_json_file<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), Er
         Error::new(ErrorCode::Io, format!("diagnostics encode: {e}")).with_source(e)
     })?;
     atomic_write(path, &bytes)
+}
+
+fn write_bytes_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let parent = path.parent().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Io,
+            format!("output path has no parent: {}", path.display()),
+        )
+    })?;
+    std::fs::create_dir_all(parent)?;
+    atomic_write(path, bytes)
 }
 
 fn json_pretty<T: serde::Serialize>(value: &T) -> Result<String, Error> {

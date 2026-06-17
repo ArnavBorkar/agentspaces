@@ -134,6 +134,24 @@ fn full_cli_loop() {
         .as_str()
         .unwrap()
         .contains("src/app.py"));
+    let html_out = root.parent().unwrap().join("review.html");
+    let html = ok_json(
+        &root,
+        &[
+            "diff",
+            "--html",
+            "--output",
+            html_out.to_str().unwrap(),
+            "1",
+            "2",
+        ],
+    );
+    assert_eq!(html["result"]["summary"]["files"], 1);
+    let html_path = PathBuf::from(html["result"]["path"].as_str().unwrap());
+    assert!(html_path.exists());
+    assert!(std::fs::read_to_string(&html_path)
+        .unwrap()
+        .contains("agentspaces diff review"));
 
     // undo steps back; file content reverts
     ok(&root, &["undo"]);
@@ -161,6 +179,19 @@ fn full_cli_loop() {
         .unwrap()
         .contains("src/app.py"));
     assert!(ok(&root, &["diff", "--fork", "try-1", "--stat"]).contains("src/app.py"));
+    let fork_html_out = root.parent().unwrap().join("fork-review.html");
+    ok(
+        &root,
+        &[
+            "diff",
+            "--fork",
+            "try-1",
+            "--html",
+            "--output",
+            fork_html_out.to_str().unwrap(),
+        ],
+    );
+    assert!(fork_html_out.exists());
     let review = ok_json(&root, &["review"]);
     assert_eq!(review["result"]["forks"].as_array().unwrap().len(), 2);
     assert!(review["result"]["markdown"]

@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/checkpointInfo" },
     { "$ref": "#/$defs/diagnosticBundle" },
     { "$ref": "#/$defs/diagnosticsOutputResult" },
+    { "$ref": "#/$defs/diffHtmlOutputResult" },
     { "$ref": "#/$defs/diffReport" },
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
@@ -361,6 +362,46 @@
           }
         },
         "text": { "type": "string" }
+      }
+    },
+    "diffHtmlOutputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "summary", "path", "bytes"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "insertions",
+            "deletions",
+            "by_path",
+            "by_language",
+            "by_change_type"
+          ],
+          "properties": {
+            "files": { "$ref": "#/$defs/u64" },
+            "insertions": { "$ref": "#/$defs/u64" },
+            "deletions": { "$ref": "#/$defs/u64" },
+            "by_path": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            },
+            "by_language": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            },
+            "by_change_type": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/diffSummaryBucket" }
+            }
+          }
+        },
+        "path": { "type": "string" },
+        "bytes": { "$ref": "#/$defs/u64" }
       }
     },
     "discardResult": {

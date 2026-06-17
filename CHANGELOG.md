@@ -77,6 +77,8 @@
   status, active fork comparison rows, and a Markdown CI-comment body.
 - `asp diff` accepts `--patch`, `--stat`, and `--fork <name>` for checkpoint
   and fork-point comparisons.
+- `asp diff --html --output <file>` writes an offline HTML diff review artifact
+  for checkpoint and fork comparisons.
 
 ### Fixed
 
@@ -118,6 +120,8 @@
   payload for dashboards and CI comments.
 - Additive: `asp diff --json --patch` and `asp diff --json --stat` return
   `diffTextReport` with summary fields plus rendered text.
+- Additive: `asp diff --json --html --output <file>` returns
+  `diffHtmlOutputResult` with the written path, byte count, and summary fields.
 
 ## Automation Contract Rules
 

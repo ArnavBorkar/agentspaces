@@ -221,7 +221,7 @@
   - [x] T17.1.3 Add JSON output suitable for dashboards and CI comments.
 - **S17.2 Review artifacts**
   - [x] T17.2.1 Add `asp diff --patch` and `--stat` modes for checkpoint and fork comparisons.
-  - [ ] T17.2.2 Add HTML diff export for offline review.
+  - [x] T17.2.2 Add HTML diff export for offline review.
 
 ## EPIC 18 — Promote-to-PR workflow
 
