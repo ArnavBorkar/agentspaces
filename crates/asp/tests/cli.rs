@@ -47,6 +47,12 @@ fn full_cli_loop() {
 
     let out = ok(&root, &["init"]);
     assert!(out.contains("initialized"));
+    let policy = ok_json(&root, &["policy", "validate"]);
+    assert_eq!(policy["result"]["valid"], true);
+    assert_eq!(
+        policy["result"]["policy"]["paths"]["protected"],
+        serde_json::json!([])
+    );
 
     // status before any checkpoint
     let st = ok_json(&root, &["status"]);
@@ -129,6 +135,28 @@ fn full_cli_loop() {
     // doctor: healthy
     let doc = ok_json(&root, &["doctor"]);
     assert_eq!(doc["result"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn policy_validate_reports_invalid_policy() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(root.join(".asp/policy.toml"), "[forks]\nmax_active = 0\n").unwrap();
+
+    let out = asp(&root, &["--json", "policy", "validate"]);
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["ok"], false);
+    assert_eq!(err["error"]["code"], "store_corrupt");
+    assert!(err["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("max_active"));
+    assert!(err["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("policy.toml"));
 }
 
 #[test]

@@ -37,6 +37,10 @@ allowed_branch_prefixes = ["asp/"]
 
 ## Validation Rules
 
+Run `asp policy validate` to check the policy without attempting a workspace
+mutation. Add `--json` for CI or agent harnesses; a valid policy returns
+`#/$defs/policyValidateReport` from [docs/schemas.md](schemas.md).
+
 - Unknown tables or keys are rejected.
 - `forks.max_active` and `checkpoints.max_age_hours` must be greater than zero
   when set.

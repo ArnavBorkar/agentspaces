@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "result": {
+    "path": "<workspace-root>/.asp/policy.toml",
+    "valid": true,
+    "policy": {
+      "forks": {
+        "max_active": null
+      },
+      "checkpoints": {
+        "max_age_hours": null
+      },
+      "paths": {
+        "protected": []
+      },
+      "promote": {
+        "require_clean_status": false,
+        "require_checkpoint": false,
+        "allowed_branch_prefixes": []
+      }
+    }
+  }
+}

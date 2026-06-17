@@ -14,6 +14,7 @@
     { "$ref": "#/$defs/initResult" },
     { "$ref": "#/$defs/journalEntries" },
     { "$ref": "#/$defs/noChanges" },
+    { "$ref": "#/$defs/policyValidateReport" },
     { "$ref": "#/$defs/promoteReport" },
     { "$ref": "#/$defs/raceLaneResults" },
     { "$ref": "#/$defs/restoreReport" },
@@ -323,6 +324,67 @@
         "no_changes": { "const": true },
         "message": { "type": "string" },
         "note": { "type": "string" }
+      }
+    },
+    "policyValidateReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "valid", "policy"],
+      "properties": {
+        "path": { "type": "string" },
+        "valid": { "const": true },
+        "policy": { "$ref": "#/$defs/workspacePolicy" }
+      }
+    },
+    "workspacePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forks", "checkpoints", "paths", "promote"],
+      "properties": {
+        "forks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_active"],
+          "properties": {
+            "max_active": { "$ref": "#/$defs/nullableU64" }
+          }
+        },
+        "checkpoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_age_hours"],
+          "properties": {
+            "max_age_hours": { "$ref": "#/$defs/nullableU64" }
+          }
+        },
+        "paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protected"],
+          "properties": {
+            "protected": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "promote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "require_clean_status",
+            "require_checkpoint",
+            "allowed_branch_prefixes"
+          ],
+          "properties": {
+            "require_clean_status": { "type": "boolean" },
+            "require_checkpoint": { "type": "boolean" },
+            "allowed_branch_prefixes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "promoteReport": {

@@ -47,6 +47,8 @@
 - New workspaces now include `.asp/policy.toml` with strict parsing, schema
   docs, helpful errors, and enforcement for active fork limits, checkpoint age,
   protected paths, and promote requirements.
+- `asp policy validate --json` validates workspace policy and returns the
+  resolved policy in a stable automation-facing shape.
 
 ### Fixed
 

@@ -63,6 +63,11 @@ enum Cmd {
     Stats,
     /// Print supported schema and format versions.
     Schema,
+    /// Inspect and validate local workspace policy.
+    Policy {
+        #[command(subcommand)]
+        command: PolicyCmd,
+    },
     /// Capture the current state as a checkpoint (no-op if nothing changed).
     #[command(visible_alias = "cp")]
     Checkpoint {
@@ -157,6 +162,12 @@ enum Cmd {
 }
 
 #[derive(Subcommand)]
+enum PolicyCmd {
+    /// Validate `.asp/policy.toml` and print the resolved policy.
+    Validate,
+}
+
+#[derive(Subcommand)]
 enum SetupHarness {
     /// Claude Code: auto-checkpoint hooks (file edits + bash) and .mcp.json.
     Claude {
@@ -242,6 +253,13 @@ struct SchemaInfo {
     version: u32,
     kind: &'static str,
     path: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PolicyValidateReport {
+    path: PathBuf,
+    valid: bool,
+    policy: asp_core::policy::Policy,
 }
 
 fn parse_source(s: &str) -> Result<Source, String> {
@@ -433,6 +451,32 @@ fn run(cli: Cli) -> Result<(), Error> {
             print!("{}", ui::table(&rows));
             Ok(())
         }
+        Cmd::Policy { command } => match command {
+            PolicyCmd::Validate => {
+                let ws = open(&cli.dir)?;
+                let report = PolicyValidateReport {
+                    path: ws.root().join(".asp/policy.toml"),
+                    valid: true,
+                    policy: ws.policy.clone(),
+                };
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                println!(
+                    "{} policy valid: {}",
+                    ui::green("✓"),
+                    ui::bold(&report.path.display().to_string())
+                );
+                let rules = policy_rule_count(&report.policy);
+                if rules == 0 {
+                    println!("  {}", ui::dim("no local policy rules are set"));
+                } else {
+                    println!("  active rules: {rules}");
+                }
+                Ok(())
+            }
+        },
         Cmd::Checkpoint {
             message,
             provenance,
@@ -938,6 +982,15 @@ fn parse_duration(raw: &str) -> Result<Duration, String> {
             .ok_or_else(|| "duration value is too large".to_string()),
         _ => Err("duration unit must be ms, s, or m".to_string()),
     }
+}
+
+fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
+    usize::from(policy.forks.max_active.is_some())
+        + usize::from(policy.checkpoints.max_age_hours.is_some())
+        + policy.paths.protected.len()
+        + usize::from(policy.promote.require_clean_status)
+        + usize::from(policy.promote.require_checkpoint)
+        + policy.promote.allowed_branch_prefixes.len()
 }
 
 fn schema_report() -> SchemaReport {

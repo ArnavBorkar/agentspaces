@@ -57,6 +57,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
+        "cli_policy_validate" => include_str!("snapshots/cli_policy_validate.json"),
         "cli_error" => include_str!("snapshots/cli_error.json"),
         "mcp_initialize" => include_str!("snapshots/mcp_initialize.json"),
         "mcp_tools" => include_str!("snapshots/mcp_tools.json"),
@@ -162,6 +163,9 @@ fn cli_json_shapes_match_snapshots() {
 
     let init = ok_json(&root, &["init"]);
     snapshot("cli_init", normalize(init, &root));
+
+    let policy = ok_json(&root, &["policy", "validate"]);
+    snapshot("cli_policy_validate", normalize(policy, &root));
 
     let checkpoint = ok_json(&root, &["checkpoint", "-m", "base"]);
     snapshot("cli_checkpoint", normalize(checkpoint, &root));

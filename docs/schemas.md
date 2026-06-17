@@ -49,6 +49,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
+| `asp policy validate --json` | `#/$defs/policyValidateReport` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
 | `asp log --json` | `#/$defs/journalEntries` |
 | `asp undo --json` | `#/$defs/restoreReport` |
