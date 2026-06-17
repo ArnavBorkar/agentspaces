@@ -80,6 +80,8 @@ Storage tools get one strike, so `asp` is built to be boring:
 
 Honest numbers from the stress tree (100k files / 3.3 GiB, including 3 GiB of binary assets), reproducible with `python3 scripts/bench/run.py` — see [docs/benchmarks/BENCHMARKS.md](docs/benchmarks/BENCHMARKS.md) and the original [spike results](docs/benchmarks/spike-results.md). Highlights (Apple M3 Pro): whole-tree fork **~1.2s / 32 MB extra disk** vs `git worktree add` ~10s (tracked files only) vs `cp -R` 26s / 3.7 GB; incremental checkpoint **0.7s on the 100k-file stress tree, ~0.3s on typical repos**; no-op checkpoint (the hook idle path) **~0.25s**.
 
+Public claims are mapped to tests, docs, and verification commands in [docs/claims.md](docs/claims.md).
+
 ## Why not …?
 
 - **[Why not git worktrees?](docs/why-not-git-worktrees.md)** — worktrees carry tracked files only, need a clean index dance, and give you no cross-session timeline of agent changes.
