@@ -276,9 +276,27 @@ pub struct ForkCompareRow {
     pub files_changed: u64,
     pub insertions: u64,
     pub deletions: u64,
+    pub review: ForkReviewSignals,
     pub last_activity: Option<String>,
     pub path: PathBuf,
     pub missing: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForkReviewSignals {
+    pub tests_passed: Option<bool>,
+    pub files_touched: u64,
+    pub line_churn: u64,
+    pub risk_score: u64,
+    pub risk_markers: Vec<ForkRiskMarker>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForkRiskMarker {
+    pub kind: String,
+    pub severity: String,
+    pub path: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1884,6 +1902,7 @@ impl Workspace {
                     files_changed: 0,
                     insertions: 0,
                     deletions: 0,
+                    review: fork_review_signals(&[], None),
                     last_activity: None,
                     path: rec.path.clone(),
                     missing: true,
@@ -1905,37 +1924,24 @@ impl Workspace {
                     .with_hint("run `asp doctor` inside the fork")
                 })?;
             let (tree, _) = fork_ws.stage_tree()?;
-            let (files, ins, del) = fork_ws.numstat_totals(&format!("{base}^{{tree}}"), &tree)?;
+            let diff_rows = fork_ws.diff_rows(&format!("{base}^{{tree}}"), &tree)?;
+            let diff_summary = summarize_diff(&diff_rows);
+            let review = fork_review_signals(&diff_rows, None);
             let last = fork_ws.journal.read()?.entries.last().map(|e| e.ts.clone());
             rows.push(ForkCompareRow {
                 name: rec.name.clone(),
                 status: rec.status,
                 fork_point_seq: rec.fork_point_seq,
-                files_changed: files,
-                insertions: ins,
-                deletions: del,
+                files_changed: diff_summary.files,
+                insertions: diff_summary.insertions,
+                deletions: diff_summary.deletions,
+                review,
                 last_activity: last,
                 path: rec.path.clone(),
                 missing: false,
             });
         }
         Ok(rows)
-    }
-
-    fn numstat_totals(&self, from: &str, to: &str) -> Result<(u64, u64, u64)> {
-        let raw = self
-            .shadow
-            .run_raw(&["diff-tree", "-r", "-z", "--numstat", from, to])?;
-        let text = String::from_utf8_lossy(&raw);
-        let (mut files, mut ins, mut del) = (0u64, 0u64, 0u64);
-        for rec in text.split('\0').filter(|s| !s.is_empty()) {
-            let mut it = rec.split('\t');
-            let (a, b) = (it.next().unwrap_or("-"), it.next().unwrap_or("-"));
-            files += 1;
-            ins += a.parse::<u64>().unwrap_or(0);
-            del += b.parse::<u64>().unwrap_or(0);
-        }
-        Ok((files, ins, del))
     }
 
     // ----------------------------------------------------------------- diff
@@ -1958,15 +1964,20 @@ impl Workspace {
             }
         };
 
+        let rows = self.diff_rows(&from_commit, &to_tree)?;
+        Ok(DiffReport {
+            from: from_label,
+            to: to_label,
+            summary: summarize_diff(&rows),
+            rows,
+        })
+    }
+
+    fn diff_rows(&self, from: &str, to: &str) -> Result<Vec<DiffRow>> {
         // name-status + numstat joined by path.
-        let ns_raw = self.shadow.run_raw(&[
-            "diff-tree",
-            "-r",
-            "-z",
-            "--name-status",
-            &from_commit,
-            &to_tree,
-        ])?;
+        let ns_raw = self
+            .shadow
+            .run_raw(&["diff-tree", "-r", "-z", "--name-status", from, to])?;
         let mut status_by_path: BTreeMap<String, String> = BTreeMap::new();
         let mut parts = ns_raw.split(|&b| b == 0).filter(|s| !s.is_empty());
         while let (Some(status), Some(path)) = (parts.next(), parts.next()) {
@@ -1975,9 +1986,9 @@ impl Workspace {
                 String::from_utf8_lossy(status).to_string(),
             );
         }
-        let num_raw =
-            self.shadow
-                .run_raw(&["diff-tree", "-r", "-z", "--numstat", &from_commit, &to_tree])?;
+        let num_raw = self
+            .shadow
+            .run_raw(&["diff-tree", "-r", "-z", "--numstat", from, to])?;
         let num_text = String::from_utf8_lossy(&num_raw);
         let mut rows = Vec::new();
         for rec in num_text.split('\0').filter(|s| !s.is_empty()) {
@@ -1996,12 +2007,7 @@ impl Workspace {
                 deletions: del,
             });
         }
-        Ok(DiffReport {
-            from: from_label,
-            to: to_label,
-            summary: summarize_diff(&rows),
-            rows,
-        })
+        Ok(rows)
     }
 
     // -------------------------------------------------------------- promote
@@ -2794,6 +2800,134 @@ fn diff_change_type(status: &str) -> String {
         _ => "other",
     }
     .to_string()
+}
+
+fn fork_review_signals(rows: &[DiffRow], tests_passed: Option<bool>) -> ForkReviewSignals {
+    let risk_markers = fork_risk_markers(rows);
+    let risk_score = risk_markers
+        .iter()
+        .map(|marker| risk_marker_score(&marker.severity))
+        .sum();
+
+    ForkReviewSignals {
+        tests_passed,
+        files_touched: rows.len() as u64,
+        line_churn: rows
+            .iter()
+            .map(|row| row.insertions.unwrap_or(0) + row.deletions.unwrap_or(0))
+            .sum(),
+        risk_score,
+        risk_markers,
+    }
+}
+
+fn fork_risk_markers(rows: &[DiffRow]) -> Vec<ForkRiskMarker> {
+    let mut markers = Vec::new();
+    for row in rows {
+        let path = row.path.as_str();
+        if path.starts_with(".git/") {
+            markers.push(risk_marker(
+                "git_metadata",
+                "high",
+                path,
+                "touches user git metadata",
+            ));
+        }
+        if path.starts_with(".github/workflows/") {
+            markers.push(risk_marker(
+                "ci_workflow",
+                "high",
+                path,
+                "changes CI workflow definitions",
+            ));
+        }
+        if is_dependency_manifest(path) {
+            markers.push(risk_marker(
+                "dependency_manifest",
+                "medium",
+                path,
+                "changes dependency or package manager inputs",
+            ));
+        }
+        if is_env_or_secret_path(path) {
+            markers.push(risk_marker(
+                "credential_or_env",
+                "medium",
+                path,
+                "changes environment or credential-like files",
+            ));
+        }
+        let churn = row.insertions.unwrap_or(0) + row.deletions.unwrap_or(0);
+        if churn >= 500 {
+            markers.push(risk_marker(
+                "large_churn",
+                "medium",
+                path,
+                "changes at least 500 lines in one file",
+            ));
+        }
+        if row.status.starts_with('D') {
+            markers.push(risk_marker(
+                "deletion",
+                "low",
+                path,
+                "deletes a tracked path",
+            ));
+        }
+    }
+    markers
+}
+
+fn risk_marker(kind: &str, severity: &str, path: &str, message: &str) -> ForkRiskMarker {
+    ForkRiskMarker {
+        kind: kind.to_string(),
+        severity: severity.to_string(),
+        path: path.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn risk_marker_score(severity: &str) -> u64 {
+    match severity {
+        "high" => 50,
+        "medium" => 20,
+        "low" => 5,
+        _ => 1,
+    }
+}
+
+fn is_dependency_manifest(path: &str) -> bool {
+    let Some(file_name) = Path::new(path).file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    matches!(
+        file_name,
+        "Cargo.toml"
+            | "Cargo.lock"
+            | "package.json"
+            | "package-lock.json"
+            | "pnpm-lock.yaml"
+            | "yarn.lock"
+            | "go.mod"
+            | "go.sum"
+            | "Gemfile"
+            | "Gemfile.lock"
+            | "requirements.txt"
+            | "pyproject.toml"
+            | "poetry.lock"
+    )
+}
+
+fn is_env_or_secret_path(path: &str) -> bool {
+    Path::new(path)
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .any(|component| {
+            component == ".env"
+                || component.starts_with(".env.")
+                || component.eq_ignore_ascii_case("secrets.toml")
+                || component.eq_ignore_ascii_case("secrets.json")
+        })
 }
 
 fn paths_from_nul(raw: &[u8]) -> Vec<String> {

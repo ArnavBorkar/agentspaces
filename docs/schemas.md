@@ -84,6 +84,10 @@ filesystem capabilities, and removes the probe before exiting.
 by top-level path, language, and change type. The existing `rows` array remains
 the per-path detail for exact review tooling.
 
+`asp forks --json` rows and `asp race --json` lane results may include `review`
+signals with `tests_passed`, touched-file and line-churn counts, a numeric
+`risk_score`, and explicit `risk_markers` for review dashboards.
+
 `asp race --json` lane results include additive runner metadata: `label` is the
 explicit `--label` for that lane or the fork name when no label was provided,
 `attempts` is the number of attempts actually started, and `timed_out` /

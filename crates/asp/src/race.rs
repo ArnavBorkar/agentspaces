@@ -15,6 +15,7 @@ use std::os::unix::process::CommandExt;
 
 use asp_core::journal::Source;
 use asp_core::store::atomic_write;
+use asp_core::workspace::ForkReviewSignals;
 use asp_core::{Error, ErrorCode, Workspace};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
@@ -39,6 +40,7 @@ pub struct LaneResult {
     pub files_changed: u64,
     pub insertions: u64,
     pub deletions: u64,
+    pub review: ForkReviewSignals,
     pub log_file: PathBuf,
 }
 
@@ -645,6 +647,16 @@ fn lane_results(
                 log_file: lane.path.join(".asp/race.log"),
             });
         let row = compare.iter().find(|r| r.name == lane.fork);
+        let mut review = row
+            .map(|r| r.review.clone())
+            .unwrap_or_else(|| ForkReviewSignals {
+                tests_passed: None,
+                files_touched: 0,
+                line_churn: 0,
+                risk_score: 0,
+                risk_markers: vec![],
+            });
+        review.tests_passed = run.tests.as_ref().map(test_summary_passed);
         results.push(LaneResult {
             rank: None,
             fork: lane.fork.clone(),
@@ -659,6 +671,7 @@ fn lane_results(
             files_changed: row.map(|r| r.files_changed).unwrap_or(0),
             insertions: row.map(|r| r.insertions).unwrap_or(0),
             deletions: row.map(|r| r.deletions).unwrap_or(0),
+            review,
             log_file: run.log_file,
         });
     }
@@ -825,11 +838,15 @@ fn tests_cell(result: &LaneResult) -> String {
         return "·".to_string();
     };
     let failed = tests.failures + tests.errors;
-    if failed == 0 {
+    if test_summary_passed(tests) {
         ui::green(&format!("{} ok", tests.tests))
     } else {
         ui::red(&format!("{failed}/{} failed", tests.tests))
     }
+}
+
+fn test_summary_passed(tests: &TestSummary) -> bool {
+    tests.failures + tests.errors == 0
 }
 
 fn run_lane(

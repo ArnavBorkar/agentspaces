@@ -145,6 +145,8 @@ fn full_cli_loop() {
     let table = ok_json(&root, &["forks"]);
     let rows = table["result"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["review"]["files_touched"], 1);
+    assert!(rows[0]["review"]["tests_passed"].is_null());
 
     // discard guard: refuses without --force, json error has code+hint
     let out = asp(&root, &["--json", "discard", "try-1"]);
@@ -653,6 +655,8 @@ fn race_ingests_junit_reports() {
     assert_eq!(tests["errors"], 0);
     assert_eq!(tests["skipped"], 1);
     assert_eq!(tests["time_seconds"], 0.25);
+    assert_eq!(lane["review"]["tests_passed"], false);
+    assert_eq!(lane["review"]["files_touched"], lane["files_changed"]);
 }
 
 #[test]

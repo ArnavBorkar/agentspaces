@@ -13,6 +13,13 @@
       "files_changed": 1,
       "insertions": 1,
       "deletions": 0,
+      "review": {
+        "tests_passed": null,
+        "files_touched": 1,
+        "line_churn": 1,
+        "risk_score": 0,
+        "risk_markers": []
+      },
       "log_file": "<workspace-root>@snap-1/.asp/race.log"
     }
   ]

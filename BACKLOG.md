@@ -217,7 +217,7 @@
 
 - **S17.1 Better summaries**
   - [x] T17.1.1 Add path-grouped diff summaries with counts by language and change type.
-  - [ ] T17.1.2 Add fork comparison scoring hooks for tests passed, files touched, and risk markers.
+  - [x] T17.1.2 Add fork comparison scoring hooks for tests passed, files touched, and risk markers.
   - [ ] T17.1.3 Add JSON output suitable for dashboards and CI comments.
 - **S17.2 Review artifacts**
   - [ ] T17.2.1 Add `asp diff --patch` and `--stat` modes for checkpoint and fork comparisons.

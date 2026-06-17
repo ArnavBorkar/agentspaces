@@ -364,6 +364,7 @@
         "files_changed": { "$ref": "#/$defs/u64" },
         "insertions": { "$ref": "#/$defs/u64" },
         "deletions": { "$ref": "#/$defs/u64" },
+        "review": { "$ref": "#/$defs/forkReviewSignals" },
         "last_activity": {
           "anyOf": [
             { "$ref": "#/$defs/dateTime" },
@@ -372,6 +373,41 @@
         },
         "path": { "type": "string" },
         "missing": { "type": "boolean" }
+      }
+    },
+    "forkReviewSignals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tests_passed",
+        "files_touched",
+        "line_churn",
+        "risk_score",
+        "risk_markers"
+      ],
+      "properties": {
+        "tests_passed": { "$ref": "#/$defs/nullableBool" },
+        "files_touched": { "$ref": "#/$defs/u64" },
+        "line_churn": { "$ref": "#/$defs/u64" },
+        "risk_score": { "$ref": "#/$defs/u64" },
+        "risk_markers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/forkRiskMarker" }
+        }
+      }
+    },
+    "forkRiskMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "severity", "path", "message"],
+      "properties": {
+        "kind": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "path": { "type": "string" },
+        "message": { "type": "string" }
       }
     },
     "forkInfos": {
@@ -547,6 +583,7 @@
           "files_changed": { "$ref": "#/$defs/u64" },
           "insertions": { "$ref": "#/$defs/u64" },
           "deletions": { "$ref": "#/$defs/u64" },
+          "review": { "$ref": "#/$defs/forkReviewSignals" },
           "log_file": { "type": "string" }
         }
       }
@@ -843,6 +880,12 @@
     "nullableI32": {
       "anyOf": [
         { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        { "type": "null" }
+      ]
+    },
+    "nullableBool": {
+      "anyOf": [
+        { "type": "boolean" },
         { "type": "null" }
       ]
     },

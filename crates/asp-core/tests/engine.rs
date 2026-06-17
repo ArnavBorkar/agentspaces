@@ -600,6 +600,11 @@ fn fork_is_independent_and_compared() {
     // CoW independence.
     write(&f1.path, "src/main.rs", "fork one wins\n");
     write(&f2.path, "src/lib.rs", "fork two adds a file\n");
+    write(
+        &f2.path,
+        "Cargo.toml",
+        "[package]\nname = \"fork-two\"\nversion = \"0.0.0\"\n",
+    );
     assert_eq!(read(&root, "src/main.rs"), "fn main() {}\n");
 
     let rows = ws.fork_compare().unwrap();
@@ -607,8 +612,16 @@ fn fork_is_independent_and_compared() {
     let r1 = rows.iter().find(|r| r.name == "attempt-1").unwrap();
     let r2 = rows.iter().find(|r| r.name == "attempt-2").unwrap();
     assert_eq!(r1.files_changed, 1);
-    assert_eq!(r2.files_changed, 1);
+    assert_eq!(r1.review.files_touched, 1);
+    assert!(r1.review.risk_markers.is_empty());
+    assert_eq!(r2.files_changed, 2);
     assert!(r2.insertions >= 1);
+    assert!(r2
+        .review
+        .risk_markers
+        .iter()
+        .any(|marker| marker.kind == "dependency_manifest" && marker.path == "Cargo.toml"));
+    assert_eq!(r2.review.risk_score, 20);
 
     // Duplicate active fork name is refused.
     let err = ws.fork(Some("attempt-1".into()), None).unwrap_err();

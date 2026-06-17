@@ -797,6 +797,7 @@ fn run(cli: Cli) -> Result<(), Error> {
                 "FILES±".to_string(),
                 "+LINES".to_string(),
                 "-LINES".to_string(),
+                "RISK".to_string(),
                 "LAST ACTIVITY".to_string(),
                 "PATH".to_string(),
             ]];
@@ -810,6 +811,7 @@ fn run(cli: Cli) -> Result<(), Error> {
                     r.files_changed.to_string(),
                     ui::green(&format!("+{}", r.insertions)),
                     ui::red(&format!("-{}", r.deletions)),
+                    review_cell(&r.review),
                     r.last_activity.clone().unwrap_or_default(),
                     ui::dim(&r.path.display().to_string()),
                 ]);
@@ -1365,6 +1367,28 @@ fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
         + usize::from(policy.promote.require_clean_status)
         + usize::from(policy.promote.require_checkpoint)
         + policy.promote.allowed_branch_prefixes.len()
+}
+
+fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {
+    if review.risk_markers.is_empty() {
+        return ui::green("low");
+    }
+    let label = review
+        .risk_markers
+        .iter()
+        .map(|marker| marker.kind.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let cell = format!("{} {}", review.risk_score, label);
+    if review
+        .risk_markers
+        .iter()
+        .any(|marker| marker.severity == "high")
+    {
+        ui::red(&cell)
+    } else {
+        ui::yellow(&cell)
+    }
 }
 
 fn print_diff_summary_table(title: &str, rows: &[asp_core::workspace::DiffSummaryBucket]) {

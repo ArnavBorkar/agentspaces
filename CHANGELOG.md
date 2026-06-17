@@ -71,6 +71,8 @@
   changed-path staging for paths with spaces or leading dashes.
 - `asp diff` reports summary totals grouped by top-level path, language, and
   change type in human and JSON output.
+- Fork and race comparison output now includes review signals for tests passed,
+  files touched, line churn, and explainable risk markers.
 
 ### Fixed
 
@@ -105,6 +107,9 @@
 - Additive: `asp diff --json` result objects include `summary` with total
   file/line counts and grouped `by_path`, `by_language`, and `by_change_type`
   buckets. Existing `rows` are unchanged.
+- Additive: `asp forks --json` rows and `asp race --json` lane result objects
+  include `review` signals for tests passed, touched files, churn, risk score,
+  and explicit risk markers. Existing comparison fields are unchanged.
 
 ## Automation Contract Rules
 
