@@ -104,3 +104,32 @@ fn generic_mcp_docs_include_supported_client_shapes() {
         "tool smoke-check guidance missing"
     );
 }
+
+#[test]
+fn command_cheat_sheet_covers_daily_workflows() {
+    let docs = fs::read_to_string(repo_file("docs/cheatsheet.md")).unwrap();
+
+    let expected = [
+        "## Start safely",
+        "asp init",
+        "asp checkpoint -m \"baseline\"",
+        "asp setup codex",
+        "## Recover work",
+        "asp restore 12 path/to/file",
+        "## Run agent races",
+        "asp race -n 3",
+        "## Land a winner",
+        "asp promote race-2",
+        "## Audit and policy",
+        "asp secrets scan",
+        "## Sync and support",
+        "asp sync push",
+        "## Shell and packaging",
+        "asp completions zsh",
+        "asp manpage",
+    ];
+
+    for needle in expected {
+        assert!(docs.contains(needle), "cheat sheet missing {needle}");
+    }
+}

@@ -365,7 +365,7 @@
 - **S29.1 Shell integration**
   - [x] T29.1.1 Add `asp completions <shell>` with JSON output and install docs.
   - [x] T29.1.2 Add generated manpage artifacts or a documented manpage generation command.
-  - [ ] T29.1.3 Add a command cheat sheet organized by daily workflows.
+  - [x] T29.1.3 Add a command cheat sheet organized by daily workflows.
 - **S29.2 Guided workflows**
   - [ ] T29.2.1 Add `asp quickstart` to print the safest first-five-minutes flow for the current directory.
   - [ ] T29.2.2 Add `asp doctor --runbook` links for common repair scenarios.

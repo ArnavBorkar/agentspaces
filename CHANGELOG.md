@@ -20,6 +20,8 @@
   test generation, docs generation, and CI repair.
 - `docs/trust-model.md` gives security reviewers a whitepaper for local trust
   boundaries, command write behavior, residual risk, and evidence links.
+- `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
+  sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
   and disaster-recovery runbook.
 - `docs/monorepo-tuning.md` documents large-repository tuning for checkpoint
