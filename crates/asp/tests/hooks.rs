@@ -168,6 +168,40 @@ command = "custom"
 }
 
 #[test]
+fn codex_hook_checkpoint_command_records_hook_provenance() {
+    let (_tmp, root) = project();
+    asp(&root, &["init"]);
+    std::fs::write(root.join("main.py"), "v2 from codex\n").unwrap();
+
+    let out = asp(
+        &root,
+        &[
+            "checkpoint",
+            "-m",
+            "codex: after tool",
+            "--source",
+            "hook",
+            "--tool",
+            "Codex",
+        ],
+    );
+
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = asp(&root, &["--json", "log"]);
+    let log: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&log.stdout)).unwrap();
+    let latest = &log["result"][0];
+    assert_eq!(latest["op"], "checkpoint");
+    assert_eq!(latest["source"], "hook");
+    assert_eq!(latest["tool"], "Codex");
+    assert_eq!(latest["message"], "codex: after tool");
+}
+
+#[test]
 fn hook_event_checkpoints_with_provenance() {
     let (_tmp, root) = project();
     asp(&root, &["init"]);

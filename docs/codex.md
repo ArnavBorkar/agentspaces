@@ -36,6 +36,39 @@ If `[mcp_servers.agentspaces]` already exists outside the managed block, setup
 stops with a hint instead of overwriting it. Rename or remove the existing entry
 and rerun setup.
 
-This integration currently registers MCP only. Hook guidance for automatic
-Codex checkpoints is tracked separately because Codex hooks require explicit
-trust review inside Codex.
+`asp setup codex` registers MCP only. Automatic checkpoint hooks remain an
+explicit manual opt-in because Codex hooks require trust review inside Codex.
+
+## Optional checkpoint hooks
+
+Codex hooks are enabled by default, but project-local hooks run only after the
+project is trusted and the hook definition is reviewed in Codex. Use `/hooks` in
+Codex to inspect and trust new hooks.
+
+Add these inline hooks to `.codex/config.toml` if you want Codex shell and file
+tool activity to create `asp` checkpoints:
+
+```toml
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'asp checkpoint -m "codex: before Bash" --source hook --tool Bash >/dev/null 2>&1 || true'
+timeout = 60
+statusMessage = "Checkpointing before shell command"
+
+[[hooks.PostToolUse]]
+matcher = "Bash|apply_patch|Edit|Write"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'asp checkpoint -m "codex: after tool" --source hook --tool Codex >/dev/null 2>&1 || true'
+timeout = 60
+statusMessage = "Checkpointing workspace changes"
+```
+
+The commands are deliberately payload-independent: they call `asp checkpoint`
+directly instead of `asp hook-event`, whose parser is currently shaped for
+Claude Code hook payloads. They also swallow errors so a missing workspace or
+transient checkpoint issue does not break the Codex session.

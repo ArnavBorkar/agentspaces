@@ -128,6 +128,8 @@
   verifies, caches, and execs native release binaries.
 - `asp setup codex` registers the `asp mcp` server in Codex
   `.codex/config.toml` without overwriting existing user settings.
+- `docs/codex.md` now includes Codex hook guidance for opt-in shell and file
+  checkpoints, with regression coverage for the checkpoint command shape.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.

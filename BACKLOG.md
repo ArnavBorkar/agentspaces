@@ -160,7 +160,7 @@
 
 - **S12.1 Codex integration**
   - [x] T12.1.1 Add `asp setup codex` that writes documented MCP/config entries without clobbering user settings.
-  - [ ] T12.1.2 Add hook or wrapper guidance for Codex file and shell checkpoints where supported.
+  - [x] T12.1.2 Add hook or wrapper guidance for Codex file and shell checkpoints where supported.
   - [ ] T12.1.3 Add an end-to-end Codex setup smoke test using a temporary HOME.
 - **S12.2 Other harnesses**
   - [ ] T12.2.1 Add `asp setup opencode` with idempotent install/remove behavior.
