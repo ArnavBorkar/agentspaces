@@ -67,6 +67,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp evidence manifest --packet file.json --output manifest.json --json` | `#/$defs/evidenceManifestOutputResult` |
 | `asp evidence verify --packet file.json --manifest manifest.json --json` | `#/$defs/evidenceVerifyReport` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
+| `asp sync status --json --remote <dir>` | `#/$defs/syncStatusReport` |
 | `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
 | `asp sync fetch --json --remote <dir>` | `#/$defs/syncFetchReport` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
@@ -153,6 +154,10 @@ through the standard error envelope instead of comparing against defaults.
 commands in `affects`, and an `enforced` timing note. Multi-value path and branch
 prefix settings are emitted as one rule per configured value.
 
+`asp sync status --json --remote <dir>` returns `syncStatusReport` with
+local/remote checkpoint-ref and meta-ref counts split into matching, local-only,
+remote-only, and conflicted buckets. It reports `head_relation` and `conflicts`
+without downloading git objects or CAS blobs.
 `asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
 git-object, CAS-blob, and ref counts split into uploaded/present/updated
 buckets. It is an explicit opt-in command; no other asp command starts sync.

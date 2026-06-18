@@ -648,6 +648,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp evidence manifest --packet file.json --output manifest.json --json",
         "asp evidence verify --packet file.json --manifest manifest.json --json",
         "asp retention plan --json",
+        "asp sync status --json --remote <dir>",
         "asp sync push --json --remote <dir>",
         "asp sync fetch --json --remote <dir>",
         "asp checkpoint --json",
@@ -684,6 +685,48 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         audit.contains("| _None currently._ |"),
         "schema inventory audit should state that no known CLI JSON surfaces are pending"
     );
+}
+
+#[test]
+fn schema_docs_cover_sync_result_contracts() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for (command, schema) in [
+        (
+            "asp sync status --json --remote <dir>",
+            "#/$defs/syncStatusReport",
+        ),
+        (
+            "asp sync push --json --remote <dir>",
+            "#/$defs/syncPushReport",
+        ),
+        (
+            "asp sync fetch --json --remote <dir>",
+            "#/$defs/syncFetchReport",
+        ),
+    ] {
+        assert!(docs.contains(command), "schema docs missing {command}");
+        assert!(
+            docs.contains(schema),
+            "schema docs missing {schema} for {command}"
+        );
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in ["syncStatusReport", "syncPushReport", "syncFetchReport"] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    for def in ["syncStatusReport", "syncPushReport", "syncFetchReport"] {
+        let reference = format!("#/$defs/{def}");
+        assert!(
+            variants.iter().any(|variant| variant["$ref"] == reference),
+            "result schema anyOf missing {reference}"
+        );
+    }
 }
 
 #[test]

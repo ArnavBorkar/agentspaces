@@ -399,6 +399,29 @@ pub struct SyncFetchReport {
     pub conflicts: Vec<SyncRefConflict>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncStatusReport {
+    pub remote: PathBuf,
+    pub workspace_id: String,
+    pub remote_initialized: bool,
+    pub local_checkpoint_refs: u64,
+    pub remote_checkpoint_refs: u64,
+    pub checkpoint_refs_matching: u64,
+    pub checkpoint_refs_local_only: u64,
+    pub checkpoint_refs_remote_only: u64,
+    pub checkpoint_refs_conflicted: u64,
+    pub local_meta_refs: u64,
+    pub remote_meta_refs: u64,
+    pub meta_refs_matching: u64,
+    pub meta_refs_local_only: u64,
+    pub meta_refs_remote_only: u64,
+    pub meta_refs_conflicted: u64,
+    pub local_head_seq: Option<u64>,
+    pub remote_head_seq: Option<u64>,
+    pub head_relation: String,
+    pub conflicts: Vec<SyncRefConflict>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SyncRefConflict {
     pub kind: String,
@@ -412,6 +435,14 @@ pub struct SyncRefConflict {
 struct SyncRef {
     seq: u64,
     target: String,
+}
+
+#[derive(Debug, Default)]
+struct SyncRefSummary {
+    matching: u64,
+    local_only: u64,
+    remote_only: u64,
+    conflicted: u64,
 }
 
 struct ScanResult {
@@ -1620,6 +1651,83 @@ impl Workspace {
                 report.head_seq = current_head;
             }
         }
+
+        Ok(report)
+    }
+
+    pub fn sync_status_local(&self, remote_root: impl AsRef<Path>) -> Result<SyncStatusReport> {
+        let _lock = StoreLock::acquire(&self.layout)?;
+        self.journal.heal()?;
+        let remote_root = remote_root.as_ref().to_path_buf();
+        let remote = LocalRemote::open(&remote_root)?;
+        let prefix = format!("asp-sync/v1/workspaces/{}", self.meta.id);
+
+        let local_checkpoints = self.checkpoint_refs()?;
+        let local_meta_refs = self.meta_refs()?;
+        let local_head = local_head_ref(self.head_seq_for(&local_checkpoints)?, &local_checkpoints);
+        let mut report = SyncStatusReport {
+            remote: remote_root,
+            workspace_id: self.meta.id.clone(),
+            remote_initialized: false,
+            local_checkpoint_refs: local_checkpoints.len() as u64,
+            remote_checkpoint_refs: 0,
+            checkpoint_refs_matching: 0,
+            checkpoint_refs_local_only: local_checkpoints.len() as u64,
+            checkpoint_refs_remote_only: 0,
+            checkpoint_refs_conflicted: 0,
+            local_meta_refs: local_meta_refs.len() as u64,
+            remote_meta_refs: 0,
+            meta_refs_matching: 0,
+            meta_refs_local_only: local_meta_refs.len() as u64,
+            meta_refs_remote_only: 0,
+            meta_refs_conflicted: 0,
+            local_head_seq: local_head.as_ref().map(|head| head.seq),
+            remote_head_seq: None,
+            head_relation: "remote_missing".to_string(),
+            conflicts: Vec::new(),
+        };
+
+        let workspace_key = format!("{prefix}/workspace.json");
+        if remote.get(&workspace_key)?.is_none() {
+            return Ok(report);
+        }
+        verify_remote_workspace(&remote, &prefix, &self.meta.id)?;
+        report.remote_initialized = true;
+
+        let remote_checkpoints = remote_sync_refs(
+            &remote,
+            &format!("{prefix}/refs/checkpoints"),
+            "checkpoint_ref",
+        )?;
+        let remote_meta_refs =
+            remote_sync_refs(&remote, &format!("{prefix}/refs/meta"), "meta_ref")?;
+        let remote_head = remote_head_ref(&remote, &prefix)?;
+
+        let checkpoint_summary = summarize_sync_refs(
+            "checkpoint_ref",
+            &local_checkpoints,
+            &remote_checkpoints,
+            &mut report.conflicts,
+        );
+        let meta_summary = summarize_sync_refs(
+            "meta_ref",
+            &local_meta_refs,
+            &remote_meta_refs,
+            &mut report.conflicts,
+        );
+
+        report.remote_checkpoint_refs = remote_checkpoints.len() as u64;
+        report.checkpoint_refs_matching = checkpoint_summary.matching;
+        report.checkpoint_refs_local_only = checkpoint_summary.local_only;
+        report.checkpoint_refs_remote_only = checkpoint_summary.remote_only;
+        report.checkpoint_refs_conflicted = checkpoint_summary.conflicted;
+        report.remote_meta_refs = remote_meta_refs.len() as u64;
+        report.meta_refs_matching = meta_summary.matching;
+        report.meta_refs_local_only = meta_summary.local_only;
+        report.meta_refs_remote_only = meta_summary.remote_only;
+        report.meta_refs_conflicted = meta_summary.conflicted;
+        report.remote_head_seq = remote_head.as_ref().map(|head| head.seq);
+        report.head_relation = sync_head_relation(local_head.as_ref(), remote_head.as_ref());
 
         Ok(report)
     }
@@ -3495,6 +3603,59 @@ fn remote_head_ref(remote: &dyn SyncRemote, prefix: &str) -> Result<Option<SyncR
     };
     let (seq, target) = sync_ref_fields(&object.bytes, &key)?;
     Ok(Some(SyncRef { seq, target }))
+}
+
+fn local_head_ref(head_seq: Option<u64>, refs: &BTreeMap<u64, String>) -> Option<SyncRef> {
+    head_seq.and_then(|seq| {
+        refs.get(&seq).map(|target| SyncRef {
+            seq,
+            target: target.clone(),
+        })
+    })
+}
+
+fn summarize_sync_refs(
+    kind: &str,
+    local_refs: &BTreeMap<u64, String>,
+    remote_refs: &BTreeMap<u64, SyncRef>,
+    conflicts: &mut Vec<SyncRefConflict>,
+) -> SyncRefSummary {
+    let mut summary = SyncRefSummary::default();
+    for (seq, local) in local_refs {
+        match remote_refs.get(seq) {
+            Some(remote) if &remote.target == local => summary.matching += 1,
+            Some(remote) => {
+                summary.conflicted += 1;
+                conflicts.push(SyncRefConflict {
+                    kind: kind.to_string(),
+                    seq: *seq,
+                    local: Some(local.clone()),
+                    remote: Some(remote.target.clone()),
+                    hint: "review both histories before pushing or fetching this ref".to_string(),
+                });
+            }
+            None => summary.local_only += 1,
+        }
+    }
+    for seq in remote_refs.keys() {
+        if !local_refs.contains_key(seq) {
+            summary.remote_only += 1;
+        }
+    }
+    summary
+}
+
+fn sync_head_relation(local: Option<&SyncRef>, remote: Option<&SyncRef>) -> String {
+    match (local, remote) {
+        (None, None) => "both_missing",
+        (Some(_), None) => "local_only",
+        (None, Some(_)) => "remote_only",
+        (Some(local), Some(remote)) if local == remote => "matching",
+        (Some(local), Some(remote)) if local.seq > remote.seq => "local_ahead",
+        (Some(local), Some(remote)) if local.seq < remote.seq => "remote_ahead",
+        (Some(_), Some(_)) => "diverged",
+    }
+    .to_string()
 }
 
 fn plan_ref_imports(

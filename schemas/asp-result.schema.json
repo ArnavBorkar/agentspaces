@@ -45,6 +45,7 @@
     { "$ref": "#/$defs/statsReport" },
     { "$ref": "#/$defs/syncFetchReport" },
     { "$ref": "#/$defs/syncPushReport" },
+    { "$ref": "#/$defs/syncStatusReport" },
     { "$ref": "#/$defs/doctorFindings" }
   ],
   "$defs": {
@@ -1573,6 +1574,67 @@
         "cas_blobs_present": { "$ref": "#/$defs/u64" },
         "head_updated": { "type": "boolean" },
         "head_seq": { "$ref": "#/$defs/nullableU64" },
+        "conflicts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/syncRefConflict" }
+        }
+      }
+    },
+    "syncStatusReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remote",
+        "workspace_id",
+        "remote_initialized",
+        "local_checkpoint_refs",
+        "remote_checkpoint_refs",
+        "checkpoint_refs_matching",
+        "checkpoint_refs_local_only",
+        "checkpoint_refs_remote_only",
+        "checkpoint_refs_conflicted",
+        "local_meta_refs",
+        "remote_meta_refs",
+        "meta_refs_matching",
+        "meta_refs_local_only",
+        "meta_refs_remote_only",
+        "meta_refs_conflicted",
+        "local_head_seq",
+        "remote_head_seq",
+        "head_relation",
+        "conflicts"
+      ],
+      "properties": {
+        "remote": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "remote_initialized": { "type": "boolean" },
+        "local_checkpoint_refs": { "$ref": "#/$defs/u64" },
+        "remote_checkpoint_refs": { "$ref": "#/$defs/u64" },
+        "checkpoint_refs_matching": { "$ref": "#/$defs/u64" },
+        "checkpoint_refs_local_only": { "$ref": "#/$defs/u64" },
+        "checkpoint_refs_remote_only": { "$ref": "#/$defs/u64" },
+        "checkpoint_refs_conflicted": { "$ref": "#/$defs/u64" },
+        "local_meta_refs": { "$ref": "#/$defs/u64" },
+        "remote_meta_refs": { "$ref": "#/$defs/u64" },
+        "meta_refs_matching": { "$ref": "#/$defs/u64" },
+        "meta_refs_local_only": { "$ref": "#/$defs/u64" },
+        "meta_refs_remote_only": { "$ref": "#/$defs/u64" },
+        "meta_refs_conflicted": { "$ref": "#/$defs/u64" },
+        "local_head_seq": { "$ref": "#/$defs/nullableU64" },
+        "remote_head_seq": { "$ref": "#/$defs/nullableU64" },
+        "head_relation": {
+          "type": "string",
+          "enum": [
+            "remote_missing",
+            "both_missing",
+            "local_only",
+            "remote_only",
+            "matching",
+            "local_ahead",
+            "remote_ahead",
+            "diverged"
+          ]
+        },
         "conflicts": {
           "type": "array",
           "items": { "$ref": "#/$defs/syncRefConflict" }

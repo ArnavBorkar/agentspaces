@@ -6,8 +6,10 @@ the protocol with a mounted drive, shared volume, or fixture directory before
 turning on cloud storage.
 
 ```bash
+asp sync status --remote /path/to/asp-remote
 asp sync push --remote /path/to/asp-remote
 asp sync fetch --remote /path/to/asp-remote
+asp sync status --json --remote /path/to/asp-remote
 asp sync push --json --remote /path/to/asp-remote
 ```
 
@@ -49,13 +51,23 @@ asp doctor --deep
 
 if sync reports a corrupt or missing local object.
 
+## Status Checks
+
+`asp sync status --remote <dir>` compares local and remote checkpoint refs, meta
+refs, and head refs without downloading git objects or CAS blobs. Use it before
+`push` or `fetch` in automation to see whether a remote is missing, matching,
+ahead, behind, or diverged. The report names matching, local-only, remote-only,
+and conflicted ref counts so operators can decide whether a normal sync is safe
+or manual reconciliation is needed.
+
 ## JSON Output
 
-The JSON results are `#/$defs/syncPushReport` and `#/$defs/syncFetchReport`
-from [docs/schemas.md](schemas.md). Counts are split into uploaded/downloaded,
-already-present, created/imported, unchanged, updated, and conflicted buckets
-so automation can distinguish a first backup, an idempotent retry, and a
-manual reconciliation case.
+The JSON results are `#/$defs/syncStatusReport`, `#/$defs/syncPushReport`, and
+`#/$defs/syncFetchReport` from [docs/schemas.md](schemas.md). Counts are split
+into matching, local-only, remote-only, uploaded/downloaded, already-present,
+created/imported, unchanged, updated, and conflicted buckets so automation can
+distinguish a first backup, an idempotent retry, and a manual reconciliation
+case.
 
 ## Fetch Behavior
 

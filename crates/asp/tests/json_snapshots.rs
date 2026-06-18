@@ -78,6 +78,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
         "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
+        "cli_sync_status" => include_str!("snapshots/cli_sync_status.json"),
         "cli_policy_explain" => include_str!("snapshots/cli_policy_explain.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_review" => include_str!("snapshots/cli_review.json"),
@@ -171,6 +172,16 @@ fn normalize_sync_fetch(mut value: Value, root: &Path) -> Value {
     ] {
         result[key] = json!(0);
     }
+    value
+}
+
+fn normalize_sync_status(mut value: Value, root: &Path) -> Value {
+    normalize_value(&mut value, root);
+    let result = value
+        .get_mut("result")
+        .and_then(Value::as_object_mut)
+        .expect("sync status result");
+    result["remote"] = json!("<sync-remote>");
     value
 }
 
@@ -303,6 +314,11 @@ fn cli_json_shapes_match_snapshots() {
         &["sync", "fetch", "--remote", sync_remote.to_str().unwrap()],
     );
     snapshot("cli_sync_fetch", normalize_sync_fetch(sync_fetch, &root));
+    let sync_status = ok_json(
+        &root,
+        &["sync", "status", "--remote", sync_remote.to_str().unwrap()],
+    );
+    snapshot("cli_sync_status", normalize_sync_status(sync_status, &root));
 
     let race = ok_json(
         &root,

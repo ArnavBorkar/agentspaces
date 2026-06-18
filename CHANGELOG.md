@@ -20,6 +20,8 @@
   remote sync objects, refs, key derivation, rotation, and remote-only recovery.
 - `docs/sync-credentials.md` documents least-privilege S3-compatible, GCS, and
   Azure Blob credential scopes for user-owned sync storage.
+- `asp sync status --remote <dir>` reports local and remote checkpoint/meta ref
+  divergence without downloading remote git objects or CAS blobs.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

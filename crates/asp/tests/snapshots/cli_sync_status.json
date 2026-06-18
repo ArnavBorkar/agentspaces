@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "result": {
+    "remote": "<sync-remote>",
+    "workspace_id": "<workspace-id>",
+    "remote_initialized": true,
+    "local_checkpoint_refs": 1,
+    "remote_checkpoint_refs": 1,
+    "checkpoint_refs_matching": 1,
+    "checkpoint_refs_local_only": 0,
+    "checkpoint_refs_remote_only": 0,
+    "checkpoint_refs_conflicted": 0,
+    "local_meta_refs": 0,
+    "remote_meta_refs": 0,
+    "meta_refs_matching": 0,
+    "meta_refs_local_only": 0,
+    "meta_refs_remote_only": 0,
+    "meta_refs_conflicted": 0,
+    "local_head_seq": 1,
+    "remote_head_seq": 1,
+    "head_relation": "matching",
+    "conflicts": []
+  }
+}

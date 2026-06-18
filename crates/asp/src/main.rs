@@ -10,6 +10,7 @@ mod mcp;
 mod race;
 mod ui;
 
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -17,6 +18,7 @@ use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, find_root, ASP_DIR, FORMAT_VERSION};
+use asp_core::sync::{LocalRemote, SyncRemote};
 use asp_core::workspace::{CheckpointOpts, DiffTextMode, Finding, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -485,6 +487,12 @@ enum RetentionCmd {
 
 #[derive(Subcommand)]
 enum SyncCmd {
+    /// Show local/remote ref divergence without downloading objects.
+    Status {
+        /// Local remote directory to inspect.
+        #[arg(long, value_name = "DIR")]
+        remote: PathBuf,
+    },
     /// Push checkpoints and large-file blobs to a local filesystem remote.
     Push {
         /// Local remote directory to create or update.
@@ -743,6 +751,52 @@ struct ConfigDiffChange {
     field: &'static str,
     workspace: serde_json::Value,
     against: serde_json::Value,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SyncStatusReport {
+    remote: PathBuf,
+    workspace_id: String,
+    remote_initialized: bool,
+    local_checkpoint_refs: u64,
+    remote_checkpoint_refs: u64,
+    checkpoint_refs_matching: u64,
+    checkpoint_refs_local_only: u64,
+    checkpoint_refs_remote_only: u64,
+    checkpoint_refs_conflicted: u64,
+    local_meta_refs: u64,
+    remote_meta_refs: u64,
+    meta_refs_matching: u64,
+    meta_refs_local_only: u64,
+    meta_refs_remote_only: u64,
+    meta_refs_conflicted: u64,
+    local_head_seq: Option<u64>,
+    remote_head_seq: Option<u64>,
+    head_relation: String,
+    conflicts: Vec<SyncStatusRefConflict>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct SyncStatusRefConflict {
+    kind: String,
+    seq: u64,
+    local: Option<String>,
+    remote: Option<String>,
+    hint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SyncStatusRef {
+    seq: u64,
+    target: String,
+}
+
+#[derive(Debug, Default)]
+struct SyncStatusRefSummary {
+    matching: u64,
+    local_only: u64,
+    remote_only: u64,
+    conflicted: u64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1294,6 +1348,70 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
         },
         Cmd::Sync { command } => match command {
+            SyncCmd::Status { remote } => {
+                let ws = open(&cli.dir)?;
+                let report = sync_status_local_compat(&ws, &remote)?;
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                if !report.remote_initialized {
+                    println!(
+                        "{} sync remote {} has no workspace record",
+                        ui::yellow("!"),
+                        ui::bold(&report.remote.display().to_string())
+                    );
+                    println!(
+                        "  local refs: {} checkpoints, {} metadata",
+                        report.local_checkpoint_refs, report.local_meta_refs
+                    );
+                    println!("  {}", ui::dim("run `asp sync push --remote <dir>` first"));
+                    return Ok(());
+                }
+                println!(
+                    "{} sync status for {}",
+                    ui::green("✓"),
+                    ui::bold(&report.remote.display().to_string())
+                );
+                println!(
+                    "  checkpoints: {} matching, {} local-only, {} remote-only, {} conflicted",
+                    report.checkpoint_refs_matching,
+                    report.checkpoint_refs_local_only,
+                    report.checkpoint_refs_remote_only,
+                    report.checkpoint_refs_conflicted
+                );
+                println!(
+                    "  metadata:    {} matching, {} local-only, {} remote-only, {} conflicted",
+                    report.meta_refs_matching,
+                    report.meta_refs_local_only,
+                    report.meta_refs_remote_only,
+                    report.meta_refs_conflicted
+                );
+                println!(
+                    "  head:        {} (local {}, remote {})",
+                    report.head_relation,
+                    report
+                        .local_head_seq
+                        .map(|seq| format!("#{seq}"))
+                        .unwrap_or_else(|| "missing".to_string()),
+                    report
+                        .remote_head_seq
+                        .map(|seq| format!("#{seq}"))
+                        .unwrap_or_else(|| "missing".to_string())
+                );
+                if !report.conflicts.is_empty() {
+                    for conflict in &report.conflicts {
+                        println!(
+                            "  {} #{}: local {}, remote {}",
+                            conflict.kind,
+                            conflict.seq,
+                            conflict.local.as_deref().unwrap_or("missing"),
+                            conflict.remote.as_deref().unwrap_or("missing")
+                        );
+                    }
+                }
+                Ok(())
+            }
             SyncCmd::Push { remote } => {
                 let ws = open(&cli.dir)?;
                 let report = ws.sync_push_local(remote)?;
@@ -2202,6 +2320,247 @@ fn scan_secrets_dir(
         }
     }
     Ok(())
+}
+
+fn sync_status_local_compat(ws: &Workspace, remote_root: &Path) -> Result<SyncStatusReport, Error> {
+    let remote_path = remote_root.to_path_buf();
+    let remote = LocalRemote::open(&remote_path)?;
+    let prefix = format!("asp-sync/v1/workspaces/{}", ws.meta.id);
+
+    let local_checkpoints = ws.checkpoint_refs()?;
+    let local_meta_refs = ws.meta_refs()?;
+    let local_head =
+        sync_status_local_head(ws.shadow().rev_parse("refs/asp/head")?, &local_checkpoints);
+    let mut report = SyncStatusReport {
+        remote: remote_path,
+        workspace_id: ws.meta.id.clone(),
+        remote_initialized: false,
+        local_checkpoint_refs: local_checkpoints.len() as u64,
+        remote_checkpoint_refs: 0,
+        checkpoint_refs_matching: 0,
+        checkpoint_refs_local_only: local_checkpoints.len() as u64,
+        checkpoint_refs_remote_only: 0,
+        checkpoint_refs_conflicted: 0,
+        local_meta_refs: local_meta_refs.len() as u64,
+        remote_meta_refs: 0,
+        meta_refs_matching: 0,
+        meta_refs_local_only: local_meta_refs.len() as u64,
+        meta_refs_remote_only: 0,
+        meta_refs_conflicted: 0,
+        local_head_seq: local_head.as_ref().map(|head| head.seq),
+        remote_head_seq: None,
+        head_relation: "remote_missing".to_string(),
+        conflicts: Vec::new(),
+    };
+
+    let workspace_key = format!("{prefix}/workspace.json");
+    if remote.get(&workspace_key)?.is_none() {
+        return Ok(report);
+    }
+    sync_status_verify_remote_workspace(&remote, &prefix, &ws.meta.id)?;
+    report.remote_initialized = true;
+
+    let remote_checkpoints = sync_status_remote_refs(
+        &remote,
+        &format!("{prefix}/refs/checkpoints"),
+        "checkpoint_ref",
+    )?;
+    let remote_meta_refs =
+        sync_status_remote_refs(&remote, &format!("{prefix}/refs/meta"), "meta_ref")?;
+    let remote_head = sync_status_remote_head(&remote, &prefix)?;
+
+    let checkpoint_summary = sync_status_summarize_refs(
+        "checkpoint_ref",
+        &local_checkpoints,
+        &remote_checkpoints,
+        &mut report.conflicts,
+    );
+    let meta_summary = sync_status_summarize_refs(
+        "meta_ref",
+        &local_meta_refs,
+        &remote_meta_refs,
+        &mut report.conflicts,
+    );
+
+    report.remote_checkpoint_refs = remote_checkpoints.len() as u64;
+    report.checkpoint_refs_matching = checkpoint_summary.matching;
+    report.checkpoint_refs_local_only = checkpoint_summary.local_only;
+    report.checkpoint_refs_remote_only = checkpoint_summary.remote_only;
+    report.checkpoint_refs_conflicted = checkpoint_summary.conflicted;
+    report.remote_meta_refs = remote_meta_refs.len() as u64;
+    report.meta_refs_matching = meta_summary.matching;
+    report.meta_refs_local_only = meta_summary.local_only;
+    report.meta_refs_remote_only = meta_summary.remote_only;
+    report.meta_refs_conflicted = meta_summary.conflicted;
+    report.remote_head_seq = remote_head.as_ref().map(|head| head.seq);
+    report.head_relation = sync_status_head_relation(local_head.as_ref(), remote_head.as_ref());
+
+    Ok(report)
+}
+
+fn sync_status_verify_remote_workspace(
+    remote: &dyn SyncRemote,
+    prefix: &str,
+    workspace_id: &str,
+) -> Result<(), Error> {
+    let key = format!("{prefix}/workspace.json");
+    let Some(object) = remote.get(&key)? else {
+        return Err(Error::new(
+            ErrorCode::NothingToDo,
+            format!("sync remote has no workspace record for {workspace_id}"),
+        )
+        .with_hint("run `asp sync push --remote <dir>` from this workspace first"));
+    };
+    let value: serde_json::Value = serde_json::from_slice(&object.bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote workspace record is not valid JSON: {e}"),
+        )
+        .with_hint("inspect the sync remote before retrying")
+    })?;
+    if value.get("workspace_id").and_then(|id| id.as_str()) != Some(workspace_id) {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            "remote workspace record does not match this workspace id",
+        )
+        .with_hint(
+            "use the remote created for this workspace, or initialize a matching restore workspace",
+        ));
+    }
+    Ok(())
+}
+
+fn sync_status_remote_refs(
+    remote: &dyn SyncRemote,
+    key_prefix: &str,
+    kind: &str,
+) -> Result<BTreeMap<u64, SyncStatusRef>, Error> {
+    let mut refs = BTreeMap::new();
+    for entry in remote.list(key_prefix)? {
+        if !entry.key.ends_with(".json") {
+            continue;
+        }
+        let object = remote.get(&entry.key)?.ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote listed ref {} but it is missing", entry.key),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+        let (seq, target) = sync_status_ref_fields(&object.bytes, &entry.key)?;
+        if refs.insert(seq, SyncStatusRef { seq, target }).is_some() {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote has duplicate {kind} for checkpoint #{seq}"),
+            )
+            .with_hint("inspect the sync remote before retrying"));
+        }
+    }
+    Ok(refs)
+}
+
+fn sync_status_remote_head(
+    remote: &dyn SyncRemote,
+    prefix: &str,
+) -> Result<Option<SyncStatusRef>, Error> {
+    let key = format!("{prefix}/refs/head.json");
+    let Some(object) = remote.get(&key)? else {
+        return Ok(None);
+    };
+    let (seq, target) = sync_status_ref_fields(&object.bytes, &key)?;
+    Ok(Some(SyncStatusRef { seq, target }))
+}
+
+fn sync_status_ref_fields(bytes: &[u8], key: &str) -> Result<(u64, String), Error> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote ref {key} is not valid JSON: {e}"),
+        )
+        .with_hint("inspect the sync remote before retrying")
+    })?;
+    let seq = value
+        .get("seq")
+        .and_then(|seq| seq.as_u64())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote ref {key} is missing a numeric seq"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    let target = value
+        .get("target")
+        .and_then(|target| target.as_str())
+        .filter(|target| !target.is_empty())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote ref {key} is missing a target"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    Ok((seq, target.to_string()))
+}
+
+fn sync_status_local_head(
+    head_target: Option<String>,
+    refs: &BTreeMap<u64, String>,
+) -> Option<SyncStatusRef> {
+    let head_target = head_target?;
+    refs.iter()
+        .find(|(_, target)| **target == head_target)
+        .map(|(seq, target)| SyncStatusRef {
+            seq: *seq,
+            target: target.clone(),
+        })
+}
+
+fn sync_status_summarize_refs(
+    kind: &str,
+    local_refs: &BTreeMap<u64, String>,
+    remote_refs: &BTreeMap<u64, SyncStatusRef>,
+    conflicts: &mut Vec<SyncStatusRefConflict>,
+) -> SyncStatusRefSummary {
+    let mut summary = SyncStatusRefSummary::default();
+    for (seq, local) in local_refs {
+        match remote_refs.get(seq) {
+            Some(remote) if &remote.target == local => summary.matching += 1,
+            Some(remote) => {
+                summary.conflicted += 1;
+                conflicts.push(SyncStatusRefConflict {
+                    kind: kind.to_string(),
+                    seq: *seq,
+                    local: Some(local.clone()),
+                    remote: Some(remote.target.clone()),
+                    hint: "review both histories before pushing or fetching this ref".to_string(),
+                });
+            }
+            None => summary.local_only += 1,
+        }
+    }
+    for seq in remote_refs.keys() {
+        if !local_refs.contains_key(seq) {
+            summary.remote_only += 1;
+        }
+    }
+    summary
+}
+
+fn sync_status_head_relation(
+    local: Option<&SyncStatusRef>,
+    remote: Option<&SyncStatusRef>,
+) -> String {
+    match (local, remote) {
+        (None, None) => "both_missing",
+        (Some(_), None) => "local_only",
+        (None, Some(_)) => "remote_only",
+        (Some(local), Some(remote)) if local == remote => "matching",
+        (Some(local), Some(remote)) if local.seq > remote.seq => "local_ahead",
+        (Some(local), Some(remote)) if local.seq < remote.seq => "remote_ahead",
+        (Some(_), Some(_)) => "diverged",
+    }
+    .to_string()
 }
 
 fn should_skip_secret_path(rel: &str, excludes: &[String], include_excluded: bool) -> bool {

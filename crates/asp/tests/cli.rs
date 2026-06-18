@@ -1282,6 +1282,50 @@ fn sync_fetch_reports_conflicts_without_overwriting_local_refs() {
 }
 
 #[test]
+fn sync_status_reports_ref_divergence_without_fetching_objects() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok(&root, &["checkpoint", "-m", "base"]);
+    let remote = root.parent().unwrap().join("sync-remote");
+
+    let missing = ok_json(
+        &root,
+        &["sync", "status", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(missing["result"]["remote_initialized"], false);
+    assert_eq!(missing["result"]["local_checkpoint_refs"], 1);
+    assert_eq!(missing["result"]["head_relation"], "remote_missing");
+
+    let pushed = ok_json(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+    let workspace_id = pushed["result"]["workspace_id"].as_str().unwrap();
+    let base = remote.join("asp-sync/v1/workspaces").join(workspace_id);
+    std::fs::remove_dir_all(base.join("objects")).unwrap();
+
+    let status = ok_json(
+        &root,
+        &["sync", "status", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(status["result"]["remote_initialized"], true);
+    assert_eq!(status["result"]["checkpoint_refs_matching"], 1);
+    assert_eq!(status["result"]["meta_refs_matching"], 0);
+    assert_eq!(status["result"]["head_relation"], "matching");
+    assert_eq!(status["result"]["conflicts"], serde_json::json!([]));
+
+    std::fs::write(root.join("next.txt"), "next").unwrap();
+    ok(&root, &["checkpoint", "-m", "next"]);
+    let diverged = ok_json(
+        &root,
+        &["sync", "status", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(diverged["result"]["checkpoint_refs_local_only"], 1);
+    assert_eq!(diverged["result"]["meta_refs_local_only"], 0);
+    assert_eq!(diverged["result"]["head_relation"], "local_ahead");
+}
+
+#[test]
 fn audit_filters_journal_events() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);
