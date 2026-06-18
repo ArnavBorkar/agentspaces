@@ -9,6 +9,7 @@ For harness launch guidance, see [agent preflight](agent-preflight.md).
 asp preflight
 asp --json preflight
 asp preflight --deep
+asp preflight --sarif > asp-preflight.sarif
 ```
 
 The command checks:
@@ -32,6 +33,11 @@ dashboards. Treat `name` as display text and `id` as the automation key.
 | `preflight.policy` | policy | `docs/policy.md` |
 | `preflight.doctor` | doctor | `docs/doctor-runbook.md` |
 | `preflight.secrets` | secrets | `docs/ignore-config-secrets.md` |
+
+`--sarif` emits raw SARIF 2.1.0 instead of the normal CLI JSON envelope. It
+declares every preflight check as a rule and emits failed checks as results.
+Secret findings are redacted and mapped to workspace-relative file and line
+locations.
 
 ## CI Example
 

@@ -38,6 +38,14 @@ jobs:
               if not check["ok"]:
                   print(f"::error title={check['id']}::{check['summary']} ({check['runbook']})")
           PY
+      - name: Write asp preflight SARIF
+        if: failure() && hashFiles('asp-preflight.json') != ''
+        run: asp preflight --sarif > asp-preflight.sarif || true
+      - name: Upload asp preflight SARIF
+        if: failure() && hashFiles('asp-preflight.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: asp-preflight.sarif
       - name: Upload asp preflight report
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,6 +81,8 @@ asp_preflight:
   to spot in logs.
 - Use the JSON `id` field, such as `preflight.secrets`, for stable CI
   annotations and dashboards; `name` is human display text.
+- Upload `asp preflight --sarif` when the platform can ingest SARIF 2.1.0, for
+  example GitHub code scanning.
 - Upload the JSON report when teams want persistent evidence for security or
   platform review.
 - If `asp preflight` fails, use `asp doctor --runbook` and `asp secrets scan`

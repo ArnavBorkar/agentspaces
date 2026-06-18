@@ -270,6 +270,7 @@ fn preflight_docs_cover_ci_readiness_gate() {
         "asp preflight",
         "asp --json preflight",
         "asp preflight --deep",
+        "asp preflight --sarif",
         ".asp/config.toml",
         ".asp/policy.toml",
         "asp doctor",
@@ -279,6 +280,7 @@ fn preflight_docs_cover_ci_readiness_gate() {
         "stable check ID",
         "preflight.config",
         "preflight.secrets",
+        "SARIF 2.1.0",
         "Do not pair it with `asp doctor --fix`",
     ] {
         assert!(docs.contains(needle), "preflight docs missing {needle}");
@@ -298,6 +300,8 @@ fn ci_docs_cover_preflight_examples() {
         "asp --json preflight > asp-preflight.json",
         "::error title=",
         "preflight.secrets",
+        "github/codeql-action/upload-sarif@v3",
+        "asp preflight --sarif",
         "do not run `asp doctor --fix`",
         "asp doctor --runbook",
     ] {

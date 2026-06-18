@@ -72,6 +72,9 @@ enum Cmd {
         /// Include deep CAS verification in the doctor check.
         #[arg(long)]
         deep: bool,
+        /// Emit raw SARIF 2.1.0 for CI security dashboards.
+        #[arg(long)]
+        sarif: bool,
     },
     /// Inspect effective workspace configuration.
     Config {
@@ -727,9 +730,20 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
-        Cmd::Preflight { deep } => {
+        Cmd::Preflight { deep, sarif } => {
+            if sarif && json {
+                return Err(Error::new(
+                    ErrorCode::NothingToDo,
+                    "`--sarif` cannot be combined with `--json`",
+                )
+                .with_hint(
+                    "run `asp preflight --sarif` for raw SARIF or `asp --json preflight` for the CLI JSON envelope",
+                ));
+            }
             let report = preflight_report(&cli.dir, deep)?;
-            if json {
+            if sarif {
+                print_preflight_sarif(&report)?;
+            } else if json {
                 ui::print_json(true, &report);
             } else {
                 print_preflight(&report);
@@ -2831,6 +2845,164 @@ fn print_preflight(report: &PreflightReport) {
     } else {
         println!("\n{}", ui::red("not ready"));
     }
+}
+
+fn print_preflight_sarif(report: &PreflightReport) -> Result<(), Error> {
+    println!("{}", json_pretty(&preflight_sarif(report))?);
+    Ok(())
+}
+
+fn preflight_sarif(report: &PreflightReport) -> serde_json::Value {
+    let rules: Vec<_> = report
+        .checks
+        .iter()
+        .map(|check| {
+            serde_json::json!({
+                "id": check.id,
+                "name": check.name,
+                "shortDescription": {
+                    "text": preflight_rule_description(check.id)
+                },
+                "helpUri": format!("https://github.com/ArnavBorkar/agentspaces/blob/main/{}", check.runbook),
+                "properties": {
+                    "runbook": check.runbook
+                }
+            })
+        })
+        .collect();
+    let results: Vec<_> = report
+        .checks
+        .iter()
+        .filter(|check| !check.ok)
+        .map(|check| {
+            let mut result = serde_json::json!({
+                "ruleId": check.id,
+                "level": "error",
+                "message": {
+                    "text": preflight_sarif_message(check)
+                },
+                "locations": preflight_sarif_locations(report, check),
+                "properties": {
+                    "checkName": check.name,
+                    "runbook": check.runbook
+                }
+            });
+            if let Some(hint) = &check.hint {
+                result["properties"]["hint"] = serde_json::json!(hint);
+            }
+            result
+        })
+        .collect();
+
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "asp preflight",
+                        "informationUri": "https://github.com/ArnavBorkar/agentspaces",
+                        "rules": rules
+                    }
+                },
+                "automationDetails": {
+                    "id": "asp/preflight"
+                },
+                "invocations": [
+                    {
+                        "executionSuccessful": report.ready,
+                        "workingDirectory": {
+                            "uri": sarif_uri(report.root.as_path())
+                        }
+                    }
+                ],
+                "results": results,
+                "properties": {
+                    "ready": report.ready
+                }
+            }
+        ]
+    })
+}
+
+fn preflight_rule_description(id: &str) -> &'static str {
+    match id {
+        "preflight.config" => "agentspaces config parses and effective settings are visible",
+        "preflight.policy" => "agentspaces policy parses and active rules are visible",
+        "preflight.doctor" => "workspace health checks have no blocking findings",
+        "preflight.secrets" => "checkpoint-scoped files contain no likely secrets",
+        _ => "agentspaces preflight check",
+    }
+}
+
+fn preflight_sarif_message(check: &PreflightCheck) -> String {
+    match &check.hint {
+        Some(hint) => format!("{}; hint: {}", check.summary, hint),
+        None => check.summary.clone(),
+    }
+}
+
+fn preflight_sarif_locations(
+    report: &PreflightReport,
+    check: &PreflightCheck,
+) -> Vec<serde_json::Value> {
+    if check.id == "preflight.secrets" && !report.secret_findings.is_empty() {
+        return report
+            .secret_findings
+            .iter()
+            .map(|finding| {
+                sarif_location(
+                    &finding.path,
+                    Some(finding.line),
+                    Some(format!("{} candidate: {}", finding.kind, finding.redacted)),
+                )
+            })
+            .collect();
+    }
+
+    vec![sarif_location(
+        preflight_sarif_artifact_uri(check.id),
+        None,
+        None,
+    )]
+}
+
+fn preflight_sarif_artifact_uri(id: &str) -> &'static str {
+    match id {
+        "preflight.config" => ".asp/config.toml",
+        "preflight.policy" => ".asp/policy.toml",
+        "preflight.doctor" => ".asp/",
+        "preflight.secrets" => ".",
+        _ => ".",
+    }
+}
+
+fn sarif_location(uri: &str, line: Option<u64>, message: Option<String>) -> serde_json::Value {
+    let mut physical = serde_json::json!({
+        "artifactLocation": {
+            "uri": uri
+        }
+    });
+    if let Some(line) = line {
+        physical["region"] = serde_json::json!({
+            "startLine": line
+        });
+    }
+
+    let mut location = serde_json::json!({
+        "physicalLocation": physical
+    });
+    if let Some(message) = message {
+        location["message"] = serde_json::json!({
+            "text": message
+        });
+    }
+    location
+}
+
+fn sarif_uri(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn quickstart_report(directory: PathBuf) -> QuickstartReport {

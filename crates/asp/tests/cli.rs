@@ -205,6 +205,19 @@ fn preflight_reports_readiness_and_blocks_secrets() {
         .iter()
         .all(|check| check["ok"] == true));
 
+    let conflict = asp(&root, &["--json", "preflight", "--sarif"]);
+    assert!(
+        !conflict.status.success(),
+        "--json and --sarif should conflict"
+    );
+    let conflict_json: serde_json::Value = serde_json::from_slice(&conflict.stdout).unwrap();
+    assert_eq!(conflict_json["ok"], false);
+    assert_eq!(conflict_json["error"]["code"], "nothing_to_do");
+    assert!(conflict_json["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("raw SARIF"));
+
     let secret = "sk-live123456789012345678901234567890";
     std::fs::write(root.join("src/secret.txt"), format!("TOKEN={secret}\n")).unwrap();
     let out = asp(&root, &["--json", "preflight"]);
@@ -225,6 +238,42 @@ fn preflight_reports_readiness_and_blocks_secrets() {
             && check["name"] == "secrets"
             && check["ok"] == false
             && check["runbook"] == "docs/ignore-config-secrets.md"));
+
+    let sarif_out = asp(&root, &["preflight", "--sarif"]);
+    assert!(
+        !sarif_out.status.success(),
+        "preflight SARIF should fail on secrets"
+    );
+    assert!(
+        !String::from_utf8_lossy(&sarif_out.stdout).contains(secret),
+        "SARIF output must not leak the raw secret"
+    );
+    let sarif: serde_json::Value = serde_json::from_slice(&sarif_out.stdout).unwrap();
+    assert_eq!(sarif["version"], "2.1.0");
+    assert_eq!(sarif["runs"][0]["tool"]["driver"]["name"], "asp preflight");
+    assert!(sarif["runs"][0]["tool"]["driver"]["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|rule| rule["id"] == "preflight.secrets"
+            && rule["helpUri"]
+                .as_str()
+                .unwrap()
+                .contains("docs/ignore-config-secrets.md")));
+    let secret_result = sarif["runs"][0]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|result| result["ruleId"] == "preflight.secrets")
+        .unwrap();
+    assert_eq!(
+        secret_result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        "src/secret.txt"
+    );
+    assert_eq!(
+        secret_result["locations"][0]["physicalLocation"]["region"]["startLine"],
+        1
+    );
 }
 
 #[test]
