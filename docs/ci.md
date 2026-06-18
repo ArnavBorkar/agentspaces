@@ -66,6 +66,67 @@ jobs:
           sarif_file: asp-secrets.sarif
 ```
 
+## Evidence Bundle Artifacts
+
+Use this pattern when a failed readiness gate should leave a complete support
+handoff: redacted evidence packet, packet manifest, verification log, and SARIF
+files. The job still does not upload anything except normal CI artifacts.
+
+```yaml
+name: asp evidence bundle
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  asp-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install asp
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run readiness checks
+        run: |
+          set +e
+          asp config validate
+          config_status=$?
+          asp preflight --sarif > asp-preflight.sarif
+          preflight_status=$?
+          asp secrets scan --sarif > asp-secrets.sarif
+          secrets_status=$?
+          exit $((config_status || preflight_status || secrets_status))
+      - name: Collect redacted evidence packet
+        if: always()
+        run: |
+          asp evidence collect --audit-limit 50 --output asp-evidence.json
+          asp evidence manifest \
+            --packet asp-evidence.json \
+            --output asp-evidence.manifest.json
+          asp evidence verify \
+            --packet asp-evidence.json \
+            --manifest asp-evidence.manifest.json \
+            > asp-evidence.verify.txt
+      - name: Upload asp support evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asp-support-evidence-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            asp-evidence.json
+            asp-evidence.manifest.json
+            asp-evidence.verify.txt
+            asp-preflight.sarif
+            asp-secrets.sarif
+```
+
+Add a manifest signature artifact when your CI environment already signs build
+outputs. Keep the signature next to `asp-evidence.manifest.json`; see
+[Evidence Packets](evidence.md) for Sigstore and minisign commands.
+
 ## GitLab CI
 
 ```yaml
@@ -83,6 +144,34 @@ asp_preflight:
     when: always
     paths:
       - asp-preflight.json
+```
+
+## GitLab Evidence Bundle
+
+```yaml
+asp_evidence_bundle:
+  image: debian:bookworm-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ca-certificates curl git
+    - curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+  script:
+    - asp config validate
+    - asp preflight --sarif > asp-preflight.sarif || true
+    - asp secrets scan --sarif > asp-secrets.sarif || true
+    - asp evidence collect --audit-limit 50 --output asp-evidence.json
+    - asp evidence manifest --packet asp-evidence.json --output asp-evidence.manifest.json
+    - asp evidence verify --packet asp-evidence.json --manifest asp-evidence.manifest.json > asp-evidence.verify.txt
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - asp-evidence.json
+      - asp-evidence.manifest.json
+      - asp-evidence.verify.txt
+      - asp-preflight.sarif
+      - asp-secrets.sarif
 ```
 
 ## GitLab Code Quality
@@ -163,7 +252,7 @@ Upload those files to any CI platform or dashboard that accepts SARIF 2.1.0.
   readiness gate is not needed.
 - For GitLab Code Quality, convert redacted `asp --json secrets scan` findings
   to CodeClimate JSON and keep SARIF as a normal artifact.
-- Upload the JSON report when teams want persistent evidence for security or
-  platform review.
+- Upload the evidence packet, manifest, verification log, and SARIF files
+  together when teams want persistent evidence for security or platform review.
 - If `asp preflight` fails, use `asp doctor --runbook` and `asp secrets scan`
   locally to triage the finding.

@@ -92,6 +92,8 @@
 - `docs/support-ticket-templates.md` adds public, private incident, security,
   and CI evidence handoff templates with redaction, manifest verification, and
   signature expectations.
+- `docs/ci.md` adds GitHub Actions and GitLab evidence-bundle examples that
+  upload packets, manifests, verification logs, and SARIF artifacts together.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
