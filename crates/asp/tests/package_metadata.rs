@@ -621,6 +621,8 @@ fn policy_docs_cover_config_pairing_for_promotion_rules() {
     let docs = fs::read_to_string(repo_file("docs/policy.md")).unwrap();
 
     for needle in [
+        "organization policy bundles",
+        "policy-packs.md",
         "## Config Pairing",
         "asp --json config show > asp-config.json",
         "asp policy validate --json > asp-policy.json",
@@ -652,6 +654,54 @@ fn policy_docs_cover_config_pairing_for_promotion_rules() {
             .iter()
             .any(|variant| variant["$ref"].as_str() == Some("#/$defs/policyExplainReport")),
         "result schema anyOf missing policyExplainReport"
+    );
+}
+
+#[test]
+fn policy_pack_docs_cover_org_rollout_profiles() {
+    let docs = fs::read_to_string(repo_file("docs/policy-packs.md")).unwrap();
+    for needle in [
+        "# Organization Policy Bundles",
+        "## Regulated Workflow",
+        "## Startup Workflow",
+        "## OSS Maintainer Workflow",
+        "asp policy validate",
+        "asp policy explain",
+        "asp --json policy explain > asp-policy-explain.json",
+        "asp preflight",
+        "forks.max_active",
+        "checkpoints.max_age_hours",
+        "paths.protected",
+        "paths.deny_checkpoint",
+        "promote.require_clean_status",
+        "promote.require_checkpoint",
+        "promote.allowed_branch_prefixes",
+        "retention.keep_last",
+        "retention.max_age_days",
+        "allowed_branch_prefixes = [\"asp/reg/\", \"review/\"]",
+        "allowed_branch_prefixes = [\"asp/\", \"ship/\"]",
+        "allowed_branch_prefixes = [\"asp/\", \"contrib/\"]",
+        "asp config diff --against <file>",
+        "asp secrets scan",
+        "fleet rollout checklist",
+    ] {
+        assert!(docs.contains(needle), "policy packs docs missing {needle}");
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/policy-packs.md"),
+        "README should link policy packs"
+    );
+    let policy = fs::read_to_string(repo_file("docs/policy.md")).unwrap();
+    assert!(
+        policy.contains("policy-packs.md"),
+        "policy docs should link policy packs"
+    );
+    let rollout = fs::read_to_string(repo_file("docs/fleet-rollout.md")).unwrap();
+    assert!(
+        rollout.contains("policy-packs.md"),
+        "fleet rollout docs should link policy packs"
     );
 }
 

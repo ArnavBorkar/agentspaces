@@ -23,6 +23,8 @@ For each pilot, record:
 - expected test command;
 - generated directories and caches;
 - paths that require human review before promote;
+- closest [organization policy bundle](policy-packs.md), if the team wants
+  reviewed fork, path, promote, and retention defaults;
 - filesystem type for common developer machines and CI runners.
 
 ## Phase 1: Review The Template

@@ -2,6 +2,8 @@
 
 `asp init` writes `.asp/policy.toml` as a local-first team policy file. Every
 field is optional, and a missing or empty policy file means no local policy.
+For copyable organization starting points, see
+[organization policy bundles](policy-packs.md).
 
 The parser is strict: unknown tables or keys are rejected with a
 `store_corrupt` error and a hint to fix the TOML or delete the file to disable

@@ -111,6 +111,8 @@
   required TOML baseline and reports field-level drift in human and JSON output.
 - `asp policy explain` lists active policy rules with their values, rationale,
   affected commands, and enforcement timing in human and JSON output.
+- `docs/policy-packs.md` adds copyable organization policy bundles for
+  regulated, startup, and OSS maintainer rollout workflows.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
