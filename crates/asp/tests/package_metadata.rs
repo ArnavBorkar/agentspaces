@@ -290,6 +290,41 @@ fn sync_emulator_docs_cover_local_backend_fixtures() {
 }
 
 #[test]
+fn sync_encryption_docs_cover_remote_object_protection_design() {
+    let docs = fs::read_to_string(repo_file("docs/sync-encryption.md")).unwrap();
+
+    for needle in [
+        "asp-sync/v2/encrypted/workspaces/<workspace-id>/",
+        "root sync key",
+        "object name MAC key",
+        "xchacha20-poly1305",
+        "HMAC of the logical sync key",
+        "Associated data includes",
+        "provider remote version",
+        "Key rotation creates a new key id",
+        "Remote-only recovery requires",
+        "Add a `SyncRemote` decorator",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "sync encryption docs missing {needle}"
+        );
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/sync-encryption.md"),
+        "README should link sync encryption docs"
+    );
+
+    let sync = fs::read_to_string(repo_file("docs/sync.md")).unwrap();
+    assert!(
+        sync.contains("sync client-side encryption design"),
+        "sync docs should link encryption design"
+    );
+}
+
+#[test]
 fn contributor_checklists_cover_schema_snapshot_updates() {
     let development = fs::read_to_string(repo_file("docs/development.md")).unwrap();
     for needle in [

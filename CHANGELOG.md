@@ -16,6 +16,8 @@
 - `crates/asp-core/tests/sync_emulators.rs` and `scripts/sync-emulators.sh`
   add ignored emulator fixtures for S3-compatible, GCS, and Azure Blob sync
   remotes.
+- `docs/sync-encryption.md` defines the client-side encryption design for
+  remote sync objects, refs, key derivation, rotation, and remote-only recovery.
 - `docs/sync-credentials.md` documents least-privilege S3-compatible, GCS, and
   Azure Blob credential scopes for user-owned sync storage.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`

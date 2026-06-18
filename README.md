@@ -116,6 +116,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Sync** — [docs/sync.md](docs/sync.md)
 - **Sync credential scopes** — [docs/sync-credentials.md](docs/sync-credentials.md)
+- **Sync encryption design** — [docs/sync-encryption.md](docs/sync-encryption.md)
 - **Sync emulator fixtures** — [docs/sync-emulators.md](docs/sync-emulators.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)

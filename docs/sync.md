@@ -88,3 +88,7 @@ See [sync credential scopes](sync-credentials.md) for least-privilege bucket,
 container, and token guidance. See [sync emulator fixtures](sync-emulators.md)
 for ignored integration tests that can run against MinIO, fake-gcs-server, or
 Azurite.
+
+See [sync client-side encryption design](sync-encryption.md) for the planned
+encrypted remote namespace, key hierarchy, object envelope, ref CAS behavior,
+rotation, and recovery model.
