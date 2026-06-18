@@ -103,6 +103,8 @@
   generated-code, or media-heavy config templates during workspace setup.
 - `asp init --print-template <name>` prints built-in config templates without
   creating `.asp/`, with JSON, schema, and snapshot coverage.
+- Init template tests now assert every built-in template appends excludes
+  without weakening asp's default derived-state protections.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

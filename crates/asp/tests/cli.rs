@@ -191,6 +191,58 @@ fn init_print_template_is_read_only() {
 }
 
 #[test]
+fn init_templates_preserve_default_capture_excludes() {
+    let templates = [
+        ("service", "coverage/"),
+        ("monorepo", "bazel-bin/"),
+        ("generated-code", "generated/cache/"),
+        ("media-heavy", "renders/cache/"),
+    ];
+    let default_excludes = [
+        "/.asp/",
+        "node_modules/",
+        "target/",
+        ".venv/",
+        "venv/",
+        "__pycache__/",
+        "build/",
+        "dist/",
+        ".next/",
+        ".cache/",
+    ];
+
+    for (template, template_exclude) in templates {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join(template);
+        std::fs::create_dir_all(&root).unwrap();
+        ok(&root, &["init", "--template", template]);
+
+        let config = std::fs::read_to_string(root.join(".asp/config.toml")).unwrap();
+        assert!(
+            config.contains("extra_excludes"),
+            "{template} should append excludes instead of replacing defaults"
+        );
+        assert!(
+            !config.contains("\nexcludes = ["),
+            "{template} must not replace default excludes"
+        );
+
+        let json = ok_json(&root, &["config", "show"]);
+        let excludes = json["result"]["shadow_excludes"].as_array().unwrap();
+        for expected in default_excludes {
+            assert!(
+                excludes.iter().any(|value| value == expected),
+                "{template} missing default exclude {expected}"
+            );
+        }
+        assert!(
+            excludes.iter().any(|value| value == template_exclude),
+            "{template} missing template exclude {template_exclude}"
+        );
+    }
+}
+
+#[test]
 fn config_validate_reads_only_config_state() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);
