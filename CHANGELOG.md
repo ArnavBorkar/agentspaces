@@ -120,6 +120,8 @@
   capture of matching files with a corrective hint.
 - Installer smoke tests now verify macOS arm64/x86_64 and Linux
   x86_64/aarch64 release asset selection.
+- Crates now include crates.io metadata, crate-local READMEs, a publishing
+  runbook, and a CI package dry run.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.

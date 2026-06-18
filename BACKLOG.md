@@ -144,9 +144,10 @@
 **Done when:** users can install asp from standard channels without weakening the no-sudo, verifiable install path.
 
 - **S11.1 Package channels**
-  - [ ] T11.1.1 Publish to crates.io with package metadata, categories, keywords, and README validation.
+  - [x] T11.1.1 Prepare crates.io package metadata, categories, keywords, crate READMEs, and README validation.
   - [ ] T11.1.2 Create a Homebrew tap formula with checksum verification.
   - [ ] T11.1.3 Add an npm/npx wrapper that downloads verified native binaries.
+  - [ ] T11.1.4 Publish `asp-core` then `asp` to crates.io once a crates.io owner token is available.
 - **S11.2 Installer resilience**
   - [x] T11.2.1 Add installer tests for macOS arm64/x86_64 and Linux x86_64/aarch64 selection.
   - [x] T11.2.2 Add checksum failure, unsupported platform, and offline-mode diagnostics.

@@ -42,6 +42,16 @@ jobs:
       - name: Test (includes kill -9 torture suite)
         run: cargo test --workspace
 
+  package:
+    name: crates.io package dry run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate packaged crates
+        run: cargo package --workspace --locked
+
   windows-unsupported:
     name: windows unsupported gate
     runs-on: windows-latest
