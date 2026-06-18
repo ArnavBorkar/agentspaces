@@ -3,6 +3,35 @@
 Start from these templates when introducing `.asp/config.toml` to a team. Treat
 them as examples, not universal defaults.
 
+Use a built-in template at init time when the repository fits a common shape:
+
+```bash
+asp init --template service
+asp init --template monorepo
+asp init --template generated-code
+asp init --template media-heavy
+```
+
+The template is written to `.asp/config.toml`; review it like any other local
+policy input before using it across a team.
+
+## Service Repository
+
+Use this for typical application or service repos that produce coverage and
+temporary files but otherwise fit the default capture model.
+
+```toml
+[capture]
+extra_excludes = [
+  "coverage/",
+  "tmp/",
+]
+blob_threshold_mb = 50
+
+[promote]
+branch_template = "asp/{workspace}/{fork}"
+```
+
 ## Monorepo
 
 Use this when the repo has multiple package managers and large generated build

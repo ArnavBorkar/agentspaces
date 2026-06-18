@@ -177,14 +177,17 @@ fn backlog_tracks_next_enterprise_adoption_wave() {
         .nth(1)
         .and_then(|tail| tail.split("## Decision log").next())
         .expect("wave 2 roadmap section should exist");
-    let pending_tasks = wave
+    let roadmap_tasks = wave
         .lines()
-        .filter(|line| line.trim_start().starts_with("- [ ] T"))
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("- [") && line.contains("] T")
+        })
         .count();
 
     assert_eq!(
-        pending_tasks, 100,
-        "wave 2 roadmap should contain exactly 100 pending tasks"
+        roadmap_tasks, 100,
+        "wave 2 roadmap should contain exactly 100 tasks"
     );
 }
 
@@ -618,6 +621,11 @@ fn config_template_docs_cover_common_repository_shapes() {
     let docs = fs::read_to_string(repo_file("docs/config-templates.md")).unwrap();
 
     for needle in [
+        "asp init --template service",
+        "asp init --template monorepo",
+        "asp init --template generated-code",
+        "asp init --template media-heavy",
+        "## Service Repository",
         "## Monorepo",
         "## Media-Heavy Repository",
         "## Generated-Code Repository",

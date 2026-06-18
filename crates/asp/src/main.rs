@@ -62,6 +62,9 @@ enum Cmd {
         /// Optional human label for the workspace.
         #[arg(long)]
         label: Option<String>,
+        /// Write a reviewed config template for a common repository shape.
+        #[arg(long, value_enum)]
+        template: Option<InitTemplate>,
     },
     /// Workspace summary: dirty files, last checkpoint, active forks.
     Status,
@@ -248,6 +251,95 @@ enum Cmd {
     /// (internal) Invoked by harness hooks; reads the event from stdin.
     #[command(hide = true, name = "hook-event")]
     HookEvent,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum InitTemplate {
+    Service,
+    Monorepo,
+    GeneratedCode,
+    MediaHeavy,
+}
+
+struct InitConfigTemplate {
+    name: &'static str,
+    summary: &'static str,
+    toml: &'static str,
+}
+
+impl InitTemplate {
+    fn config(self) -> InitConfigTemplate {
+        match self {
+            Self::Service => InitConfigTemplate {
+                name: "service",
+                summary: "Default service repository with coverage and temp outputs excluded.",
+                toml: r#"# asp config template: service
+
+[capture]
+extra_excludes = [
+  "coverage/",
+  "tmp/",
+]
+blob_threshold_mb = 50
+
+[promote]
+branch_template = "asp/{workspace}/{fork}"
+"#,
+            },
+            Self::Monorepo => InitConfigTemplate {
+                name: "monorepo",
+                summary: "Large multi-package repository with common build trees excluded.",
+                toml: r#"# asp config template: monorepo
+
+[capture]
+extra_excludes = [
+  "bazel-bin/",
+  "bazel-out/",
+  "bazel-testlogs/",
+  "coverage/",
+  "tmp/",
+]
+blob_threshold_mb = 50
+
+[promote]
+branch_template = "asp/{workspace}/{fork}"
+"#,
+            },
+            Self::GeneratedCode => InitConfigTemplate {
+                name: "generated-code",
+                summary: "Repository with reproducible generated caches and reviewed outputs.",
+                toml: r#"# asp config template: generated-code
+
+[capture]
+extra_excludes = [
+  "generated/cache/",
+  "generated/tmp/",
+  "openapi/.cache/",
+]
+blob_threshold_mb = 25
+
+[promote]
+branch_template = "gen/{workspace}/{fork}"
+"#,
+            },
+            Self::MediaHeavy => InitConfigTemplate {
+                name: "media-heavy",
+                summary: "Repository with large media artifacts and render/export caches.",
+                toml: r#"# asp config template: media-heavy
+
+[capture]
+extra_excludes = [
+  "renders/cache/",
+  "exports/tmp/",
+]
+blob_threshold_mb = 10
+
+[promote]
+branch_template = "media/{workspace}/{fork}"
+"#,
+            },
+        }
+    }
 }
 
 #[derive(Args)]
@@ -741,8 +833,15 @@ fn open(cli_dir: &Option<PathBuf>) -> Result<Workspace, Error> {
 fn run(cli: Cli) -> Result<(), Error> {
     let json = cli.json;
     match cli.command {
-        Cmd::Init { label } => {
+        Cmd::Init { label, template } => {
+            let selected_template = template.map(|template| template.config());
             let ws = Workspace::init(&cwd(&cli.dir)?, label)?;
+            if let Some(template) = &selected_template {
+                atomic_write(
+                    &ws.root().join(ASP_DIR).join("config.toml"),
+                    template.toml.as_bytes(),
+                )?;
+            }
             if json {
                 ui::print_json(true, &serde_json::json!({ "root": ws.root() }));
             } else {
@@ -755,6 +854,13 @@ fn run(cli: Cli) -> Result<(), Error> {
                     "  nothing was captured yet — run {} to take the first checkpoint",
                     ui::cyan("asp checkpoint")
                 );
+                if let Some(template) = selected_template {
+                    println!(
+                        "  config template: {} — {}",
+                        ui::cyan(template.name),
+                        template.summary
+                    );
+                }
             }
             Ok(())
         }

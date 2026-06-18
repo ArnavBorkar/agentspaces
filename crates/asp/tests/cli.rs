@@ -142,6 +142,28 @@ fn config_show_reports_effective_workspace_settings() {
 }
 
 #[test]
+fn init_template_writes_reviewed_config() {
+    let (_tmp, root) = project();
+    let human = ok(&root, &["init", "--template", "monorepo"]);
+    assert!(human.contains("config template: monorepo"), "{human}");
+
+    let config = std::fs::read_to_string(root.join(".asp/config.toml")).unwrap();
+    assert!(config.contains("asp config template: monorepo"), "{config}");
+    assert!(config.contains("bazel-bin/"), "{config}");
+    assert!(config.contains("branch_template = \"asp/{workspace}/{fork}\""));
+
+    let json = ok_json(&root, &["config", "show"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(
+        json["result"]["config"]["promote"]["branch_template"],
+        "asp/{workspace}/{fork}"
+    );
+    let excludes = json["result"]["shadow_excludes"].as_array().unwrap();
+    assert!(excludes.iter().any(|value| value == "node_modules/"));
+    assert!(excludes.iter().any(|value| value == "bazel-bin/"));
+}
+
+#[test]
 fn config_validate_reads_only_config_state() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);
