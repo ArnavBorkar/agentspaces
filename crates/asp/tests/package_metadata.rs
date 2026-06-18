@@ -451,6 +451,10 @@ fn windows_docs_cover_portable_checkpoint_path_guards() {
         "trailing-space/trailing-dot",
         "overlong Windows components",
         "rename the path before checkpointing",
+        "Supported macOS/Linux symlinks are preserved as links",
+        "`unsupported_platform`",
+        "junctions, mount\npoints, or other reparse points",
+        "rejecting unsafe reparse points",
     ] {
         assert!(docs.contains(needle), "windows docs missing {needle}");
     }

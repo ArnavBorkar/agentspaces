@@ -17,6 +17,14 @@ backslash-separated paths, trailing-space/trailing-dot names, control-character
 names, or overlong Windows components are rejected before they enter checkpoint
 metadata. The corrective hint says `rename the path before checkpointing`.
 
+Supported macOS/Linux symlinks are preserved as links in forks, checkpoint
+commits, and restores. Native Windows remains fail-closed behind
+`unsupported_platform` before any workspace scan can traverse junctions, mount
+points, or other reparse points. The first native Windows behavior suite must
+classify file symlinks, directory symlinks, junctions, and mount points
+separately, preserving supported symlinks and rejecting unsafe reparse points
+with a precise corrective hint.
+
 The CLI reports `unsupported_platform` on Windows with a hint to use WSL2 and
 track native support through the
 [Windows issue list](https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows).

@@ -1551,6 +1551,53 @@ fn non_utf8_filenames_are_captured() {
     cp(&ws, "after").unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn checkpoint_restore_preserves_symlinks_as_links() {
+    use std::os::unix::fs::symlink;
+
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    std::fs::create_dir_all(root.join("linked-dir-target")).unwrap();
+    write(&root, "linked-dir-target/data.txt", "dir target\n");
+    symlink("src/main.rs", root.join("main-link")).unwrap();
+    symlink("linked-dir-target", root.join("dir-link")).unwrap();
+
+    let c1 = cp(&ws, "with symlinks").unwrap();
+    for (path, target) in [
+        ("main-link", "src/main.rs"),
+        ("dir-link", "linked-dir-target"),
+    ] {
+        let tree = ws.shadow().run(&["ls-tree", &c1.commit, path]).unwrap();
+        assert!(tree.starts_with("120000 "), "{tree}");
+        let stored = ws
+            .shadow()
+            .run(&["cat-file", "-p", &format!("{}:{path}", c1.commit)])
+            .unwrap();
+        assert_eq!(stored, target);
+    }
+
+    std::fs::remove_file(root.join("main-link")).unwrap();
+    std::fs::remove_file(root.join("dir-link")).unwrap();
+    cp(&ws, "without symlinks").unwrap();
+
+    ws.restore(&c1.seq.to_string(), &[], None).unwrap();
+    for (path, target) in [
+        ("main-link", "src/main.rs"),
+        ("dir-link", "linked-dir-target"),
+    ] {
+        let link = root.join(path);
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "{path} should be restored as a symlink"
+        );
+        assert_eq!(std::fs::read_link(link).unwrap(), PathBuf::from(target));
+    }
+}
+
 #[test]
 fn checkpoint_rejects_windows_reserved_paths_before_capture() {
     let (_tmp, root) = project();
