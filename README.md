@@ -95,6 +95,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Quickstart** — [docs/quickstart.md](docs/quickstart.md)
 - **Workspace config** — [docs/config.md](docs/config.md)
 - **Config review** — [docs/config-review.md](docs/config-review.md)
+- **Config templates** — [docs/config-templates.md](docs/config-templates.md)
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
 - **Manpage generation** — [docs/manpage.md](docs/manpage.md)
 - **Command cheat sheet** — [docs/cheatsheet.md](docs/cheatsheet.md)

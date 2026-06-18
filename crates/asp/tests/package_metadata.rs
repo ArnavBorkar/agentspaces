@@ -216,3 +216,23 @@ fn config_review_docs_cover_security_and_rollout_checks() {
         assert!(docs.contains(needle), "config review docs missing {needle}");
     }
 }
+
+#[test]
+fn config_template_docs_cover_common_repository_shapes() {
+    let docs = fs::read_to_string(repo_file("docs/config-templates.md")).unwrap();
+
+    for needle in [
+        "## Monorepo",
+        "## Media-Heavy Repository",
+        "## Generated-Code Repository",
+        "extra_excludes",
+        "blob_threshold_mb = 10",
+        "branch_template = \"asp/{workspace}/{fork}\"",
+        "branch_template = \"media/{workspace}/{fork}\"",
+        "branch_template = \"gen/{workspace}/{fork}\"",
+        "asp config validate",
+        "asp --json config show",
+    ] {
+        assert!(docs.contains(needle), "config templates missing {needle}");
+    }
+}

@@ -381,7 +381,7 @@
   - [x] T30.1.2 Add `asp config validate` as a non-mutating CI-friendly check that does not require other workspace reads.
   - [x] T30.1.3 Add config review guidance for security and platform teams.
 - **S30.2 Safe rollout templates**
-  - [ ] T30.2.1 Add example config templates for monorepos, media-heavy repos, and generated-code repos.
+  - [x] T30.2.1 Add example config templates for monorepos, media-heavy repos, and generated-code repos.
   - [ ] T30.2.2 Add docs for coordinating `.gitignore`, `.asp/config.toml`, and secrets policy.
 
 ---

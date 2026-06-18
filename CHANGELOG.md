@@ -30,6 +30,8 @@
   CI-friendly read path that does not open the journal, policy, or shadow git.
 - `docs/config-review.md` gives security and platform teams a checklist for
   reviewing `.asp/config.toml` changes and rollout risks.
+- `docs/config-templates.md` adds copyable `.asp/config.toml` starting points
+  for monorepos, media-heavy repos, and generated-code repos.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
