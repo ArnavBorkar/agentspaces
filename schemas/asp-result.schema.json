@@ -27,6 +27,7 @@
     { "$ref": "#/$defs/setupReport" },
     { "$ref": "#/$defs/statusReport" },
     { "$ref": "#/$defs/statsReport" },
+    { "$ref": "#/$defs/syncPushReport" },
     { "$ref": "#/$defs/doctorFindings" }
   ],
   "$defs": {
@@ -985,6 +986,34 @@
         "duration_ms": { "$ref": "#/$defs/nullableU64" },
         "files_changed": { "$ref": "#/$defs/nullableU64" },
         "message": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "syncPushReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remote",
+        "workspace_id",
+        "checkpoints",
+        "git_objects_uploaded",
+        "git_objects_present",
+        "cas_blobs_uploaded",
+        "cas_blobs_present",
+        "refs_created",
+        "refs_present",
+        "refs_replaced"
+      ],
+      "properties": {
+        "remote": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "checkpoints": { "$ref": "#/$defs/u64" },
+        "git_objects_uploaded": { "$ref": "#/$defs/u64" },
+        "git_objects_present": { "$ref": "#/$defs/u64" },
+        "cas_blobs_uploaded": { "$ref": "#/$defs/u64" },
+        "cas_blobs_present": { "$ref": "#/$defs/u64" },
+        "refs_created": { "$ref": "#/$defs/u64" },
+        "refs_present": { "$ref": "#/$defs/u64" },
+        "refs_replaced": { "$ref": "#/$defs/u64" }
       }
     },
     "lastCheckpoint": {

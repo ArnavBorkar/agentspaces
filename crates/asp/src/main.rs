@@ -83,6 +83,11 @@ enum Cmd {
         #[command(subcommand)]
         command: RetentionCmd,
     },
+    /// Sync checkpoints and large-file blobs to an explicit remote.
+    Sync {
+        #[command(subcommand)]
+        command: SyncCmd,
+    },
     /// Capture the current state as a checkpoint (no-op if nothing changed).
     #[command(visible_alias = "cp")]
     Checkpoint {
@@ -257,6 +262,16 @@ enum PolicyCmd {
 enum RetentionCmd {
     /// Show the checkpoint retention plan without deleting anything.
     Plan,
+}
+
+#[derive(Subcommand)]
+enum SyncCmd {
+    /// Push checkpoints and large-file blobs to a local filesystem remote.
+    Push {
+        /// Local remote directory to create or update.
+        #[arg(long, value_name = "DIR")]
+        remote: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -662,6 +677,36 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ]);
                 }
                 print!("{}", ui::table(&rows));
+                Ok(())
+            }
+        },
+        Cmd::Sync { command } => match command {
+            SyncCmd::Push { remote } => {
+                let ws = open(&cli.dir)?;
+                let report = ws.sync_push_local(remote)?;
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                println!(
+                    "{} synced {} checkpoint{} to {}",
+                    ui::green("✓"),
+                    report.checkpoints,
+                    if report.checkpoints == 1 { "" } else { "s" },
+                    ui::bold(&report.remote.display().to_string())
+                );
+                println!(
+                    "  git objects: {} uploaded, {} already present",
+                    report.git_objects_uploaded, report.git_objects_present
+                );
+                println!(
+                    "  CAS blobs:   {} uploaded, {} already present",
+                    report.cas_blobs_uploaded, report.cas_blobs_present
+                );
+                println!(
+                    "  refs:        {} created, {} unchanged, {} updated",
+                    report.refs_created, report.refs_present, report.refs_replaced
+                );
                 Ok(())
             }
         },

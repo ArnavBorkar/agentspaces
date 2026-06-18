@@ -53,6 +53,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
+| `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
 | `asp log --json` | `#/$defs/journalEntries` |
 | `asp undo --json` | `#/$defs/restoreReport` |
@@ -80,6 +81,10 @@ metadata.
 `asp bench self --json` can run outside an initialized workspace. It creates a
 short-lived probe directory under the selected `-C` path, reports the observed
 filesystem capabilities, and removes the probe before exiting.
+
+`asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
+git-object, CAS-blob, and ref counts split into uploaded/present/updated
+buckets. It is an explicit opt-in command; no other asp command starts sync.
 
 `asp diff --json` result objects include `summary` totals plus grouped buckets
 by top-level path, language, and change type. The existing `rows` array remains

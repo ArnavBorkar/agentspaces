@@ -387,6 +387,86 @@ fn retention_plan_reports_dry_run_from_policy() {
 }
 
 #[test]
+fn sync_push_uploads_checkpoints_and_blobs_to_local_remote() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let big: Vec<u8> = (0..(2 * 1024 * 1024)).map(|i| (i % 251) as u8).collect();
+    std::fs::write(root.join("asset.bin"), &big).unwrap();
+    ok(&root, &["checkpoint", "-m", "with big"]);
+
+    let remote = root.parent().unwrap().join("sync-remote");
+    let pushed = ok_json(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(pushed["result"]["checkpoints"], 1);
+    assert!(pushed["result"]["git_objects_uploaded"].as_u64().unwrap() > 0);
+    assert_eq!(pushed["result"]["cas_blobs_uploaded"], 1);
+
+    let workspace_id = pushed["result"]["workspace_id"].as_str().unwrap();
+    let base = remote.join("asp-sync/v1/workspaces").join(workspace_id);
+    assert!(base.join("workspace.json").is_file());
+    assert!(base.join("refs/checkpoints/1.json").is_file());
+    assert!(base.join("refs/meta/1.json").is_file());
+    assert!(base.join("refs/head.json").is_file());
+    assert!(std::fs::read_dir(base.join("objects/git/sha1"))
+        .unwrap()
+        .next()
+        .is_some());
+    assert_eq!(
+        std::fs::read_dir(base.join("objects/blobs/blake3"))
+            .unwrap()
+            .count(),
+        1
+    );
+
+    let again = ok_json(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(again["result"]["git_objects_uploaded"], 0);
+    assert_eq!(again["result"]["cas_blobs_uploaded"], 0);
+    assert!(again["result"]["git_objects_present"].as_u64().unwrap() > 0);
+    assert_eq!(again["result"]["cas_blobs_present"], 1);
+
+    let head = base.join("refs/head.json");
+    std::fs::write(
+        &head,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "v": 1,
+            "name": "refs/asp/head",
+            "seq": 99,
+            "target": "0123456789012345678901234567890123456789",
+            "workspace_id": workspace_id,
+            "updated_at": "2099-01-01T00:00:00Z",
+            "writer": "test",
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let conflict = asp(
+        &root,
+        &[
+            "--json",
+            "sync",
+            "push",
+            "--remote",
+            remote.to_str().unwrap(),
+        ],
+    );
+    assert!(!conflict.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&conflict.stdout)).unwrap();
+    assert_eq!(err["error"]["code"], "sync_conflict");
+    assert!(err["error"]["hint"].as_str().unwrap().contains("fetch"));
+}
+
+#[test]
 fn audit_filters_journal_events() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

@@ -99,6 +99,10 @@
   safe key validation, immutable puts, reads, and sorted listing.
 - `asp-core` now defines a sync remote trait with versioned conditional writes
   and a `sync_conflict` error code for compare-and-swap failures.
+- `asp sync push --remote <dir>` uploads checkpoint git objects, CAS blobs, and
+  refs to a local filesystem remote with idempotent counts.
+- `docs/sync.md` documents the explicit opt-in sync boundary, pushed data, JSON
+  output, conflict behavior, and current push-only limit.
 
 ### Fixed
 
@@ -157,6 +161,8 @@
   with `operation`, `description`, `command`, and `destructive`.
 - Additive: future sync commands may return the new `sync_conflict` error code
   when conditional remote writes detect newer state.
+- Additive: `asp sync push --json --remote <dir>` returns `syncPushReport` with
+  checkpoint, git-object, CAS-blob, and ref upload counts.
 
 ## Automation Contract Rules
 

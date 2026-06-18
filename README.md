@@ -95,6 +95,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Local-first team workflows** — [docs/local-first-team-workflows.md](docs/local-first-team-workflows.md)
 - **Enterprise support boundaries** — [docs/enterprise-support-boundaries.md](docs/enterprise-support-boundaries.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
+- **Sync** — [docs/sync.md](docs/sync.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)
 - **30-minute evaluation guide** — [docs/evaluation.md](docs/evaluation.md)
 - **Enterprise workflow playbooks** — [docs/playbooks.md](docs/playbooks.md)

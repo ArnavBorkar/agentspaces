@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "result": {
+    "remote": "<sync-remote>",
+    "workspace_id": "<workspace-id>",
+    "checkpoints": 1,
+    "git_objects_uploaded": 0,
+    "git_objects_present": 0,
+    "cas_blobs_uploaded": 0,
+    "cas_blobs_present": 0,
+    "refs_created": 0,
+    "refs_present": 0,
+    "refs_replaced": 0
+  }
+}

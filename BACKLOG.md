@@ -256,7 +256,7 @@
   - [x] T20.1.2 Add a local filesystem remote implementation for deterministic tests.
   - [x] T20.1.3 Add conditional-write semantics to the remote trait.
 - **S20.2 First sync command**
-  - [ ] T20.2.1 Add `asp sync push` for checkpoints and blobs to a local remote.
+  - [x] T20.2.1 Add `asp sync push` for checkpoints and blobs to a local remote.
   - [ ] T20.2.2 Add `asp sync fetch` that restores refs without overwriting newer local state.
 
 ## EPIC 21 — Security hardening

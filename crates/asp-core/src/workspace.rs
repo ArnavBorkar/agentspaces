@@ -22,6 +22,7 @@ use crate::store::{
     atomic_write, atomic_write_json, find_root, read_json, ForkRecord, ForkRegistry, ForkStatus,
     Layout, ParentRef, StoreLock, WorkspaceMeta, FORMAT_VERSION,
 };
+use crate::sync::{LocalRemote, PutOutcome};
 use walkdir::WalkDir;
 
 pub const CHECKPOINT_REF_PREFIX: &str = "refs/asp/checkpoints/";
@@ -366,6 +367,20 @@ pub struct PromotePrDraftReport {
     pub command: String,
     pub fallback_command: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncPushReport {
+    pub remote: PathBuf,
+    pub workspace_id: String,
+    pub checkpoints: u64,
+    pub git_objects_uploaded: u64,
+    pub git_objects_present: u64,
+    pub cas_blobs_uploaded: u64,
+    pub cas_blobs_present: u64,
+    pub refs_created: u64,
+    pub refs_present: u64,
+    pub refs_replaced: u64,
 }
 
 struct ScanResult {
@@ -1311,6 +1326,186 @@ impl Workspace {
             }
         }
         Ok(map)
+    }
+
+    /// All checkpoint metadata refs as seq -> blob object.
+    pub fn meta_refs(&self) -> Result<BTreeMap<u64, String>> {
+        let out = self.shadow.run(&[
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+            META_REF_PREFIX.trim_end_matches('/'),
+        ])?;
+        let mut map = BTreeMap::new();
+        for line in out.lines() {
+            if let Some((name, oid)) = line.split_once(' ') {
+                if let Some(seq) = name
+                    .strip_prefix(META_REF_PREFIX)
+                    .and_then(|s| s.parse::<u64>().ok())
+                {
+                    map.insert(seq, oid.to_string());
+                }
+            }
+        }
+        Ok(map)
+    }
+
+    pub fn sync_push_local(&self, remote_root: impl AsRef<Path>) -> Result<SyncPushReport> {
+        let _lock = StoreLock::acquire(&self.layout)?;
+        self.journal.heal()?;
+        let remote_root = remote_root.as_ref().to_path_buf();
+        let remote = LocalRemote::open(&remote_root)?;
+        let prefix = format!("asp-sync/v1/workspaces/{}", self.meta.id);
+        let checkpoints = self.checkpoint_refs()?;
+        let meta_refs = self.meta_refs()?;
+        let mut report = SyncPushReport {
+            remote: remote_root,
+            workspace_id: self.meta.id.clone(),
+            checkpoints: checkpoints.len() as u64,
+            git_objects_uploaded: 0,
+            git_objects_present: 0,
+            cas_blobs_uploaded: 0,
+            cas_blobs_present: 0,
+            refs_created: 0,
+            refs_present: 0,
+            refs_replaced: 0,
+        };
+
+        let workspace_record = serde_json::to_vec_pretty(&serde_json::json!({
+            "v": 1,
+            "workspace_id": self.meta.id.clone(),
+            "format_version": FORMAT_VERSION,
+            "created_by": "asp",
+            "created_at": self.meta.created_at.clone(),
+        }))
+        .map_err(|e| Error::new(ErrorCode::Io, format!("encode sync workspace record: {e}")))?;
+        let (mut descriptor_uploaded, mut descriptor_present) = (0, 0);
+        put_immutable_count(
+            &remote,
+            &format!("{prefix}/workspace.json"),
+            &workspace_record,
+            &mut descriptor_uploaded,
+            &mut descriptor_present,
+        )?;
+
+        for oid in self.sync_git_object_ids(&checkpoints, &meta_refs)? {
+            let bytes = self.read_loose_git_object(&oid)?;
+            put_immutable_count(
+                &remote,
+                &format!("{prefix}/objects/git/sha1/{}/{}", &oid[..2], &oid[2..]),
+                &bytes,
+                &mut report.git_objects_uploaded,
+                &mut report.git_objects_present,
+            )?;
+        }
+
+        for hash in self.sync_cas_blob_hashes(&checkpoints)? {
+            let path = self.layout.blobs().join(&hash);
+            if !path.is_file() {
+                return Err(Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("CAS blob {hash} is missing"),
+                )
+                .with_hint("run `asp doctor --deep` before syncing"));
+            }
+            let actual = blobs::hash_file(&path)?;
+            if actual != hash {
+                return Err(Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("CAS blob {hash} is corrupt (got {actual})"),
+                )
+                .with_hint("run `asp doctor --deep` before syncing"));
+            }
+            let bytes = std::fs::read(&path)?;
+            put_immutable_count(
+                &remote,
+                &format!("{prefix}/objects/blobs/blake3/{hash}"),
+                &bytes,
+                &mut report.cas_blobs_uploaded,
+                &mut report.cas_blobs_present,
+            )?;
+        }
+
+        let now = crate::now_rfc3339();
+        for (seq, target) in &checkpoints {
+            let key = format!("{prefix}/refs/checkpoints/{seq}.json");
+            let bytes = sync_ref_json(&self.meta.id, CHECKPOINT_REF_PREFIX, *seq, target, &now)?;
+            put_append_only_ref(&remote, &key, &bytes, &mut report)?;
+        }
+        for (seq, target) in &meta_refs {
+            let key = format!("{prefix}/refs/meta/{seq}.json");
+            let bytes = sync_ref_json(&self.meta.id, META_REF_PREFIX, *seq, target, &now)?;
+            put_append_only_ref(&remote, &key, &bytes, &mut report)?;
+        }
+        if let Some((seq, target)) = checkpoints.iter().next_back() {
+            let key = format!("{prefix}/refs/head.json");
+            let bytes = sync_ref_json(&self.meta.id, HEAD_REF, *seq, target, &now)?;
+            put_head_ref(&remote, &key, &bytes, *seq, &mut report)?;
+        }
+
+        Ok(report)
+    }
+
+    fn sync_git_object_ids(
+        &self,
+        checkpoints: &BTreeMap<u64, String>,
+        meta_refs: &BTreeMap<u64, String>,
+    ) -> Result<BTreeSet<String>> {
+        let mut objects: BTreeSet<String> = BTreeSet::new();
+        if !checkpoints.is_empty() {
+            let mut args: Vec<String> = vec!["rev-list".into(), "--objects".into()];
+            args.extend(checkpoints.values().cloned());
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            let out = self.shadow.run(&refs)?;
+            for line in out.lines() {
+                if let Some(oid) = line.split_whitespace().next() {
+                    objects.insert(oid.to_string());
+                }
+            }
+        }
+        objects.extend(checkpoints.values().cloned());
+        objects.extend(meta_refs.values().cloned());
+        Ok(objects)
+    }
+
+    fn read_loose_git_object(&self, oid: &str) -> Result<Vec<u8>> {
+        if oid.len() != 40 || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("invalid git object id in shadow store: {oid}"),
+            )
+            .with_hint("run `asp doctor` before syncing"));
+        }
+        let path = self
+            .shadow
+            .git_dir()
+            .join("objects")
+            .join(&oid[..2])
+            .join(&oid[2..]);
+        if !path.is_file() {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("shadow git object {oid} is not available as a loose object"),
+            )
+            .with_hint(
+                "run `asp doctor`; packed shadow objects are not supported by sync push yet",
+            ));
+        }
+        std::fs::read(path).map_err(Into::into)
+    }
+
+    fn sync_cas_blob_hashes(
+        &self,
+        checkpoints: &BTreeMap<u64, String>,
+    ) -> Result<BTreeSet<String>> {
+        let mut hashes = BTreeSet::new();
+        for seq in checkpoints.keys() {
+            if let Some(manifest) = self.manifest_for(*seq)? {
+                for pointer in manifest.pointers {
+                    hashes.insert(pointer.blake3);
+                }
+            }
+        }
+        Ok(hashes)
     }
 
     /// Resolve "42" / "#42" / commit-sha-prefix to (seq, commit).
@@ -2857,6 +3052,166 @@ fn doctor_repair_plan(message: &str, deep: bool) -> Option<RepairPlan> {
     } else {
         None
     }
+}
+
+fn put_immutable_count(
+    remote: &LocalRemote,
+    key: &str,
+    bytes: &[u8],
+    created: &mut u64,
+    present: &mut u64,
+) -> Result<()> {
+    match remote.put_immutable(key, bytes)? {
+        PutOutcome::Created => *created += 1,
+        PutOutcome::AlreadyExists => *present += 1,
+        PutOutcome::Replaced => unreachable!("immutable writes do not replace existing keys"),
+    }
+    Ok(())
+}
+
+fn sync_ref_json(
+    workspace_id: &str,
+    ref_name: &str,
+    seq: u64,
+    target: &str,
+    updated_at: &str,
+) -> Result<Vec<u8>> {
+    let name = if ref_name.ends_with('/') {
+        format!("{ref_name}{seq}")
+    } else {
+        ref_name.to_string()
+    };
+    serde_json::to_vec_pretty(&serde_json::json!({
+        "v": 1,
+        "name": name,
+        "seq": seq,
+        "target": target,
+        "workspace_id": workspace_id,
+        "updated_at": updated_at,
+        "writer": "local",
+    }))
+    .map_err(|e| Error::new(ErrorCode::Io, format!("encode sync ref {name}: {e}")))
+}
+
+fn put_append_only_ref(
+    remote: &LocalRemote,
+    key: &str,
+    bytes: &[u8],
+    report: &mut SyncPushReport,
+) -> Result<()> {
+    match remote.get(key)? {
+        Some(existing) => {
+            let expected = sync_ref_fields(bytes, key)?;
+            let actual = sync_ref_fields(&existing.bytes, key)?;
+            if actual == expected {
+                report.refs_present += 1;
+                Ok(())
+            } else {
+                Err(Error::new(
+                    ErrorCode::SyncConflict,
+                    format!("remote ref {key} already exists with a different target"),
+                )
+                .with_hint("fetch the latest remote state, review conflicts, and retry"))
+            }
+        }
+        None => match remote.put_if_match(key, bytes, None)? {
+            PutOutcome::Created => {
+                report.refs_created += 1;
+                Ok(())
+            }
+            PutOutcome::AlreadyExists => {
+                report.refs_present += 1;
+                Ok(())
+            }
+            PutOutcome::Replaced => unreachable!("conditional create does not replace refs"),
+        },
+    }
+}
+
+fn put_head_ref(
+    remote: &LocalRemote,
+    key: &str,
+    bytes: &[u8],
+    local_seq: u64,
+    report: &mut SyncPushReport,
+) -> Result<()> {
+    match remote.get(key)? {
+        Some(existing) => {
+            let expected = sync_ref_fields(bytes, key)?;
+            let actual = sync_ref_fields(&existing.bytes, key)?;
+            if actual == expected {
+                report.refs_present += 1;
+                return Ok(());
+            }
+            if actual.0 >= local_seq {
+                return Err(Error::new(
+                    ErrorCode::SyncConflict,
+                    format!(
+                        "remote head is at checkpoint #{}; local head is checkpoint #{local_seq}",
+                        actual.0
+                    ),
+                )
+                .with_hint("fetch the latest remote state, review conflicts, and retry"));
+            }
+
+            match remote.put_if_match(key, bytes, Some(&existing.version))? {
+                PutOutcome::Replaced => {
+                    report.refs_replaced += 1;
+                    Ok(())
+                }
+                PutOutcome::AlreadyExists => {
+                    report.refs_present += 1;
+                    Ok(())
+                }
+                PutOutcome::Created => {
+                    report.refs_created += 1;
+                    Ok(())
+                }
+            }
+        }
+        None => match remote.put_if_match(key, bytes, None)? {
+            PutOutcome::Created => {
+                report.refs_created += 1;
+                Ok(())
+            }
+            PutOutcome::AlreadyExists => {
+                report.refs_present += 1;
+                Ok(())
+            }
+            PutOutcome::Replaced => unreachable!("conditional create does not replace refs"),
+        },
+    }
+}
+
+fn sync_ref_fields(bytes: &[u8], key: &str) -> Result<(u64, String)> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote ref {key} is not valid JSON: {e}"),
+        )
+        .with_hint("inspect the sync remote before retrying")
+    })?;
+    let seq = value
+        .get("seq")
+        .and_then(|seq| seq.as_u64())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote ref {key} is missing numeric seq"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    let target = value
+        .get("target")
+        .and_then(|target| target.as_str())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote ref {key} is missing string target"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    Ok((seq, target.to_string()))
 }
 
 fn sanitize_name(label: &str) -> String {
