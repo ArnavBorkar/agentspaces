@@ -48,6 +48,8 @@
   including redacted secret file and line locations for security dashboards.
 - `asp secrets scan --sarif` emits redacted secret findings as SARIF results
   with stable `secrets.<kind>` rule IDs for direct code-scanning uploads.
+- `docs/ci.md` now includes GitLab Code Quality conversion and generic SARIF
+  artifact examples for preflight and secret-scan outputs.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

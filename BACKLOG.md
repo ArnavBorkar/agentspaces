@@ -407,7 +407,7 @@
 - **S32.1 Security dashboard exports**
   - [x] T32.1.1 Add `asp preflight --sarif` for failed readiness checks with redacted secret locations.
   - [x] T32.1.2 Add `asp secrets scan --sarif` for direct secret-scan upload workflows.
-  - [ ] T32.1.3 Add GitLab Code Quality and generic SARIF artifact examples.
+  - [x] T32.1.3 Add GitLab Code Quality and generic SARIF artifact examples.
 - **S32.2 Local evidence packets**
   - [ ] T32.2.1 Add `asp evidence collect` to bundle redacted diagnostics, preflight, schema, and recent audit events.
   - [ ] T32.2.2 Add a signed local manifest for evidence bundles using existing release-trust tooling.
