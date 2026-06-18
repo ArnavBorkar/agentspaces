@@ -425,7 +425,7 @@
   - [x] T33.1.3 Add schema docs for raw SARIF outputs and version compatibility expectations.
 - **S33.2 Contract validation**
   - [x] T33.2.1 Add tests that schema docs mention every command introduced after EPIC 30.
-  - [ ] T33.2.2 Add a contributor checklist item for schema updates when adding CLI output fields.
+  - [x] T33.2.2 Add a contributor checklist item for schema updates when adding CLI output fields.
 
 ---
 

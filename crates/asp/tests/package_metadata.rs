@@ -140,6 +140,30 @@ fn command_cheat_sheet_covers_daily_workflows() {
 }
 
 #[test]
+fn contributor_checklists_cover_schema_snapshot_updates() {
+    let development = fs::read_to_string(repo_file("docs/development.md")).unwrap();
+    for needle in [
+        "Serialized CLI or MCP output changes update [docs/schemas.md]",
+        "[schemas/](../schemas/)",
+        "add or update JSON snapshots for changed",
+        "automation-facing payloads",
+    ] {
+        assert!(
+            development.contains(needle),
+            "development checklist missing {needle}"
+        );
+    }
+
+    let pr_template = fs::read_to_string(repo_file(".github/pull_request_template.md")).unwrap();
+    for needle in [
+        "User-facing commands support `--json`",
+        "Serialized CLI/MCP output changes update schemas, docs, and JSON snapshots",
+    ] {
+        assert!(pr_template.contains(needle), "PR template missing {needle}");
+    }
+}
+
+#[test]
 fn quickstart_docs_cover_safe_first_five_minutes() {
     let docs = fs::read_to_string(repo_file("docs/quickstart.md")).unwrap();
 

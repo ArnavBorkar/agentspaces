@@ -150,7 +150,8 @@ Before opening a PR or pushing to `main`, verify the same items captured in
 - User-facing errors include a corrective `hint`.
 - Any new command has JSON output and tests for both success and failure.
 - Serialized CLI or MCP output changes update [docs/schemas.md](schemas.md) and
-  [schemas/](../schemas/).
+  [schemas/](../schemas/), and add or update JSON snapshots for changed
+  automation-facing payloads.
 - Additive or breaking automation-contract changes follow
   [CHANGELOG.md](../CHANGELOG.md#automation-contract-rules).
 - `.asp/config.toml` changes update [docs/config.md](config.md); `.asp/policy.toml`

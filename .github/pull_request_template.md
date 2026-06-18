@@ -20,6 +20,7 @@
 - [ ] Crash-sensitive behavior has regression, property, or torture coverage.
 - [ ] User-facing errors include a corrective `hint`.
 - [ ] User-facing commands support `--json` or the PR explains why no command surface changed.
+- [ ] Serialized CLI/MCP output changes update schemas, docs, and JSON snapshots.
 - [ ] Docs, README claims, and benchmark numbers were updated when behavior or claims changed.
 
 ## Risk Notes
