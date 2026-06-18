@@ -45,6 +45,15 @@ findmnt -T "$PWD" -no FSTYPE,SOURCE,OPTIONS
 diskutil info "$PWD"
 ```
 
+For first-run diagnostics that do not require an initialized workspace, use:
+
+```bash
+asp bench self --json
+```
+
+The report includes `prerequisites[]` entries for platform support, symlink
+privilege, hardlinks, atomic rename, and copy-on-write fork availability.
+
 ## Operational Guidance
 
 - Keep forks on the same local volume as the workspace. `asp` creates fork

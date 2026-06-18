@@ -37,6 +37,10 @@
   WSL2, NTFS, ReFS, network shares, and cloud-synced folders.
 - `docs/support-ticket-templates.md` now captures Windows filesystem layout,
   Developer Mode or symlink privilege state, and reparse-point exposure.
+- `asp bench self --json` now emits structured first-run `prerequisites[]`
+  diagnostics, and Windows CI verifies Developer Mode /
+  `SeCreateSymbolicLinkPrivilege` guidance while native workspace commands
+  remain fail-closed.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

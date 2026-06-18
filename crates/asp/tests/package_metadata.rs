@@ -455,6 +455,10 @@ fn windows_docs_cover_portable_checkpoint_path_guards() {
         "`unsupported_platform`",
         "junctions, mount\npoints, or other reparse points",
         "rejecting unsafe reparse points",
+        "`asp bench self --json`",
+        "`prerequisites[]`",
+        "Developer Mode",
+        "`SeCreateSymbolicLinkPrivilege`",
     ] {
         assert!(docs.contains(needle), "windows docs missing {needle}");
     }
@@ -475,6 +479,11 @@ fn windows_filesystem_docs_cover_enterprise_layout_choices() {
         "OneDrive, Dropbox, Google Drive",
         "Cloud-Synced Folders",
         "Probe Checklist",
+        "`prerequisites[]`",
+        "`filesystem.symlinks`",
+        "`filesystem.atomic_rename`",
+        "`fork.copy_on_write`",
+        "`SeCreateSymbolicLinkPrivilege`",
         "symlink support",
         "filesystem detection",
         "sync remote recovery",
@@ -1384,6 +1393,38 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
             "result schema anyOf missing {reference}"
         );
     }
+}
+
+#[test]
+fn bench_self_schema_documents_first_run_prerequisites() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp bench self --json",
+        "`prerequisites[]`",
+        "`id`, `ok`,\n`severity`, `summary`, and nullable `hint`",
+        "symlink privilege",
+        "copy-on-write fork",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    assert!(
+        defs.contains_key("benchPrerequisite"),
+        "result schema missing benchPrerequisite"
+    );
+    let required = schema["$defs"]["benchSelfReport"]["required"]
+        .as_array()
+        .expect("benchSelfReport required array");
+    assert!(
+        required
+            .iter()
+            .any(|field| field.as_str() == Some("prerequisites")),
+        "benchSelfReport should require prerequisites"
+    );
 }
 
 #[test]

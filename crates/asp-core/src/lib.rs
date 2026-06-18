@@ -31,7 +31,9 @@ pub fn ensure_supported_platform() -> Result<()> {
             "native Windows support is not enabled in this asp release",
         )
         .with_hint(
-            "use WSL2, macOS, or Linux for now; track native Windows support at \
+            "use WSL2, macOS, or Linux for workspace operations; run `asp bench self --json` \
+             for first-run filesystem, Developer Mode, and symlink privilege diagnostics; \
+             track native Windows support at \
              https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows",
         ));
     }

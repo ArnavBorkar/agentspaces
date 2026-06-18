@@ -21,6 +21,16 @@
       "support_hint": null,
       "supported": true
     },
+    "prerequisites": [
+      {
+        "hint": null,
+        "id": "<prerequisite-id>",
+        "name": "<prerequisite-name>",
+        "ok": true,
+        "severity": "info",
+        "summary": "<prerequisite-summary>"
+      }
+    ],
     "probe_errors": [],
     "recommendations": [
       "<recommendation>"

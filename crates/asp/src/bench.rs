@@ -14,6 +14,7 @@ pub struct BenchSelfReport {
     pub platform: BenchPlatform,
     pub filesystem: BenchFilesystem,
     pub capabilities: BenchCapabilities,
+    pub prerequisites: Vec<BenchPrerequisite>,
     pub recommendations: Vec<String>,
     pub probe_errors: Vec<String>,
 }
@@ -41,6 +42,16 @@ pub struct BenchCapabilities {
     pub copy_on_write_forks: bool,
     pub large_file_sidecar_cow: bool,
     pub same_volume_forks_required: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BenchPrerequisite {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub ok: bool,
+    pub severity: &'static str,
+    pub summary: String,
+    pub hint: Option<String>,
 }
 
 pub fn self_report(path: &Path) -> Result<BenchSelfReport> {
@@ -105,6 +116,12 @@ pub fn self_report(path: &Path) -> Result<BenchSelfReport> {
         large_file_sidecar_cow: copy_on_write_forks,
         same_volume_forks_required: true,
     };
+    let prerequisites = prerequisites(
+        supported,
+        support_hint.as_deref(),
+        &filesystem,
+        &capabilities,
+    );
     let recommendations = recommendations(supported, &filesystem, &capabilities);
 
     Ok(BenchSelfReport {
@@ -117,6 +134,7 @@ pub fn self_report(path: &Path) -> Result<BenchSelfReport> {
         },
         filesystem,
         capabilities,
+        prerequisites,
         recommendations,
         probe_errors,
     })
@@ -156,6 +174,26 @@ pub fn print_self_report(report: &BenchSelfReport) {
     println!("  hardlinks:  {}", yes_no(report.filesystem.hardlinks));
     println!("  rename:     {}", yes_no(report.filesystem.atomic_rename));
 
+    if !report.prerequisites.is_empty() {
+        println!();
+        println!("{}", ui::bold("prerequisites"));
+        for prerequisite in &report.prerequisites {
+            let status = if prerequisite.ok {
+                ui::green("ok")
+            } else if prerequisite.severity == "error" {
+                ui::red("error")
+            } else {
+                ui::yellow("warning")
+            };
+            println!("  {status} {}: {}", prerequisite.name, prerequisite.summary);
+            if !prerequisite.ok {
+                if let Some(hint) = &prerequisite.hint {
+                    println!("    hint: {hint}");
+                }
+            }
+        }
+    }
+
     if !report.recommendations.is_empty() {
         println!();
         println!("{}", ui::bold("recommendations"));
@@ -169,6 +207,116 @@ pub fn print_self_report(report: &BenchSelfReport) {
         for error in &report.probe_errors {
             println!("  - {error}");
         }
+    }
+}
+
+fn prerequisites(
+    supported: bool,
+    support_hint: Option<&str>,
+    filesystem: &BenchFilesystem,
+    capabilities: &BenchCapabilities,
+) -> Vec<BenchPrerequisite> {
+    vec![
+        BenchPrerequisite {
+            id: "platform.supported",
+            name: "platform support",
+            ok: supported,
+            severity: if supported { "info" } else { "error" },
+            summary: if supported {
+                "workspace commands are enabled on this platform".to_string()
+            } else {
+                "workspace commands are disabled on this platform".to_string()
+            },
+            hint: support_hint.map(str::to_string),
+        },
+        BenchPrerequisite {
+            id: "filesystem.symlinks",
+            name: "symlink privilege",
+            ok: filesystem.symlinks,
+            severity: if filesystem.symlinks {
+                "info"
+            } else {
+                "warning"
+            },
+            summary: symlink_prerequisite_summary(filesystem.symlinks),
+            hint: (!filesystem.symlinks).then(|| symlink_prerequisite_hint().to_string()),
+        },
+        BenchPrerequisite {
+            id: "filesystem.hardlinks",
+            name: "hardlink support",
+            ok: filesystem.hardlinks,
+            severity: if filesystem.hardlinks {
+                "info"
+            } else {
+                "warning"
+            },
+            summary: if filesystem.hardlinks {
+                "hardlink probe succeeded on this path".to_string()
+            } else {
+                "hardlink probe failed on this path".to_string()
+            },
+            hint: (!filesystem.hardlinks).then(|| {
+                "choose a local filesystem that permits hardlinks, or ask IT to allow them for the workspace path".to_string()
+            }),
+        },
+        BenchPrerequisite {
+            id: "filesystem.atomic_rename",
+            name: "atomic rename",
+            ok: filesystem.atomic_rename,
+            severity: if filesystem.atomic_rename {
+                "info"
+            } else {
+                "error"
+            },
+            summary: if filesystem.atomic_rename {
+                "write-temp-plus-rename probe succeeded on this path".to_string()
+            } else {
+                "atomic rename probe failed on this path".to_string()
+            },
+            hint: (!filesystem.atomic_rename).then(|| {
+                "move the workspace to a local filesystem with atomic rename semantics, then rerun `asp bench self --json`".to_string()
+            }),
+        },
+        BenchPrerequisite {
+            id: "fork.copy_on_write",
+            name: "copy-on-write forks",
+            ok: capabilities.copy_on_write_forks,
+            severity: if capabilities.copy_on_write_forks {
+                "info"
+            } else {
+                "warning"
+            },
+            summary: if capabilities.copy_on_write_forks {
+                "directory clone probe found a copy-on-write fork method".to_string()
+            } else {
+                "no copy-on-write fork method was found for this path".to_string()
+            },
+            hint: (!capabilities.copy_on_write_forks).then(|| {
+                "use APFS on macOS or btrfs/XFS with reflink on Linux for fastest forks; correctness does not require CoW".to_string()
+            }),
+        },
+    ]
+}
+
+fn symlink_prerequisite_summary(ok: bool) -> String {
+    if cfg!(windows) {
+        if ok {
+            "file symlink probe succeeded; Developer Mode or SeCreateSymbolicLinkPrivilege is available for this path".to_string()
+        } else {
+            "file symlink probe failed; Developer Mode or SeCreateSymbolicLinkPrivilege is missing or blocked for this path".to_string()
+        }
+    } else if ok {
+        "symlink creation and readlink probe succeeded on this path".to_string()
+    } else {
+        "symlink creation or readlink probe failed on this path".to_string()
+    }
+}
+
+fn symlink_prerequisite_hint() -> &'static str {
+    if cfg!(windows) {
+        "enable Windows Developer Mode or grant the Create symbolic links (SeCreateSymbolicLinkPrivilege) right, then rerun `asp bench self --json`"
+    } else {
+        "choose a filesystem and security policy that allow symlinks, then rerun `asp bench self --json`"
     }
 }
 
@@ -198,7 +346,7 @@ fn recommendations(
         out.push("this path is case-insensitive; asp guards case-only restores, but avoid relying on paths that differ only by case".to_string());
     }
     if !filesystem.symlinks {
-        out.push("symlink support is unavailable or restricted on this path".to_string());
+        out.push(symlink_prerequisite_hint().to_string());
     }
     if !filesystem.atomic_rename {
         out.push(
@@ -369,5 +517,61 @@ impl ProbeDir {
 impl Drop for ProbeDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn filesystem(symlinks: bool, hardlinks: bool, atomic_rename: bool) -> BenchFilesystem {
+        BenchFilesystem {
+            kind: None,
+            case_sensitive: true,
+            symlinks,
+            hardlinks,
+            atomic_rename,
+        }
+    }
+
+    fn capabilities(copy_on_write_forks: bool) -> BenchCapabilities {
+        BenchCapabilities {
+            directory_clone_method: None,
+            copy_on_write_forks,
+            large_file_sidecar_cow: copy_on_write_forks,
+            same_volume_forks_required: true,
+        }
+    }
+
+    #[test]
+    fn prerequisites_are_machine_readable_and_actionable() {
+        let checks = prerequisites(
+            false,
+            Some("use WSL2 or run `asp bench self --json`"),
+            &filesystem(false, true, false),
+            &capabilities(false),
+        );
+
+        let platform = checks
+            .iter()
+            .find(|check| check.id == "platform.supported")
+            .unwrap();
+        assert!(!platform.ok);
+        assert_eq!(platform.severity, "error");
+        assert!(platform.hint.as_deref().unwrap().contains("WSL2"));
+
+        let symlinks = checks
+            .iter()
+            .find(|check| check.id == "filesystem.symlinks")
+            .unwrap();
+        assert!(!symlinks.ok);
+        assert!(symlinks.hint.as_deref().unwrap().contains("asp bench self"));
+
+        let atomic = checks
+            .iter()
+            .find(|check| check.id == "filesystem.atomic_rename")
+            .unwrap();
+        assert!(!atomic.ok);
+        assert_eq!(atomic.severity, "error");
     }
 }

@@ -138,7 +138,11 @@ as a breaking CLI JSON schema change.
 
 `asp bench self --json` can run outside an initialized workspace. It creates a
 short-lived probe directory under the selected `-C` path, reports the observed
-filesystem capabilities, and removes the probe before exiting.
+filesystem capabilities, emits stable `prerequisites[]` diagnostics, and
+removes the probe before exiting. Each prerequisite has an `id`, `ok`,
+`severity`, `summary`, and nullable `hint` so first-run tooling can surface
+platform, symlink privilege, hardlink, atomic-rename, and copy-on-write fork
+issues without parsing prose.
 
 `asp config show --json` and `asp config validate --json` both return
 `configShowReport` when the effective config parses successfully. Invalid

@@ -65,9 +65,16 @@ asp -C /path/to/repo --json bench self
 
 The command reports the selected path, platform, filesystem kind when the OS
 exposes it, the observed directory clone method (`clonefile`, `reflink`, or
-`copy`), case sensitivity, symlink/hardlink support, atomic rename behavior, and
-recommendations. It creates a short-lived `.asp-bench-self-*` directory under
-the target path and removes it before exiting.
+`copy`), case sensitivity, symlink/hardlink support, atomic rename behavior,
+structured `prerequisites[]` diagnostics, and recommendations. It creates a
+short-lived `.asp-bench-self-*` directory under the target path and removes it
+before exiting.
+
+On native Windows builds, `asp bench self --json` remains the first-run
+diagnostic even while workspace commands fail closed with `unsupported_platform`.
+The prerequisite list explains whether the file-symlink probe sees Developer
+Mode or the `SeCreateSymbolicLinkPrivilege` right, and points the user to rerun
+the probe after permissions or filesystem layout change.
 
 ## CI Trend Artifact
 

@@ -91,6 +91,20 @@ jobs:
           Select-String -Path asp-windows.json -Pattern '"code": "unsupported_platform"'
           Select-String -Path asp-windows.json -Pattern 'WSL2'
           exit 0
+      - name: Bench self reports first-run Windows prerequisites
+        shell: pwsh
+        run: |
+          $env:NO_COLOR = "1"
+          & .\target\debug\asp.exe --json bench self > asp-windows-bench.json
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content asp-windows-bench.json
+            throw "asp bench self failed on Windows"
+          }
+          Get-Content asp-windows-bench.json
+          Select-String -Path asp-windows-bench.json -Pattern '"prerequisites"'
+          Select-String -Path asp-windows-bench.json -Pattern '"filesystem.symlinks"'
+          Select-String -Path asp-windows-bench.json -Pattern 'Developer Mode'
+          Select-String -Path asp-windows-bench.json -Pattern 'SeCreateSymbolicLinkPrivilege'
 
   linux-reflink:
     name: linux reflink path (btrfs)

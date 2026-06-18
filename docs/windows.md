@@ -25,14 +25,21 @@ classify file symlinks, directory symlinks, junctions, and mount points
 separately, preserving supported symlinks and rejecting unsafe reparse points
 with a precise corrective hint.
 
-The CLI reports `unsupported_platform` on Windows with a hint to use WSL2 and
-track native support through the
+The CLI reports `unsupported_platform` on Windows with a hint to use WSL2 for
+workspace operations and to run `asp bench self --json` for first-run
+diagnostics. That read-only probe reports structured `prerequisites[]`
+including whether file symlink creation sees Developer Mode or the
+`SeCreateSymbolicLinkPrivilege` right, whether hardlinks and atomic rename work
+on the selected path, and whether copy-on-write forks are available. Track
+native support through the
 [Windows issue list](https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows).
 
 CI includes a Windows unsupported gate. It builds the workspace, runs the
 Windows-specific unit guard, and checks that `asp init --json` exits nonzero with
-the documented `unsupported_platform` code and WSL2 hint. Before native Windows
-is marked supported, that job must be replaced by a real Windows behavior suite.
+the documented `unsupported_platform` code and WSL2 hint. It also runs
+`asp bench self --json` to ensure first-run prerequisite diagnostics keep naming
+Developer Mode and `SeCreateSymbolicLinkPrivilege`. Before native Windows is
+marked supported, that job must be replaced by a real Windows behavior suite.
 
 The first filesystem spike is documented in
 [docs/design/windows-block-clone-spike.md](design/windows-block-clone-spike.md):

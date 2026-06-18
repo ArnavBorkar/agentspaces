@@ -521,7 +521,7 @@ blocked with precise, actionable diagnostics for unsupported cases.
   - [ ] T38.2.2 Add a Windows release target and installer selection tests.
   - [x] T38.2.3 Add Windows filesystem capability docs for NTFS, ReFS, WSL2, and network shares.
   - [x] T38.2.4 Add support-ticket fields for Windows filesystem and Developer Mode state.
-  - [ ] T38.2.5 Add first-run diagnostics that explain Windows permission prerequisites.
+  - [x] T38.2.5 Add first-run diagnostics that explain Windows permission prerequisites.
 
 ## EPIC 39 — Incident recovery and forensic drills
 

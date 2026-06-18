@@ -129,6 +129,11 @@ Before approving a Windows-hosted layout:
 
 - Run `asp bench self --json` or the filesystem probe from
   [filesystem detection](filesystems.md).
+- Inspect `prerequisites[]` for `platform.supported`,
+  `filesystem.symlinks`, `filesystem.hardlinks`,
+  `filesystem.atomic_rename`, and `fork.copy_on_write`.
+- On native Windows, record whether the symlink prerequisite says Developer
+  Mode or `SeCreateSymbolicLinkPrivilege` is available for the path.
 - Record whether symlink support is available.
 - Record the observed fork method: `copy`, `reflink`, `clonefile`, or future
   `block_clone`.

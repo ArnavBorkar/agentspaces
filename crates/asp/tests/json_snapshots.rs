@@ -128,6 +128,16 @@ fn normalize_bench_self(mut value: Value, root: &Path) -> Value {
     ] {
         result["capabilities"][key] = json!(true);
     }
+    result["prerequisites"] = json!([
+        {
+            "hint": null,
+            "id": "<prerequisite-id>",
+            "name": "<prerequisite-name>",
+            "ok": true,
+            "severity": "info",
+            "summary": "<prerequisite-summary>"
+        }
+    ]);
     result["recommendations"] = json!(["<recommendation>"]);
     result["probe_errors"] = json!([]);
     value

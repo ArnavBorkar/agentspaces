@@ -119,6 +119,7 @@ fn bench_self_runs_outside_workspace() {
     let human = ok(tmp.path(), &["bench", "self"]);
     assert!(human.contains("bench self"));
     assert!(human.contains("dir clone"));
+    assert!(human.contains("prerequisites"));
 
     let json = ok_json(tmp.path(), &["bench", "self"]);
     assert_eq!(json["ok"], true);
@@ -132,6 +133,15 @@ fn bench_self_runs_outside_workspace() {
     );
     assert!(json["result"]["platform"]["supported"].is_boolean());
     assert!(json["result"]["filesystem"]["atomic_rename"].is_boolean());
+    let prereq_ids: Vec<_> = json["result"]["prerequisites"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|check| check["id"].as_str().unwrap())
+        .collect();
+    assert!(prereq_ids.contains(&"platform.supported"));
+    assert!(prereq_ids.contains(&"filesystem.symlinks"));
+    assert!(prereq_ids.contains(&"filesystem.atomic_rename"));
 }
 
 #[test]

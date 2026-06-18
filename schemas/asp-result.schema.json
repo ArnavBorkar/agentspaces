@@ -57,6 +57,7 @@
         "platform",
         "filesystem",
         "capabilities",
+        "prerequisites",
         "recommendations",
         "probe_errors"
       ],
@@ -109,6 +110,10 @@
             "same_volume_forks_required": { "type": "boolean" }
           }
         },
+        "prerequisites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/benchPrerequisite" }
+        },
         "recommendations": {
           "type": "array",
           "items": { "type": "string" }
@@ -117,6 +122,19 @@
           "type": "array",
           "items": { "type": "string" }
         }
+      }
+    },
+    "benchPrerequisite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "ok", "severity", "summary", "hint"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "severity": { "enum": ["info", "warning", "error"] },
+        "summary": { "type": "string" },
+        "hint": { "$ref": "#/$defs/nullableString" }
       }
     },
     "checkpointInfo": {
