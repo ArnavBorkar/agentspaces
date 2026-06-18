@@ -639,9 +639,46 @@ fn config_template_docs_cover_common_repository_shapes() {
         "branch_template = \"gen/{workspace}/{fork}\"",
         "asp config validate",
         "asp --json config show",
+        "fleet rollout checklist",
     ] {
         assert!(docs.contains(needle), "config templates missing {needle}");
     }
+}
+
+#[test]
+fn fleet_rollout_docs_cover_multi_repo_adoption() {
+    let docs = fs::read_to_string(repo_file("docs/fleet-rollout.md")).unwrap();
+    for needle in [
+        "# Fleet Rollout Checklist",
+        "2-3 repositories",
+        "10+ repos",
+        "asp init --print-template monorepo",
+        "asp init --template monorepo",
+        "asp config validate",
+        "asp --json config show > asp-config.json",
+        "asp preflight",
+        "asp checkpoint -m \"rollout: baseline\"",
+        "asp fork --name rollout-smoke",
+        "asp doctor --deep",
+        "asp evidence collect --output asp-evidence.json",
+        "asp evidence verify",
+        "Do not run `asp doctor --fix`",
+        "asp setup claude",
+        "asp setup codex",
+        "asp setup opencode",
+        "## Rollback",
+        "Only delete `.asp/`",
+        "## Done When",
+        "Support ticket templates",
+    ] {
+        assert!(docs.contains(needle), "fleet rollout docs missing {needle}");
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/fleet-rollout.md"),
+        "README should link fleet rollout checklist"
+    );
 }
 
 #[test]

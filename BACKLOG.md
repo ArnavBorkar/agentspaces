@@ -478,7 +478,7 @@ repeatable defaults, reviewable policy, and minimal per-repo hand editing.
   - [x] T36.1.2 Ship built-in templates for service, monorepo, generated-code, and media-heavy repos.
   - [x] T36.1.3 Add `asp init --print-template <name>` for review before writing config.
   - [x] T36.1.4 Add tests that templates never weaken default secret and derived-state exclusions.
-  - [ ] T36.1.5 Document a rollout checklist for adding `asp` to 10+ repos safely.
+  - [x] T36.1.5 Document a rollout checklist for adding `asp` to 10+ repos safely.
 - **S36.2 Organization rollout controls**
   - [ ] T36.2.1 Add `asp config diff --against <file>` for reviewing local config drift.
   - [ ] T36.2.2 Add `asp policy explain` to show why each rule exists and which commands it affects.

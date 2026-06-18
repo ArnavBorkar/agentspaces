@@ -99,6 +99,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Workspace config** — [docs/config.md](docs/config.md)
 - **Config review** — [docs/config-review.md](docs/config-review.md)
 - **Config templates** — [docs/config-templates.md](docs/config-templates.md)
+- **Fleet rollout checklist** — [docs/fleet-rollout.md](docs/fleet-rollout.md)
 - **Ignore/config/secrets coordination** — [docs/ignore-config-secrets.md](docs/ignore-config-secrets.md)
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
 - **Manpage generation** — [docs/manpage.md](docs/manpage.md)

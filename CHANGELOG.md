@@ -105,6 +105,8 @@
   creating `.asp/`, with JSON, schema, and snapshot coverage.
 - Init template tests now assert every built-in template appends excludes
   without weakening asp's default derived-state protections.
+- `docs/fleet-rollout.md` adds a phased checklist for rolling `asp` out across
+  10+ repositories with read-only CI, smoke tests, evidence, and rollback steps.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

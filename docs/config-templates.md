@@ -126,3 +126,5 @@ asp discard config-smoke
 
 Run the smoke test in a disposable branch before rolling the template into a
 shared repository.
+
+For multi-repository adoption, use the [fleet rollout checklist](fleet-rollout.md).
