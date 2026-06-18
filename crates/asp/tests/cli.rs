@@ -79,6 +79,21 @@ fn bench_self_runs_outside_workspace() {
 }
 
 #[test]
+fn completions_emit_shell_scripts_and_json() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bash = ok(tmp.path(), &["completions", "bash"]);
+    assert!(bash.contains("_asp"), "{bash}");
+    assert!(bash.contains("completions"), "{bash}");
+
+    let json = ok_json(tmp.path(), &["completions", "zsh"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["shell"], "zsh");
+    let completion = json["result"]["completion"].as_str().unwrap();
+    assert!(completion.contains("#compdef asp"), "{completion}");
+    assert!(completion.contains("completions"), "{completion}");
+}
+
+#[test]
 fn full_cli_loop() {
     let (_tmp, root) = project();
 

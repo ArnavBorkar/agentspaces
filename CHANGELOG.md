@@ -136,6 +136,8 @@
   `opencode.json` with idempotent install/remove behavior.
 - `docs/mcp-clients.md` documents generic MCP client JSON/TOML setup shapes
   and safety guidance for unsupported harnesses.
+- `asp completions <shell>` generates shell completion scripts, with JSON
+  output and install docs.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.

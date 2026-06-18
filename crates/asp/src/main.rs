@@ -18,7 +18,8 @@ use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, DiffTextMode, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Parser)]
@@ -71,6 +72,12 @@ enum Cmd {
     },
     /// Print supported schema and format versions.
     Schema,
+    /// Generate shell completion scripts.
+    Completions {
+        /// Shell to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
     /// Show filtered audit events from the local journal.
     Audit(AuditArgs),
     /// Inspect and validate local workspace policy.
@@ -646,6 +653,30 @@ fn run(cli: Cli) -> Result<(), Error> {
                 ]);
             }
             print!("{}", ui::table(&rows));
+            Ok(())
+        }
+        Cmd::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            let mut buf = Vec::new();
+            clap_complete::generate(shell, &mut cmd, name, &mut buf);
+            let completion = String::from_utf8(buf).map_err(|e| {
+                Error::new(
+                    ErrorCode::Io,
+                    format!("completion output was not UTF-8: {e}"),
+                )
+            })?;
+            if json {
+                ui::print_json(
+                    true,
+                    &serde_json::json!({
+                        "shell": shell.to_string(),
+                        "completion": completion,
+                    }),
+                );
+            } else {
+                print!("{completion}");
+            }
             Ok(())
         }
         Cmd::Audit(args) => {
