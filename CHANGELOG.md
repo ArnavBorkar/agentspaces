@@ -49,6 +49,9 @@
 - Drill JSON reports now include shared audit metadata (`report_id`,
   `generated_at`, `workspace_id`, command, schema version, and asp version) for
   incident dashboards and evidence retention systems.
+- `docs/ci.md` now includes scheduled GitHub Actions and GitLab examples that
+  run non-destructive recovery and fork drills in a temporary workspace and
+  upload JSON evidence.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

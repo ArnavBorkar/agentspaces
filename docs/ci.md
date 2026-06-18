@@ -235,6 +235,124 @@ Add a manifest signature artifact when your CI environment already signs build
 outputs. Keep the signature next to `asp-evidence.manifest.json`; see
 [Evidence Packets](evidence.md) for Sigstore and minisign commands.
 
+## Scheduled Recovery Drills
+
+Use a scheduled workflow to prove checkpoint recovery and fork cleanup before an
+incident. The example below copies the checkout into a temp directory, initializes
+`asp` there, creates an ephemeral baseline checkpoint, runs both drills, uploads
+only JSON reports, and removes the recovery temp tree. It does not mutate source
+files or user git history in the checked-out repository.
+
+```yaml
+name: asp scheduled drills
+
+on:
+  schedule:
+    - cron: "31 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  asp-drills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install asp
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run non-destructive asp drills
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/asp-drill-evidence"
+          drill_root="$RUNNER_TEMP/asp-drill-workspace"
+          mkdir -p "$drill_root"
+          tar --exclude=.git --exclude=.asp -cf - . | tar -xf - -C "$drill_root"
+          cd "$drill_root"
+          git init -q
+          asp init
+          asp checkpoint -m "ci scheduled drill baseline"
+          asp --json drill recovery > "$GITHUB_WORKSPACE/asp-drill-evidence/recovery.json"
+          asp --json drill fork > "$GITHUB_WORKSPACE/asp-drill-evidence/fork.json"
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import shutil
+
+          evidence = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "asp-drill-evidence"
+          for report_name in ["recovery.json", "fork.json"]:
+              with open(evidence / report_name, encoding="utf-8") as handle:
+                  result = json.load(handle)["result"]
+              assert result["status"] == "passed"
+              assert result["metadata"]["status"] == "passed"
+
+          with open(evidence / "recovery.json", encoding="utf-8") as handle:
+              recovery = json.load(handle)["result"]
+          shutil.rmtree(recovery["recovered_tree"], ignore_errors=True)
+          pathlib.Path(recovery["index_file"]).unlink(missing_ok=True)
+          PY
+      - name: Upload asp drill reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asp-drill-evidence-${{ github.run_id }}
+          if-no-files-found: error
+          path: asp-drill-evidence/*.json
+```
+
+For GitLab scheduled pipelines:
+
+```yaml
+asp_scheduled_drills:
+  image: debian:bookworm-slim
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ca-certificates curl git python3
+    - curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+  script:
+    - mkdir -p "$CI_PROJECT_DIR/asp-drill-evidence"
+    - drill_root="$(mktemp -d)"
+    - tar --exclude=.git --exclude=.asp -cf - . | tar -xf - -C "$drill_root"
+    - cd "$drill_root"
+    - git init -q
+    - asp init
+    - asp checkpoint -m "ci scheduled drill baseline"
+    - asp --json drill recovery > "$CI_PROJECT_DIR/asp-drill-evidence/recovery.json"
+    - asp --json drill fork > "$CI_PROJECT_DIR/asp-drill-evidence/fork.json"
+    - |
+      python3 - <<'PY'
+      import json
+      import os
+      import pathlib
+      import shutil
+
+      evidence = pathlib.Path(os.environ["CI_PROJECT_DIR"]) / "asp-drill-evidence"
+      for report_name in ["recovery.json", "fork.json"]:
+          with open(evidence / report_name, encoding="utf-8") as handle:
+              result = json.load(handle)["result"]
+          assert result["status"] == "passed"
+          assert result["metadata"]["status"] == "passed"
+
+      with open(evidence / "recovery.json", encoding="utf-8") as handle:
+          recovery = json.load(handle)["result"]
+      shutil.rmtree(recovery["recovered_tree"], ignore_errors=True)
+      pathlib.Path(recovery["index_file"]).unlink(missing_ok=True)
+      PY
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - asp-drill-evidence/recovery.json
+      - asp-drill-evidence/fork.json
+```
+
 ## GitLab CI
 
 ```yaml

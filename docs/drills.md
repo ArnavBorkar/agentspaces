@@ -68,6 +68,8 @@ The JSON result includes:
 
 Do not commit the JSON report or recovered tree unless the team has reviewed
 the contents. They may contain proprietary source or checkpointed secrets.
+For scheduled CI drills that run in a temporary copy of the checkout and upload
+only JSON evidence, see [CI preflight examples](ci.md#scheduled-recovery-drills).
 
 ## Failure Triage
 
