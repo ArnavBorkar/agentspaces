@@ -2,6 +2,7 @@
 
 `asp preflight` runs a read-only readiness gate for CI, onboarding, and agent
 workflows.
+For copyable CI snippets, see [CI preflight examples](ci.md).
 
 ```bash
 asp preflight

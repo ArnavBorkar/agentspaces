@@ -94,6 +94,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Generic MCP clients** — [docs/mcp-clients.md](docs/mcp-clients.md)
 - **Quickstart** — [docs/quickstart.md](docs/quickstart.md)
 - **Preflight** — [docs/preflight.md](docs/preflight.md)
+- **CI examples** — [docs/ci.md](docs/ci.md)
 - **Workspace config** — [docs/config.md](docs/config.md)
 - **Config review** — [docs/config-review.md](docs/config-review.md)
 - **Config templates** — [docs/config-templates.md](docs/config-templates.md)

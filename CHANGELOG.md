@@ -36,6 +36,8 @@
   `.gitignore`, `.asp/config.toml`, `.asp/policy.toml`, and secrets scanning.
 - `asp preflight` adds a read-only CI readiness gate for config, policy,
   doctor, and secrets checks with human and JSON output.
+- `docs/ci.md` provides GitHub Actions and GitLab CI examples for non-mutating
+  asp preflight gates.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

@@ -280,3 +280,21 @@ fn preflight_docs_cover_ci_readiness_gate() {
         assert!(docs.contains(needle), "preflight docs missing {needle}");
     }
 }
+
+#[test]
+fn ci_docs_cover_preflight_examples() {
+    let docs = fs::read_to_string(repo_file("docs/ci.md")).unwrap();
+
+    for needle in [
+        "## GitHub Actions",
+        "actions/checkout@v4",
+        "actions/upload-artifact@v4",
+        "## GitLab CI",
+        "asp config validate",
+        "asp --json preflight > asp-preflight.json",
+        "do not run `asp doctor --fix`",
+        "asp doctor --runbook",
+    ] {
+        assert!(docs.contains(needle), "CI docs missing {needle}");
+    }
+}
