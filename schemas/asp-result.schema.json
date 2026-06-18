@@ -637,9 +637,13 @@
         "paths": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["protected"],
+          "required": ["protected", "deny_checkpoint"],
           "properties": {
             "protected": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "deny_checkpoint": {
               "type": "array",
               "items": { "type": "string" }
             }

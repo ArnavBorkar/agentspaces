@@ -116,6 +116,8 @@
   redacts findings, supports JSON output, and exits nonzero when findings are
   present.
 - `docs/secrets.md` documents secret scanning scope, redaction, and CI usage.
+- Local policy now supports `paths.deny_checkpoint` rules that block checkpoint
+  capture of matching files with a corrective hint.
 
 ### Fixed
 

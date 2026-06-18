@@ -936,7 +936,7 @@ impl Workspace {
     fn checkpoint_locked(&self, opts: CheckpointOpts) -> Result<Option<CheckpointInfo>> {
         let t0 = Instant::now();
         let parent = self.shadow.rev_parse(HEAD_REF)?;
-        let (tree, bigfiles) = self.stage_tree()?;
+        let (tree, bigfiles) = self.stage_tree_for_checkpoint()?;
         if let Some(ref p) = parent {
             if self.shadow.tree_of(p)? == tree {
                 let _ = self.refresh_file_state_index_if_needed(p);
@@ -1046,12 +1046,20 @@ impl Workspace {
     /// paths are removed from the index afterwards so the next capture skips
     /// them (untracked + excluded). Returns the tree oid + big-file set.
     fn stage_tree(&self) -> Result<(String, BigFiles)> {
+        self.stage_tree_inner(false)
+    }
+
+    fn stage_tree_for_checkpoint(&self) -> Result<(String, BigFiles)> {
+        self.stage_tree_inner(true)
+    }
+
+    fn stage_tree_inner(&self, enforce_checkpoint_deny: bool) -> Result<(String, BigFiles)> {
         let ScanResult {
             changed,
             case_index_removals,
             bigfiles,
             force_full_scan,
-        } = self.scan_changes()?;
+        } = self.scan_changes(enforce_checkpoint_deny)?;
 
         let mut excludes = self.config.shadow_excludes();
         excludes.push("# --- asp generated: large-blob sidecar ---".to_string());
@@ -1150,7 +1158,7 @@ impl Workspace {
     /// One `git status` scan shared by everything stage_tree needs: the list
     /// of user-visible changed paths (rename pairs included, managed big-file
     /// pointer deletions filtered out) and the maintained big-file cache.
-    fn scan_changes(&self) -> Result<ScanResult> {
+    fn scan_changes(&self, enforce_checkpoint_deny: bool) -> Result<ScanResult> {
         let threshold = self.config.blob_threshold_bytes();
         let bf_path = blobs::bigfiles_path(&self.layout.asp);
         let mut bf = blobs::load_bigfiles(&bf_path)?;
@@ -1208,6 +1216,15 @@ impl Workspace {
             changed.push((path, needs_add));
         }
 
+        if enforce_checkpoint_deny {
+            self.enforce_checkpoint_deny_paths(
+                changed
+                    .iter()
+                    .filter(|(_, needs_add)| *needs_add)
+                    .map(|(path, _)| path.clone()),
+            )?;
+        }
+
         if threshold > 0 {
             // Promote new big files out of the changed set into the CAS.
             for (path, _) in &changed {
@@ -1233,6 +1250,9 @@ impl Workspace {
                     Ok(md) if md.is_file() && md.len() >= threshold => {
                         let rec = &bf.files[&path];
                         if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+                            if enforce_checkpoint_deny {
+                                self.enforce_checkpoint_deny_paths(std::iter::once(path.clone()))?;
+                            }
                             let entry = blobs::store_in_cas(&self.layout.blobs(), &abs)?;
                             bf.files.insert(path.clone(), entry);
                             bf_changed = true;
@@ -1268,6 +1288,9 @@ impl Workspace {
                         // Genuinely shrunk below the threshold: it goes back
                         // to being an ordinary git blob — STAGE it, or the
                         // checkpoint would record a deletion of a live file.
+                        if enforce_checkpoint_deny {
+                            self.enforce_checkpoint_deny_paths(std::iter::once(path.clone()))?;
+                        }
                         bf.files.remove(&path);
                         bf_changed = true;
                         changed.push((path, true));
@@ -1823,6 +1846,33 @@ impl Workspace {
                         "policy blocks {operation}: protected path '{path}' matches '{pattern}'"
                     ),
                     "review the change, narrow the command to unprotected paths, or edit .asp/policy.toml",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn enforce_checkpoint_deny_paths(&self, paths: impl IntoIterator<Item = String>) -> Result<()> {
+        if self.policy.paths.deny_checkpoint.is_empty() {
+            return Ok(());
+        }
+        let mut unique_paths = BTreeSet::new();
+        for path in paths {
+            unique_paths.insert(path);
+        }
+        for path in unique_paths {
+            if let Some(pattern) = self
+                .policy
+                .paths
+                .deny_checkpoint
+                .iter()
+                .find(|pattern| policy_path_matches(pattern, &path))
+            {
+                return Err(policy_violation(
+                    format!(
+                        "policy blocks checkpoint: path '{path}' matches paths.deny_checkpoint entry '{pattern}'"
+                    ),
+                    "remove or move the file, adjust paths.deny_checkpoint after review, or run `asp secrets scan` to inspect likely secrets",
                 ));
             }
         }

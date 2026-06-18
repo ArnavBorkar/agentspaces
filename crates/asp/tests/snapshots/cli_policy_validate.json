@@ -11,6 +11,7 @@
         "max_age_hours": null
       },
       "paths": {
+        "deny_checkpoint": [],
         "protected": []
       },
       "promote": {

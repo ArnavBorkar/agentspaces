@@ -1924,6 +1924,7 @@ fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
     usize::from(policy.forks.max_active.is_some())
         + usize::from(policy.checkpoints.max_age_hours.is_some())
         + policy.paths.protected.len()
+        + policy.paths.deny_checkpoint.len()
         + usize::from(policy.promote.require_clean_status)
         + usize::from(policy.promote.require_checkpoint)
         + policy.promote.allowed_branch_prefixes.len()

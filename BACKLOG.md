@@ -269,7 +269,7 @@
   - [x] T21.1.3 Add fuzzing harnesses for config, journal, MCP params, and hook payload parsing.
 - **S21.2 Secret safety**
   - [x] T21.2.1 Add `asp secrets scan` for common accidental checkpoint inclusions.
-  - [ ] T21.2.2 Add configurable deny patterns that block checkpoint with a corrective hint.
+  - [x] T21.2.2 Add configurable deny patterns that block checkpoint with a corrective hint.
 
 ## EPIC 22 — Observability without telemetry
 

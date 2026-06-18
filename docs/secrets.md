@@ -31,3 +31,6 @@ asp secrets scan && asp checkpoint -m "reviewed"
 If a finding is real, remove it from the file, rotate the credential, and then
 checkpoint again. The scanner is a guardrail, not a replacement for provider
 revocation, repository secret scanning, or organization-wide policy.
+
+To block known sensitive paths from being checkpointed at all, add
+`paths.deny_checkpoint` rules in [.asp/policy.toml](policy.md).

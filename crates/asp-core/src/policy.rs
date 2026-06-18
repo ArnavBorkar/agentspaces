@@ -41,6 +41,8 @@ pub struct CheckpointPolicy {
 pub struct PathPolicy {
     #[serde(default)]
     pub protected: Vec<String>,
+    #[serde(default)]
+    pub deny_checkpoint: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -94,6 +96,8 @@ impl Policy {
 [paths]
 # Path patterns protected from restore and promote:
 # protected = ["src/security/**", ".github/workflows/**"]
+# Path patterns that checkpoint is not allowed to capture:
+# deny_checkpoint = [".env", "**/*.pem"]
 
 [promote]
 # require_clean_status = true
@@ -135,6 +139,9 @@ impl Policy {
         }
         for protected in &self.paths.protected {
             validate_path_pattern(path, "paths.protected", protected)?;
+        }
+        for denied in &self.paths.deny_checkpoint {
+            validate_path_pattern(path, "paths.deny_checkpoint", denied)?;
         }
         for prefix in &self.promote.allowed_branch_prefixes {
             if prefix.trim().is_empty() {
@@ -211,6 +218,7 @@ max_age_hours = 12
 
 [paths]
 protected = ["src/security/**"]
+deny_checkpoint = [".env", "**/*.pem"]
 
 [promote]
 require_clean_status = true
@@ -225,6 +233,7 @@ max_age_days = 30
         .unwrap();
         policy.validate(Path::new(".asp/policy.toml")).unwrap();
         assert_eq!(policy.forks.max_active, Some(4));
+        assert_eq!(policy.paths.deny_checkpoint, vec![".env", "**/*.pem"]);
         assert!(policy.promote.require_clean_status);
         assert_eq!(policy.retention.keep_last, Some(20));
     }

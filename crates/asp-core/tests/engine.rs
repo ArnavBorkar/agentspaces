@@ -294,6 +294,63 @@ fn policy_enforces_checkpoint_age_before_risky_operations() {
 }
 
 #[test]
+fn policy_blocks_checkpoint_of_denied_paths() {
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[paths]\ndeny_checkpoint = [\".env\", \"secrets/**\"]\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+
+    let err = ws
+        .checkpoint(CheckpointOpts {
+            message: Some("blocked".into()),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert!(err.message.contains("paths.deny_checkpoint"));
+    assert!(err.hint.unwrap().contains("asp secrets scan"));
+    assert!(ws.checkpoint_refs().unwrap().is_empty());
+
+    std::fs::remove_file(root.join(".env")).unwrap();
+    let c = cp(&ws, "without denied file").unwrap();
+    assert!(c.files_changed >= 2);
+}
+
+#[test]
+fn policy_blocks_denied_big_file_before_cas_storage() {
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        "[paths]\ndeny_checkpoint = [\"large.bin\"]\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    write_bytes(&root, "large.bin", &vec![4u8; 2 * 1024 * 1024]);
+
+    let err = ws
+        .checkpoint(CheckpointOpts {
+            message: Some("blocked big".into()),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::PolicyViolation);
+    assert_eq!(
+        std::fs::read_dir(root.join(".asp/blobs")).unwrap().count(),
+        0
+    );
+}
+
+#[test]
 fn policy_blocks_restore_of_protected_paths() {
     let (_tmp, root) = project();
     let ws = Workspace::init(&root, None).unwrap();

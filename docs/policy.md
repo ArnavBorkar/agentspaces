@@ -19,6 +19,7 @@ max_age_hours = 24
 
 [paths]
 protected = ["src/security/**", ".github/workflows/**"]
+deny_checkpoint = [".env", "**/*.pem"]
 
 [promote]
 require_clean_status = true
@@ -35,6 +36,7 @@ max_age_days = 30
 | `forks.max_active` | positive integer or omitted | unset | Maximum active sibling forks allowed before new fork creation is blocked. |
 | `checkpoints.max_age_hours` | positive integer or omitted | unset | Maximum acceptable age for the latest checkpoint before `fork`, `restore`, or `promote`. |
 | `paths.protected` | array of workspace-relative strings | `[]` | Path patterns protected from restore and promote. |
+| `paths.deny_checkpoint` | array of workspace-relative strings | `[]` | Path patterns that checkpoint is not allowed to capture. |
 | `promote.require_clean_status` | boolean | `false` | Whether promotion requires the main workspace to have no dirty, deleted, or untracked paths. |
 | `promote.require_checkpoint` | boolean | `false` | Whether promotion requires at least one checkpoint. |
 | `promote.allowed_branch_prefixes` | array of strings | `[]` | Branch prefixes promotion may create; empty means unrestricted. |
@@ -52,8 +54,8 @@ mutation. Add `--json` for CI or agent harnesses; a valid policy returns
   when set.
 - `retention.keep_last` and `retention.max_age_days` must be greater than zero
   when set.
-- `paths.protected` entries must be non-empty workspace-relative patterns and
-  cannot contain `..` path segments.
+- `paths.protected` and `paths.deny_checkpoint` entries must be non-empty
+  workspace-relative patterns and cannot contain `..` path segments.
 - `promote.allowed_branch_prefixes` entries must be non-empty and cannot contain
   whitespace.
 
@@ -69,6 +71,9 @@ the operation:
   `promote`. Run `asp checkpoint` to refresh the latest checkpoint.
 - `paths.protected` blocks full or targeted restores that would write/delete a
   matching path, and blocks promotes whose fork changes a matching path.
+- `paths.deny_checkpoint` blocks checkpoints that would capture a matching file.
+  Deleting a denied file can still be checkpointed so teams can remove
+  accidental inclusions.
 - `promote.require_clean_status`, `promote.require_checkpoint`, and
   `promote.allowed_branch_prefixes` are checked before the promoted branch is
   created.
@@ -91,6 +96,13 @@ Protect sensitive paths from accidental broad operations:
 ```toml
 [paths]
 protected = ["src/security/**", "infra/prod/**", ".github/workflows/**"]
+```
+
+Block common local secret files from checkpoint capture:
+
+```toml
+[paths]
+deny_checkpoint = [".env", ".env.*", "**/*.pem"]
 ```
 
 Reserve promotion branches for reviewable asp output:
