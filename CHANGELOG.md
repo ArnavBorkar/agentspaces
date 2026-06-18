@@ -115,6 +115,8 @@
   regulated, startup, and OSS maintainer rollout workflows.
 - `docs/ci.md` adds read-only GitHub Actions and GitLab examples that fail on
   unsafe `asp config diff` drift against a reviewed baseline.
+- `docs/rollout-handoff.md` adds phase gates, rollback levels, and an owner
+  handoff packet template for moving pilots into team ownership.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

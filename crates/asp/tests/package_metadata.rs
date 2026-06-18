@@ -684,6 +684,7 @@ fn policy_pack_docs_cover_org_rollout_profiles() {
         "asp config diff --against <file>",
         "asp secrets scan",
         "fleet rollout checklist",
+        "rollout handoff guide",
     ] {
         assert!(docs.contains(needle), "policy packs docs missing {needle}");
     }
@@ -756,6 +757,7 @@ fn fleet_rollout_docs_cover_multi_repo_adoption() {
         "asp setup codex",
         "asp setup opencode",
         "asp config diff --against <file>",
+        "rollout-handoff.md",
         "## Rollback",
         "Only delete `.asp/`",
         "## Done When",
@@ -768,6 +770,61 @@ fn fleet_rollout_docs_cover_multi_repo_adoption() {
     assert!(
         readme.contains("docs/fleet-rollout.md"),
         "README should link fleet rollout checklist"
+    );
+}
+
+#[test]
+fn rollout_handoff_docs_cover_phase_rollback_and_owner_handoff() {
+    let docs = fs::read_to_string(repo_file("docs/rollout-handoff.md")).unwrap();
+    for needle in [
+        "# Phased Rollout And Owner Handoff",
+        "## Phase Gates",
+        "0: Pilot",
+        "1: Early teams",
+        "2: Critical repos",
+        "3: Default recommendation",
+        "asp config validate",
+        "asp config diff",
+        "asp preflight",
+        "asp doctor --deep",
+        "## Rollback Levels",
+        "Harness rollback",
+        "Policy/config rollback",
+        "Workspace rollback",
+        "Do not run `asp doctor --fix`",
+        "## Owner Handoff Packet",
+        "# asp owner handoff",
+        "Repository:",
+        "Owner:",
+        "Rollback owner:",
+        "Evidence packet:",
+        "asp --json config show > asp-config.json",
+        "asp --json config diff --against baseline.toml > asp-config-diff.json",
+        "asp --json policy explain > asp-policy-explain.json",
+        "asp evidence verify --packet asp-evidence.json --manifest asp-evidence.manifest.json",
+        "## Review Cadence",
+        "Support ticket templates",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "rollout handoff docs missing {needle}"
+        );
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/rollout-handoff.md"),
+        "README should link rollout handoff docs"
+    );
+    let fleet = fs::read_to_string(repo_file("docs/fleet-rollout.md")).unwrap();
+    assert!(
+        fleet.contains("rollout-handoff.md"),
+        "fleet rollout docs should link rollout handoff"
+    );
+    let policy_packs = fs::read_to_string(repo_file("docs/policy-packs.md")).unwrap();
+    assert!(
+        policy_packs.contains("rollout-handoff.md"),
+        "policy packs should link rollout handoff"
     );
 }
 

@@ -120,7 +120,7 @@ Use rings instead of a single fleet-wide change:
 | 0 | Maintainer-owned pilot repos | Manual smoke test plus read-only CI. |
 | 1 | 5-10 willing teams | Preflight ready, support channel staffed. |
 | 2 | Business-critical repos | Backup plan for `.asp/`, recovery drill passed. |
-| 3 | Default recommendation | Docs, issue templates, and rollback notes published. |
+| 3 | Default recommendation | Docs, issue templates, and [owner handoff](rollout-handoff.md) published. |
 
 Do not advance a ring while any crash-safety, restore, promote, or source
 exposure report is unresolved.
@@ -167,6 +167,7 @@ A repository is considered rolled out when:
 ## Related Docs
 
 - [Config templates](config-templates.md)
+- [Rollout handoff](rollout-handoff.md)
 - [CI preflight examples](ci.md)
 - [Evidence packets](evidence.md)
 - [Support ticket templates](support-ticket-templates.md)

@@ -164,4 +164,5 @@ For every bundle:
 5. Revisit `forks.max_active`, `checkpoints.max_age_hours`, and retention after
    the first week of real usage.
 
-For multi-repository adoption, use the [fleet rollout checklist](fleet-rollout.md).
+For multi-repository adoption, use the [fleet rollout checklist](fleet-rollout.md)
+and [rollout handoff guide](rollout-handoff.md).
