@@ -422,6 +422,39 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
 }
 
 #[test]
+fn schema_docs_cover_post_epic_30_machine_readable_outputs() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+
+    let enveloped_outputs = [
+        ("asp preflight --json", "#/$defs/preflightReport"),
+        ("asp evidence collect --json", "#/$defs/evidenceReport"),
+        (
+            "asp evidence collect --json --output file.json",
+            "#/$defs/evidenceOutputResult",
+        ),
+    ];
+    for (command, schema) in enveloped_outputs {
+        assert!(docs.contains(command), "schema docs missing {command}");
+        assert!(
+            docs.contains(schema),
+            "schema docs missing {schema} for {command}"
+        );
+    }
+
+    let raw_outputs = [
+        ("asp preflight --sarif", "SARIF 2.1.0"),
+        ("asp secrets scan --sarif", "SARIF 2.1.0"),
+    ];
+    for (command, contract) in raw_outputs {
+        assert!(docs.contains(command), "schema docs missing {command}");
+        assert!(
+            docs.contains(contract),
+            "schema docs missing {contract} for {command}"
+        );
+    }
+}
+
+#[test]
 fn agent_preflight_docs_cover_harness_launch_checks() {
     let docs = fs::read_to_string(repo_file("docs/agent-preflight.md")).unwrap();
 

@@ -424,7 +424,7 @@
   - [x] T33.1.2 Add snapshot coverage for preflight and evidence JSON payloads.
   - [x] T33.1.3 Add schema docs for raw SARIF outputs and version compatibility expectations.
 - **S33.2 Contract validation**
-  - [ ] T33.2.1 Add tests that schema docs mention every command introduced after EPIC 30.
+  - [x] T33.2.1 Add tests that schema docs mention every command introduced after EPIC 30.
   - [ ] T33.2.2 Add a contributor checklist item for schema updates when adding CLI output fields.
 
 ---
