@@ -122,6 +122,8 @@
   x86_64/aarch64 release asset selection.
 - Crates now include crates.io metadata, crate-local READMEs, a publishing
   runbook, and a CI package dry run.
+- A tap-ready Homebrew formula pins SHA-256 checksums for all four release
+  targets and is covered by metadata tests.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.

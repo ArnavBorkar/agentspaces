@@ -124,6 +124,7 @@ cargo install --git https://github.com/ArnavBorkar/agentspaces asp
 Requires `git` ≥ 2.32 on PATH (asp uses it as its storage engine — that's the trust model, not a shortcut).
 
 Release checksum signatures can be verified with Sigstore; see [docs/release-verification.md](docs/release-verification.md).
+The tap-ready Homebrew formula and update procedure are documented in [docs/homebrew.md](docs/homebrew.md).
 
 ## Project status & open-core boundary
 
