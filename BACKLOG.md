@@ -148,7 +148,7 @@
   - [ ] T11.1.2 Create a Homebrew tap formula with checksum verification.
   - [ ] T11.1.3 Add an npm/npx wrapper that downloads verified native binaries.
 - **S11.2 Installer resilience**
-  - [ ] T11.2.1 Add installer tests for macOS arm64/x86_64 and Linux x86_64/aarch64 selection.
+  - [x] T11.2.1 Add installer tests for macOS arm64/x86_64 and Linux x86_64/aarch64 selection.
   - [x] T11.2.2 Add checksum failure, unsupported platform, and offline-mode diagnostics.
 
 ## EPIC 12 — Cross-harness integrations

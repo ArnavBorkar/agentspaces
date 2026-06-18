@@ -118,6 +118,8 @@
 - `docs/secrets.md` documents secret scanning scope, redaction, and CI usage.
 - Local policy now supports `paths.deny_checkpoint` rules that block checkpoint
   capture of matching files with a corrective hint.
+- Installer smoke tests now verify macOS arm64/x86_64 and Linux
+  x86_64/aarch64 release asset selection.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.
