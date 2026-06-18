@@ -22,6 +22,14 @@ use serde_json::{json, Value};
 /// Tools whose completion should snapshot the tree.
 const FILE_TOOLS: &str = "Write|Edit|MultiEdit|NotebookEdit";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HookEvent {
+    pub event: String,
+    pub tool: String,
+    pub session_id: Option<String>,
+    pub cwd: PathBuf,
+}
+
 /// Entry point for `asp hook-event`. Reads Claude Code's hook payload from
 /// stdin. Exit code is always 0 — a state layer must never break the session.
 pub fn handle_hook_event() {
@@ -37,15 +45,38 @@ fn try_handle_hook_event() -> Result<(), Error> {
         .map_err(|e| Error::new(ErrorCode::Io, format!("stdin: {e}")))?;
     let payload: Value = serde_json::from_str(&input)
         .map_err(|e| Error::new(ErrorCode::Io, format!("hook payload not JSON: {e}")))?;
+    let event = parse_hook_payload(&payload)?;
 
+    // Not an asp workspace → silently do nothing (user-scope hooks fire in
+    // every project; that must be free of noise and side effects).
+    let Ok(ws) = Workspace::open(&event.cwd) else {
+        return Ok(());
+    };
+
+    let message = match event.event.as_str() {
+        "PreToolUse" => format!("auto: before {}", event.tool),
+        _ => format!("auto: after {}", event.tool),
+    };
+    ws.checkpoint(CheckpointOpts {
+        message: Some(message),
+        source: Some(Source::Hook),
+        session_id: event.session_id,
+        tool: Some(event.tool),
+    })?;
+    Ok(())
+}
+
+pub fn parse_hook_payload(payload: &Value) -> Result<HookEvent, Error> {
     let event = payload
         .get("hook_event_name")
         .and_then(|v| v.as_str())
-        .unwrap_or("");
+        .unwrap_or("")
+        .to_string();
     let tool = payload
         .get("tool_name")
         .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
+        .unwrap_or("unknown")
+        .to_string();
     let session_id = payload
         .get("session_id")
         .and_then(|v| v.as_str())
@@ -57,23 +88,12 @@ fn try_handle_hook_event() -> Result<(), Error> {
         .or_else(|| std::env::current_dir().ok())
         .ok_or_else(|| Error::new(ErrorCode::Io, "no cwd in hook payload"))?;
 
-    // Not an asp workspace → silently do nothing (user-scope hooks fire in
-    // every project; that must be free of noise and side effects).
-    let Ok(ws) = Workspace::open(&cwd) else {
-        return Ok(());
-    };
-
-    let message = match event {
-        "PreToolUse" => format!("auto: before {tool}"),
-        _ => format!("auto: after {tool}"),
-    };
-    ws.checkpoint(CheckpointOpts {
-        message: Some(message),
-        source: Some(Source::Hook),
+    Ok(HookEvent {
+        event,
+        tool,
         session_id,
-        tool: Some(tool.to_string()),
-    })?;
-    Ok(())
+        cwd,
+    })
 }
 
 #[derive(Debug, serde::Serialize)]

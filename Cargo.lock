@@ -78,6 +78,7 @@ dependencies = [
  "asp-core",
  "clap",
  "libc",
+ "proptest",
  "quick-xml",
  "serde",
  "serde_json",

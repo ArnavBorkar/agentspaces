@@ -108,6 +108,10 @@
   data, JSON output, conflict behavior, and current local-remote limit.
 - `SECURITY.md` now includes a threat model diagram, assets, trusted and
   untrusted inputs, in-scope vulnerability classes, and explicit non-goals.
+- Stable parser fuzz harnesses now cover config, journal, MCP `tools/call`
+  params, and Claude hook payload parsing in the normal test suite.
+- `docs/fuzzing.md` documents parser fuzzing coverage and longer local
+  proptest campaigns.
 
 ### Fixed
 

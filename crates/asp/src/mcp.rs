@@ -332,7 +332,7 @@ pub fn tool_definitions() -> Vec<Value> {
     ]
 }
 
-fn handle_tool_call(params: &Value) -> Result<Value, Value> {
+pub fn parse_tool_call_params(params: &Value) -> Result<(&str, Value), Value> {
     if !params.is_object() {
         return Err(invalid_params(
             "tools/call params must be an object with a string 'name'",
@@ -348,6 +348,11 @@ fn handle_tool_call(params: &Value) -> Result<Value, Value> {
             "tools/call 'arguments' must be an object when present",
         ));
     }
+    Ok((name, args))
+}
+
+fn handle_tool_call(params: &Value) -> Result<Value, Value> {
+    let (name, args) = parse_tool_call_params(params)?;
     match call_tool(name, &args) {
         Ok(payload) => Ok(json!({
             "content": [{ "type": "text", "text": payload.to_string() }],

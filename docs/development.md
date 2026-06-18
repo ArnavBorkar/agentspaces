@@ -132,6 +132,7 @@ Use focused tests while iterating, then finish with the full gate.
 | CLI output or JSON envelope | `cargo test -p asp --test cli` and `cargo test -p asp --test json_snapshots` | full gate |
 | MCP tools | `cargo test -p asp --test mcp` and `cargo test -p asp --test json_snapshots` | full gate |
 | Claude hooks | `cargo test -p asp --test hooks` | full gate |
+| Parser fuzzing | `cargo test -p asp --test fuzz_harnesses` (see [docs/fuzzing.md](fuzzing.md)) | full gate |
 | Release/dependency policy | `cargo deny check` | full gate |
 
 The torture suite intentionally spawns real `asp` processes and kills them. It
