@@ -22,6 +22,8 @@
   boundaries, command write behavior, residual risk, and evidence links.
 - `asp quickstart` prints a context-aware first-five-minutes workflow with
   human and JSON output.
+- `asp doctor --runbook` adds per-finding repair runbook links in human output
+  and a structured runbook catalog in JSON output.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

@@ -96,6 +96,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
 - **Manpage generation** — [docs/manpage.md](docs/manpage.md)
 - **Command cheat sheet** — [docs/cheatsheet.md](docs/cheatsheet.md)
+- **Doctor runbook** — [docs/doctor-runbook.md](docs/doctor-runbook.md)
 - **Open-core boundary policy** — [docs/open-core-boundary.md](docs/open-core-boundary.md)
 - **Local engine governance** — [docs/local-engine-governance.md](docs/local-engine-governance.md)
 - **Future control plane constraints** — [docs/control-plane-constraints.md](docs/control-plane-constraints.md)

@@ -36,6 +36,7 @@ run `asp checkpoint`.
 ```bash
 asp undo
 asp restore 1
+asp doctor --runbook
 asp doctor --explain
 ```
 

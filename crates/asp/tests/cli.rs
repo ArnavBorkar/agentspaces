@@ -319,6 +319,10 @@ fn doctor_explain_reports_cause_and_next_action() {
     assert!(human.contains("  next:"));
     assert!(human.contains("asp doctor --fix"));
 
+    let human_runbook = ok(&root, &["doctor", "--runbook"]);
+    assert!(human_runbook.contains("shadow git config"));
+    assert!(human_runbook.contains("runbook: docs/doctor-runbook.md#shadow-git-config-drift"));
+
     let json = ok_json(&root, &["doctor"]);
     let finding = json["result"]
         .as_array()
@@ -347,6 +351,32 @@ fn doctor_explain_reports_cause_and_next_action() {
     assert_eq!(finding["repair_plan"]["command"], "asp doctor --fix");
     assert_eq!(finding["repair_plan"]["destructive"], false);
     assert_eq!(finding["fixed"], false);
+
+    let runbook_json = ok_json(&root, &["doctor", "--runbook"]);
+    let runbook_finding = runbook_json["result"]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["message"]
+                .as_str()
+                .unwrap()
+                .contains("shadow git config core.compression")
+        })
+        .expect("shadow git config finding with runbook");
+    assert_eq!(
+        runbook_finding["runbook"]["link"],
+        "docs/doctor-runbook.md#shadow-git-config-drift"
+    );
+    assert_eq!(
+        runbook_finding["runbook"]["operations"][0],
+        "reset_shadow_git_config"
+    );
+    assert!(runbook_json["result"]["common_runbooks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|runbook| runbook["link"] == "docs/doctor-runbook.md#torn-journal-tail"));
 
     let fixed_json = ok_json(&root, &["doctor", "--fix"]);
     let fixed_finding = fixed_json["result"]

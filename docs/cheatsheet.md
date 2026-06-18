@@ -22,6 +22,7 @@ asp undo
 asp restore 12
 asp restore 12 path/to/file
 asp doctor --explain
+asp doctor --runbook
 asp doctor --fix
 ```
 

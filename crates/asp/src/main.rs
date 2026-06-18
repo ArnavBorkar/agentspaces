@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, find_root, FORMAT_VERSION};
-use asp_core::workspace::{CheckpointOpts, DiffTextMode, Severity};
+use asp_core::workspace::{CheckpointOpts, DiffTextMode, Finding, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
@@ -201,6 +201,9 @@ enum Cmd {
         /// Show cause and next action for each finding.
         #[arg(long)]
         explain: bool,
+        /// Show runbook links for common repair scenarios.
+        #[arg(long)]
+        runbook: bool,
     },
     /// Emit a redacted diagnostics bundle for issue reports and support.
     Diagnostics {
@@ -438,6 +441,26 @@ struct QuickstartStep {
 struct QuickstartDoc {
     title: &'static str,
     path: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DoctorRunbookReport {
+    findings: Vec<DoctorFindingWithRunbook>,
+    common_runbooks: Vec<DoctorRunbookLink>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DoctorFindingWithRunbook {
+    #[serde(flatten)]
+    finding: Finding,
+    runbook: DoctorRunbookLink,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct DoctorRunbookLink {
+    scenario: &'static str,
+    link: &'static str,
+    operations: &'static [&'static str],
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1485,15 +1508,27 @@ fn run(cli: Cli) -> Result<(), Error> {
             hooks::handle_hook_event();
             Ok(())
         }
-        Cmd::Doctor { fix, deep, explain } => {
+        Cmd::Doctor {
+            fix,
+            deep,
+            explain,
+            runbook,
+        } => {
             let ws = open(&cli.dir)?;
             let findings = ws.doctor(fix, deep)?;
             if json {
-                ui::print_json(true, &findings);
+                if runbook {
+                    ui::print_json(true, &doctor_runbook_report(&findings));
+                } else {
+                    ui::print_json(true, &findings);
+                }
                 return Ok(());
             }
             if findings.is_empty() {
                 println!("{} workspace is healthy", ui::green("✓"));
+                if runbook {
+                    print_common_doctor_runbooks();
+                }
                 return Ok(());
             }
             for f in &findings {
@@ -1511,6 +1546,10 @@ fn run(cli: Cli) -> Result<(), Error> {
                 if explain {
                     println!("  cause: {}", f.cause);
                     println!("  next: {}", f.next_action);
+                }
+                if runbook {
+                    let link = doctor_runbook_for_finding(f);
+                    println!("  runbook: {} ({})", ui::cyan(link.link), link.scenario);
                 }
             }
             if !fix && findings.iter().any(|f| !f.fixed) {
@@ -2595,6 +2634,154 @@ fn print_quickstart(report: &QuickstartReport) {
     println!("{}", ui::bold("Docs"));
     for doc in &report.docs {
         println!("  {} - {}", doc.title, doc.path);
+    }
+}
+
+const OPS_NONE: &[&str] = &[];
+const OPS_RESET_SHADOW_GIT_CONFIG: &[&str] = &["reset_shadow_git_config"];
+const OPS_TRUNCATE_TORN_JOURNAL_TAIL: &[&str] = &["truncate_torn_journal_tail"];
+const OPS_REPOINT_SHADOW_HEAD: &[&str] = &["repoint_shadow_head"];
+const OPS_MARK_MISSING_FORK_DISCARDED: &[&str] = &["mark_missing_fork_discarded"];
+const OPS_REMOVE_PENDING_FORK: &[&str] = &["remove_pending_fork"];
+const OPS_RECREATE_MISSING_CAS_BLOB: &[&str] = &["recreate_missing_cas_blob"];
+
+const DOCTOR_RUNBOOK_GENERAL: DoctorRunbookLink = DoctorRunbookLink {
+    scenario: "General doctor triage",
+    link: "docs/doctor-runbook.md#general-doctor-triage",
+    operations: OPS_NONE,
+};
+
+const DOCTOR_RUNBOOKS: &[DoctorRunbookLink] = &[
+    DoctorRunbookLink {
+        scenario: "Shadow git config drift",
+        link: "docs/doctor-runbook.md#shadow-git-config-drift",
+        operations: OPS_RESET_SHADOW_GIT_CONFIG,
+    },
+    DoctorRunbookLink {
+        scenario: "Torn journal tail",
+        link: "docs/doctor-runbook.md#torn-journal-tail",
+        operations: OPS_TRUNCATE_TORN_JOURNAL_TAIL,
+    },
+    DoctorRunbookLink {
+        scenario: "Shadow HEAD drift",
+        link: "docs/doctor-runbook.md#shadow-head-drift",
+        operations: OPS_REPOINT_SHADOW_HEAD,
+    },
+    DoctorRunbookLink {
+        scenario: "Missing active fork directory",
+        link: "docs/doctor-runbook.md#missing-active-fork-directory",
+        operations: OPS_MARK_MISSING_FORK_DISCARDED,
+    },
+    DoctorRunbookLink {
+        scenario: "Torn fork clone",
+        link: "docs/doctor-runbook.md#torn-fork-clone",
+        operations: OPS_REMOVE_PENDING_FORK,
+    },
+    DoctorRunbookLink {
+        scenario: "Missing CAS blob that can be recreated",
+        link: "docs/doctor-runbook.md#missing-cas-blob-recreatable",
+        operations: OPS_RECREATE_MISSING_CAS_BLOB,
+    },
+    DoctorRunbookLink {
+        scenario: "Journal CRC mismatch",
+        link: "docs/doctor-runbook.md#journal-crc-mismatch",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Missing checkpoint commit",
+        link: "docs/doctor-runbook.md#missing-checkpoint-commit",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Promoted fork cleanup",
+        link: "docs/doctor-runbook.md#promoted-fork-cleanup",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Unregistered fork-looking directory",
+        link: "docs/doctor-runbook.md#unregistered-fork-looking-directory",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Missing CAS blob and working file",
+        link: "docs/doctor-runbook.md#missing-cas-blob-and-working-file",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Corrupt CAS blob",
+        link: "docs/doctor-runbook.md#corrupt-cas-blob",
+        operations: OPS_NONE,
+    },
+    DoctorRunbookLink {
+        scenario: "Runtime prerequisite failure",
+        link: "docs/doctor-runbook.md#runtime-prerequisite-failure",
+        operations: OPS_NONE,
+    },
+    DOCTOR_RUNBOOK_GENERAL,
+];
+
+fn doctor_runbook_report(findings: &[Finding]) -> DoctorRunbookReport {
+    DoctorRunbookReport {
+        findings: findings
+            .iter()
+            .map(|finding| DoctorFindingWithRunbook {
+                finding: finding.clone(),
+                runbook: doctor_runbook_for_finding(finding),
+            })
+            .collect(),
+        common_runbooks: DOCTOR_RUNBOOKS.to_vec(),
+    }
+}
+
+fn doctor_runbook_for_finding(finding: &Finding) -> DoctorRunbookLink {
+    if let Some(plan) = &finding.repair_plan {
+        if let Some(link) = doctor_runbook_by_operation(&plan.operation) {
+            return link;
+        }
+    }
+
+    let message = &finding.message;
+    if message.contains("CRC mismatch") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#journal-crc-mismatch")
+    } else if message.contains("points at missing commit")
+        || (message.contains("journal records checkpoint") && message.contains("ref is missing"))
+    {
+        doctor_runbook_by_link("docs/doctor-runbook.md#missing-checkpoint-commit")
+    } else if message.contains("was promoted but its directory still exists") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#promoted-fork-cleanup")
+    } else if message.contains("looks like a fork of this workspace but is not in the registry") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#unregistered-fork-looking-directory")
+    } else if message.contains("CAS blob") && message.contains("is missing and the file is gone") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#missing-cas-blob-and-working-file")
+    } else if message.contains("CAS blob") && message.contains("is corrupt") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#corrupt-cas-blob")
+    } else if message.contains("hint:") {
+        doctor_runbook_by_link("docs/doctor-runbook.md#runtime-prerequisite-failure")
+    } else {
+        DOCTOR_RUNBOOK_GENERAL
+    }
+}
+
+fn doctor_runbook_by_operation(operation: &str) -> Option<DoctorRunbookLink> {
+    DOCTOR_RUNBOOKS
+        .iter()
+        .copied()
+        .find(|link| link.operations.contains(&operation))
+}
+
+fn doctor_runbook_by_link(link: &str) -> DoctorRunbookLink {
+    DOCTOR_RUNBOOKS
+        .iter()
+        .copied()
+        .find(|runbook| runbook.link == link)
+        .unwrap_or(DOCTOR_RUNBOOK_GENERAL)
+}
+
+fn print_common_doctor_runbooks() {
+    println!();
+    println!("{}", ui::bold("Common runbooks"));
+    for link in DOCTOR_RUNBOOKS {
+        println!("  {} - {}", link.scenario, ui::cyan(link.link));
     }
 }
 

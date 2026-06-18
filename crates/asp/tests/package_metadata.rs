@@ -117,6 +117,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
         "asp setup codex",
         "## Recover work",
         "asp restore 12 path/to/file",
+        "asp doctor --runbook",
         "## Run agent races",
         "asp race -n 3",
         "## Land a winner",
@@ -147,8 +148,30 @@ fn quickstart_docs_cover_safe_first_five_minutes() {
         "asp race -n 3 -- <agent command>",
         "asp promote <name>",
         "asp undo",
+        "asp doctor --runbook",
         "asp doctor --explain",
     ] {
         assert!(docs.contains(needle), "quickstart docs missing {needle}");
+    }
+}
+
+#[test]
+fn doctor_runbook_docs_cover_common_repair_scenarios() {
+    let docs = fs::read_to_string(repo_file("docs/doctor-runbook.md")).unwrap();
+
+    for needle in [
+        "asp doctor --runbook",
+        "## Shadow git config drift",
+        "## Torn journal tail",
+        "## Shadow HEAD drift",
+        "## Missing active fork directory",
+        "## Torn fork clone",
+        "## Missing CAS blob recreatable",
+        "## Journal CRC mismatch",
+        "## Missing checkpoint commit",
+        "## Corrupt CAS blob",
+        "asp diagnostics --output diagnostics.json",
+    ] {
+        assert!(docs.contains(needle), "doctor runbook missing {needle}");
     }
 }

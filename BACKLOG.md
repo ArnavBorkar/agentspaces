@@ -368,7 +368,7 @@
   - [x] T29.1.3 Add a command cheat sheet organized by daily workflows.
 - **S29.2 Guided workflows**
   - [x] T29.2.1 Add `asp quickstart` to print the safest first-five-minutes flow for the current directory.
-  - [ ] T29.2.2 Add `asp doctor --runbook` links for common repair scenarios.
+  - [x] T29.2.2 Add `asp doctor --runbook` links for common repair scenarios.
 
 ---
 
