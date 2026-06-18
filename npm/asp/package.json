@@ -1,0 +1,29 @@
+{
+  "name": "@agentspaces/asp",
+  "version": "0.1.1",
+  "description": "npx wrapper for agentspaces: durable, branchable workspaces for AI agents",
+  "license": "MIT OR Apache-2.0",
+  "homepage": "https://github.com/ArnavBorkar/agentspaces",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArnavBorkar/agentspaces.git",
+    "directory": "npm/asp"
+  },
+  "bugs": {
+    "url": "https://github.com/ArnavBorkar/agentspaces/issues"
+  },
+  "bin": {
+    "asp": "bin/asp.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

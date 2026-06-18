@@ -124,6 +124,8 @@
   runbook, and a CI package dry run.
 - A tap-ready Homebrew formula pins SHA-256 checksums for all four release
   targets and is covered by metadata tests.
+- `@agentspaces/asp` provides a dependency-free npm/npx wrapper that downloads,
+  verifies, caches, and execs native release binaries.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.
