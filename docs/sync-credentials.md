@@ -115,8 +115,10 @@ mutation to a sync writer.
 
 ## Azure Blob Storage
 
-Prefer a user delegation SAS or managed identity over an account key. For a SAS,
-scope it to a dedicated container when possible and use only:
+The Azure Blob adapter uses caller-provided SAS query strings and blob ETags for
+create-only and compare-and-swap writes. Prefer a user delegation SAS or managed
+identity over an account key. For a SAS, scope it to a dedicated container when
+possible and use only:
 
 ```text
 sp=rlcw

@@ -40,6 +40,13 @@ pub struct GcsRemote<T> {
     transport: T,
 }
 
+#[derive(Debug, Clone)]
+pub struct AzureBlobRemote<T> {
+    config: AzureBlobRemoteConfig,
+    endpoint: AzureBlobEndpoint,
+    transport: T,
+}
+
 #[derive(Clone)]
 pub struct S3RemoteConfig {
     pub endpoint: String,
@@ -143,6 +150,45 @@ impl GcsRemoteConfig {
     }
 }
 
+#[derive(Clone)]
+pub struct AzureBlobRemoteConfig {
+    pub endpoint: String,
+    pub container: String,
+    pub sas_token: String,
+    pub prefix: String,
+}
+
+impl fmt::Debug for AzureBlobRemoteConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AzureBlobRemoteConfig")
+            .field("endpoint", &self.endpoint)
+            .field("container", &self.container)
+            .field("sas_token", &"<redacted>")
+            .field("prefix", &self.prefix)
+            .finish()
+    }
+}
+
+impl AzureBlobRemoteConfig {
+    pub fn new(
+        endpoint: impl Into<String>,
+        container: impl Into<String>,
+        sas_token: impl Into<String>,
+    ) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            container: container.into(),
+            sas_token: sas_token.into(),
+            prefix: String::new(),
+        }
+    }
+
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum S3Method {
     Get,
@@ -162,6 +208,12 @@ impl S3Method {
 pub enum GcsMethod {
     Get,
     Post,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AzureBlobMethod {
+    Get,
+    Put,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,12 +294,55 @@ impl GcsResponse {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AzureBlobRequest {
+    pub method: AzureBlobMethod,
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AzureBlobResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+impl AzureBlobResponse {
+    pub fn new(
+        status: u16,
+        headers: Vec<(impl Into<String>, impl Into<String>)>,
+        body: Vec<u8>,
+    ) -> Self {
+        Self {
+            status,
+            headers: headers
+                .into_iter()
+                .map(|(name, value)| (name.into(), value.into()))
+                .collect(),
+            body,
+        }
+    }
+
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
+}
+
 pub trait S3Transport: Send + Sync {
     fn send(&self, request: S3Request) -> Result<S3Response>;
 }
 
 pub trait GcsTransport: Send + Sync {
     fn send(&self, request: GcsRequest) -> Result<GcsResponse>;
+}
+
+pub trait AzureBlobTransport: Send + Sync {
+    fn send(&self, request: AzureBlobRequest) -> Result<AzureBlobResponse>;
 }
 
 #[derive(Debug, Clone)]
@@ -259,6 +354,11 @@ struct S3Endpoint {
 
 #[derive(Debug, Clone)]
 struct GcsEndpoint {
+    origin: String,
+}
+
+#[derive(Debug, Clone)]
+struct AzureBlobEndpoint {
     origin: String,
 }
 
@@ -900,6 +1000,255 @@ impl<T: GcsTransport> SyncRemote for GcsRemote<T> {
     }
 }
 
+impl<T: AzureBlobTransport> AzureBlobRemote<T> {
+    pub fn new(mut config: AzureBlobRemoteConfig, transport: T) -> Result<Self> {
+        if config.container.trim().is_empty()
+            || config.container.contains('/')
+            || config.container.contains('\\')
+            || config.container.bytes().any(|b| b.is_ascii_control())
+        {
+            return Err(azure_config_error(
+                "Azure Blob container name must be non-empty and must not contain path separators",
+            ));
+        }
+        config.sas_token = config.sas_token.trim_start_matches('?').to_string();
+        if config.sas_token.trim().is_empty() {
+            return Err(azure_config_error("Azure Blob SAS token must be non-empty"));
+        }
+        config.prefix = normalize_remote_prefix(&config.prefix)?;
+        let endpoint = parse_azure_blob_endpoint(&config.endpoint)?;
+        Ok(Self {
+            config,
+            endpoint,
+            transport,
+        })
+    }
+
+    pub fn config(&self) -> &AzureBlobRemoteConfig {
+        &self.config
+    }
+
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+
+    fn get_request(&self, key: &str) -> Result<AzureBlobRequest> {
+        let scoped_key = self.scoped_key(key)?;
+        self.request(
+            AzureBlobMethod::Get,
+            Some(&scoped_key),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    fn list_request(&self, prefix: &str, marker: Option<&str>) -> Result<AzureBlobRequest> {
+        let mut query = vec![
+            ("comp".to_string(), "list".to_string()),
+            ("prefix".to_string(), self.scoped_list_prefix(prefix)?),
+            ("restype".to_string(), "container".to_string()),
+        ];
+        if let Some(marker) = marker {
+            query.push(("marker".to_string(), marker.to_string()));
+        }
+        self.request(AzureBlobMethod::Get, None, query, Vec::new(), Vec::new())
+    }
+
+    fn put_request(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        condition: (&str, &str),
+    ) -> Result<AzureBlobRequest> {
+        let scoped_key = self.scoped_key(key)?;
+        self.request(
+            AzureBlobMethod::Put,
+            Some(&scoped_key),
+            Vec::new(),
+            bytes.to_vec(),
+            vec![
+                ("x-ms-blob-type".to_string(), "BlockBlob".to_string()),
+                (condition.0.to_string(), condition.1.to_string()),
+            ],
+        )
+    }
+
+    fn request(
+        &self,
+        method: AzureBlobMethod,
+        key: Option<&str>,
+        query: Vec<(String, String)>,
+        body: Vec<u8>,
+        mut headers: Vec<(String, String)>,
+    ) -> Result<AzureBlobRequest> {
+        headers.push(("x-ms-version".to_string(), "2023-11-03".to_string()));
+        let path = if let Some(key) = key {
+            format!(
+                "/{}/{}",
+                percent_encode_path_segment(&self.config.container),
+                percent_encode_key_path(key)
+            )
+        } else {
+            format!("/{}", percent_encode_path_segment(&self.config.container))
+        };
+        Ok(AzureBlobRequest {
+            method,
+            url: self.url(&path, query),
+            headers,
+            body,
+        })
+    }
+
+    fn url(&self, path: &str, query: Vec<(String, String)>) -> String {
+        let mut query = canonical_query(&query);
+        if !self.config.sas_token.is_empty() {
+            if query.is_empty() {
+                query = self.config.sas_token.clone();
+            } else {
+                query.push('&');
+                query.push_str(&self.config.sas_token);
+            }
+        }
+        if query.is_empty() {
+            format!("{}{}", self.endpoint.origin, path)
+        } else {
+            format!("{}{}?{}", self.endpoint.origin, path, query)
+        }
+    }
+
+    fn scoped_key(&self, key: &str) -> Result<String> {
+        validate_key(key)?;
+        if self.config.prefix.is_empty() {
+            Ok(key.to_string())
+        } else {
+            Ok(format!("{}/{}", self.config.prefix, key))
+        }
+    }
+
+    fn scoped_list_prefix(&self, prefix: &str) -> Result<String> {
+        let prefix = normalize_prefix(prefix)?;
+        let scoped = match (self.config.prefix.is_empty(), prefix.is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => prefix,
+            (false, true) => format!("{}/", self.config.prefix),
+            (false, false) => format!("{}/{prefix}/", self.config.prefix),
+        };
+        if scoped.is_empty() || scoped.ends_with('/') {
+            Ok(scoped)
+        } else {
+            Ok(format!("{scoped}/"))
+        }
+    }
+
+    fn unscoped_key(&self, key: &str) -> Option<String> {
+        if self.config.prefix.is_empty() {
+            Some(key.to_string())
+        } else {
+            key.strip_prefix(&format!("{}/", self.config.prefix))
+                .map(|rest| rest.to_string())
+        }
+    }
+}
+
+impl<T: AzureBlobTransport> SyncRemote for AzureBlobRemote<T> {
+    fn get(&self, key: &str) -> Result<Option<RemoteObject>> {
+        let request = self.get_request(key)?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 => {
+                let version = azure_etag_version(&response, key)?;
+                Ok(Some(RemoteObject {
+                    bytes: response.body,
+                    version,
+                }))
+            }
+            404 => Ok(None),
+            status => Err(azure_status_error(status, format!("read blob '{key}'"))),
+        }
+    }
+
+    fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
+        let mut entries = Vec::new();
+        let mut marker = None;
+        loop {
+            let request = self.list_request(prefix, marker.as_deref())?;
+            let response = self.transport.send(request)?;
+            if response.status != 200 {
+                return Err(azure_status_error(
+                    response.status,
+                    format!("list prefix '{prefix}'"),
+                ));
+            }
+            let page = parse_azure_blob_list_page(&response.body)?;
+            for blob in page.blobs {
+                let Some(key) = self.unscoped_key(&blob.name) else {
+                    continue;
+                };
+                validate_key(&key)?;
+                entries.push(RemoteEntry {
+                    key,
+                    bytes: blob.size,
+                    version: RemoteVersion(blob.etag),
+                });
+            }
+            let Some(next) = page.next_marker.filter(|marker| !marker.is_empty()) else {
+                break;
+            };
+            marker = Some(next);
+        }
+        entries.sort_by(|a, b| a.key.cmp(&b.key));
+        Ok(entries)
+    }
+
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
+        let request = self.put_request(key, bytes, ("If-None-Match", "*"))?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 | 201 => Ok(PutOutcome::Created),
+            409 | 412 => match self.get(key)? {
+                Some(existing) if existing.bytes == bytes => Ok(PutOutcome::AlreadyExists),
+                Some(_) => Err(remote_corrupt(format!(
+                    "remote immutable key '{key}' already exists with different bytes"
+                ))),
+                None => Err(sync_conflict(format!(
+                    "remote immutable key '{key}' changed during conditional create"
+                ))),
+            },
+            status => Err(azure_status_error(
+                status,
+                format!("write immutable blob '{key}'"),
+            )),
+        }
+    }
+
+    fn put_if_match(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome> {
+        let Some(expected) = expected else {
+            return self.put_immutable(key, bytes);
+        };
+        let request = self.put_request(key, bytes, ("If-Match", expected.token()))?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 | 201 => Ok(PutOutcome::Replaced),
+            409 | 412 => Err(sync_conflict(format!(
+                "remote key '{key}' changed before conditional write"
+            ))),
+            404 => Err(sync_conflict(format!(
+                "remote key '{key}' is missing; conditional write expected an existing version"
+            ))),
+            status => Err(azure_status_error(
+                status,
+                format!("conditionally write blob '{key}'"),
+            )),
+        }
+    }
+}
+
 impl LocalRemote {
     pub fn open(root: impl AsRef<Path>) -> Result<Self> {
         std::fs::create_dir_all(root.as_ref())?;
@@ -1345,6 +1694,45 @@ fn parse_gcs_endpoint(endpoint: &str) -> Result<GcsEndpoint> {
     })
 }
 
+fn azure_config_error(message: impl Into<String>) -> Error {
+    Error::new(ErrorCode::Io, message)
+        .with_hint("fix the Azure Blob remote configuration and retry sync")
+}
+
+fn azure_status_error(status: u16, action: impl AsRef<str>) -> Error {
+    Error::new(
+        ErrorCode::Io,
+        format!(
+            "Azure Blob remote failed to {}: HTTP {status}",
+            action.as_ref()
+        ),
+    )
+    .with_hint("verify the endpoint, SAS token, container policy, and blob prefix")
+}
+
+fn parse_azure_blob_endpoint(endpoint: &str) -> Result<AzureBlobEndpoint> {
+    let endpoint = endpoint.trim().trim_end_matches('/');
+    let rest = endpoint
+        .strip_prefix("https://")
+        .or_else(|| endpoint.strip_prefix("http://"))
+        .ok_or_else(|| {
+            azure_config_error("Azure Blob endpoint must start with http:// or https://")
+        })?;
+    if rest.is_empty()
+        || rest.contains('/')
+        || rest.contains('?')
+        || rest.contains('#')
+        || rest.contains('@')
+    {
+        return Err(azure_config_error(
+            "Azure Blob endpoint must be an origin such as https://acct.blob.core.windows.net",
+        ));
+    }
+    Ok(AzureBlobEndpoint {
+        origin: endpoint.to_string(),
+    })
+}
+
 fn normalize_remote_prefix(prefix: &str) -> Result<String> {
     let prefix = prefix.trim_matches('/');
     if prefix.is_empty() {
@@ -1662,6 +2050,128 @@ fn parse_gcs_list_page(bytes: &[u8]) -> Result<GcsListPage> {
     })
 }
 
+fn azure_etag_version(response: &AzureBlobResponse, key: &str) -> Result<RemoteVersion> {
+    response
+        .header("etag")
+        .map(|etag| RemoteVersion(etag.to_string()))
+        .ok_or_else(|| {
+            remote_corrupt(format!(
+                "Azure Blob response for key '{key}' did not include an ETag version"
+            ))
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AzureBlobListPage {
+    blobs: Vec<AzureListedBlob>,
+    next_marker: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AzureListedBlob {
+    name: String,
+    size: u64,
+    etag: String,
+}
+
+fn parse_azure_blob_list_page(bytes: &[u8]) -> Result<AzureBlobListPage> {
+    use quick_xml::events::Event;
+    use quick_xml::reader::Reader;
+
+    let mut reader = Reader::from_reader(bytes);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut path = Vec::<String>::new();
+    let mut blobs = Vec::new();
+    let mut current = PartialAzureListedBlob::default();
+    let mut next_marker = None;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(event)) => {
+                path.push(String::from_utf8_lossy(event.name().as_ref()).to_string());
+            }
+            Ok(Event::End(event)) => {
+                let name = String::from_utf8_lossy(event.name().as_ref()).to_string();
+                if name == "Blob" && in_azure_blob(&path) {
+                    blobs.push(current.finish()?);
+                    current = PartialAzureListedBlob::default();
+                }
+                path.pop();
+            }
+            Ok(Event::Text(text)) => {
+                let value = text.decode().map_err(|e| {
+                    remote_corrupt(format!(
+                        "Azure Blob list response contains invalid text: {e}"
+                    ))
+                })?;
+                let Some(last) = path.last().map(String::as_str) else {
+                    buf.clear();
+                    continue;
+                };
+                if in_azure_blob(&path) {
+                    match last {
+                        "Name" => current.name = Some(value.into_owned()),
+                        "Etag" => current.etag = Some(value.into_owned()),
+                        "Content-Length" => {
+                            current.size = Some(value.parse::<u64>().map_err(|e| {
+                                remote_corrupt(format!(
+                                    "Azure Blob list object size is not numeric: {e}"
+                                ))
+                            })?)
+                        }
+                        _ => {}
+                    }
+                } else if last == "NextMarker" {
+                    next_marker = Some(value.into_owned());
+                }
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(e) => {
+                return Err(remote_corrupt(format!(
+                    "Azure Blob list response is not valid XML at byte {}: {e}",
+                    reader.error_position()
+                )));
+            }
+        }
+        buf.clear();
+    }
+
+    Ok(AzureBlobListPage { blobs, next_marker })
+}
+
+#[derive(Default)]
+struct PartialAzureListedBlob {
+    name: Option<String>,
+    size: Option<u64>,
+    etag: Option<String>,
+}
+
+impl PartialAzureListedBlob {
+    fn finish(&mut self) -> Result<AzureListedBlob> {
+        let name = self
+            .name
+            .take()
+            .ok_or_else(|| remote_corrupt("Azure Blob list object is missing a Name element"))?;
+        let size = self.size.take().ok_or_else(|| {
+            remote_corrupt(format!(
+                "Azure Blob list object '{name}' is missing a Content-Length element"
+            ))
+        })?;
+        let etag = self.etag.take().ok_or_else(|| {
+            remote_corrupt(format!(
+                "Azure Blob list object '{name}' is missing an Etag element"
+            ))
+        })?;
+        Ok(AzureListedBlob { name, size, etag })
+    }
+}
+
+fn in_azure_blob(path: &[String]) -> bool {
+    path.iter().any(|element| element == "Blob")
+}
+
 fn version_for(bytes: &[u8]) -> RemoteVersion {
     RemoteVersion(blake3::hash(bytes).to_hex().to_string())
 }
@@ -1686,6 +2196,12 @@ mod tests {
     struct RecordingGcsTransport {
         responses: Mutex<VecDeque<GcsResponse>>,
         requests: Mutex<Vec<GcsRequest>>,
+    }
+
+    #[derive(Debug)]
+    struct RecordingAzureBlobTransport {
+        responses: Mutex<VecDeque<AzureBlobResponse>>,
+        requests: Mutex<Vec<AzureBlobRequest>>,
     }
 
     impl RecordingS3Transport {
@@ -1732,6 +2248,31 @@ mod tests {
         }
     }
 
+    impl RecordingAzureBlobTransport {
+        fn new(responses: Vec<AzureBlobResponse>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into()),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<AzureBlobRequest> {
+            self.requests.lock().unwrap().clone()
+        }
+    }
+
+    impl AzureBlobTransport for RecordingAzureBlobTransport {
+        fn send(&self, request: AzureBlobRequest) -> Result<AzureBlobResponse> {
+            self.requests.lock().unwrap().push(request);
+            self.responses.lock().unwrap().pop_front().ok_or_else(|| {
+                Error::new(
+                    ErrorCode::Io,
+                    "mock Azure Blob transport has no queued response",
+                )
+            })
+        }
+    }
+
     fn test_s3_remote(responses: Vec<S3Response>) -> S3Remote<RecordingS3Transport> {
         S3Remote::new(
             S3RemoteConfig::new(
@@ -1755,6 +2296,21 @@ mod tests {
         .unwrap()
     }
 
+    fn test_azure_remote(
+        responses: Vec<AzureBlobResponse>,
+    ) -> AzureBlobRemote<RecordingAzureBlobTransport> {
+        AzureBlobRemote::new(
+            AzureBlobRemoteConfig::new(
+                "https://acct.blob.core.windows.net",
+                "team-container",
+                "?sv=2024-11-04&sig=abc%2B123",
+            )
+            .with_prefix("/team-a/asp/"),
+            RecordingAzureBlobTransport::new(responses),
+        )
+        .unwrap()
+    }
+
     fn request_header<'a>(request: &'a S3Request, name: &str) -> &'a str {
         request
             .headers
@@ -1765,6 +2321,15 @@ mod tests {
     }
 
     fn gcs_request_header<'a>(request: &'a GcsRequest, name: &str) -> &'a str {
+        request
+            .headers
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+            .unwrap_or_else(|| panic!("missing request header {name}"))
+    }
+
+    fn azure_request_header<'a>(request: &'a AzureBlobRequest, name: &str) -> &'a str {
         request
             .headers
             .iter()
@@ -2175,6 +2740,153 @@ mod tests {
     }
 
     #[test]
+    fn azure_blob_remote_uploads_immutable_with_match_condition() {
+        let remote = test_azure_remote(vec![AzureBlobResponse::new(
+            201,
+            vec![("ETag", "\"etag-one\"")],
+            Vec::new(),
+        )]);
+
+        assert_eq!(
+            remote
+                .put_immutable("objects/git/sha1/aa/1111", b"one")
+                .unwrap(),
+            PutOutcome::Created
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        assert_eq!(request.method, AzureBlobMethod::Put);
+        assert_eq!(
+            request.url,
+            "https://acct.blob.core.windows.net/team-container/team-a/asp/objects/git/sha1/aa/1111?sv=2024-11-04&sig=abc%2B123"
+        );
+        assert_eq!(request.body, b"one");
+        assert_eq!(azure_request_header(request, "If-None-Match"), "*");
+        assert_eq!(azure_request_header(request, "x-ms-blob-type"), "BlockBlob");
+        assert_eq!(azure_request_header(request, "x-ms-version"), "2023-11-03");
+    }
+
+    #[test]
+    fn azure_blob_remote_treats_same_immutable_bytes_as_present() {
+        let remote = test_azure_remote(vec![
+            AzureBlobResponse::new(412, Vec::<(&str, &str)>::new(), Vec::new()),
+            AzureBlobResponse::new(200, vec![("ETag", "\"etag-one\"")], b"one".to_vec()),
+        ]);
+
+        assert_eq!(
+            remote
+                .put_immutable("objects/git/sha1/aa/1111", b"one")
+                .unwrap(),
+            PutOutcome::AlreadyExists
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].method, AzureBlobMethod::Put);
+        assert_eq!(requests[1].method, AzureBlobMethod::Get);
+        assert_eq!(
+            requests[1].url,
+            "https://acct.blob.core.windows.net/team-container/team-a/asp/objects/git/sha1/aa/1111?sv=2024-11-04&sig=abc%2B123"
+        );
+    }
+
+    #[test]
+    fn azure_blob_remote_uses_etags_for_conditional_ref_writes() {
+        let remote = test_azure_remote(vec![
+            AzureBlobResponse::new(201, Vec::<(&str, &str)>::new(), Vec::new()),
+            AzureBlobResponse::new(412, Vec::<(&str, &str)>::new(), Vec::new()),
+        ]);
+        let version = RemoteVersion("\"head-v1\"".to_string());
+
+        assert_eq!(
+            remote
+                .put_if_match("refs/head.json", br#"{"seq":2}"#, Some(&version))
+                .unwrap(),
+            PutOutcome::Replaced
+        );
+        let stale = remote
+            .put_if_match("refs/head.json", br#"{"seq":3}"#, Some(&version))
+            .unwrap_err();
+        assert_eq!(stale.code, ErrorCode::SyncConflict);
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(
+            azure_request_header(&requests[0], "If-Match"),
+            "\"head-v1\""
+        );
+        assert_eq!(
+            azure_request_header(&requests[1], "If-Match"),
+            "\"head-v1\""
+        );
+    }
+
+    #[test]
+    fn azure_blob_remote_lists_paginated_prefixed_objects() {
+        let first_page = br#"
+            <EnumerationResults>
+              <Blobs>
+                <Blob>
+                  <Name>team-a/asp/objects/git/sha1/aa/1111</Name>
+                  <Properties>
+                    <Content-Length>3</Content-Length>
+                    <Etag>"etag-git"</Etag>
+                  </Properties>
+                </Blob>
+              </Blobs>
+              <NextMarker>next-marker</NextMarker>
+            </EnumerationResults>
+        "#;
+        let second_page = br#"
+            <EnumerationResults>
+              <Blobs>
+                <Blob>
+                  <Name>team-a/asp/objects/blobs/blake3/bbbb</Name>
+                  <Properties>
+                    <Content-Length>4</Content-Length>
+                    <Etag>"etag-blob"</Etag>
+                  </Properties>
+                </Blob>
+              </Blobs>
+              <NextMarker></NextMarker>
+            </EnumerationResults>
+        "#;
+        let remote = test_azure_remote(vec![
+            AzureBlobResponse::new(200, Vec::<(&str, &str)>::new(), first_page.to_vec()),
+            AzureBlobResponse::new(200, Vec::<(&str, &str)>::new(), second_page.to_vec()),
+        ]);
+
+        let entries = remote.list("objects").unwrap();
+        assert_eq!(
+            entries,
+            vec![
+                RemoteEntry {
+                    key: "objects/blobs/blake3/bbbb".to_string(),
+                    bytes: 4,
+                    version: RemoteVersion("\"etag-blob\"".to_string())
+                },
+                RemoteEntry {
+                    key: "objects/git/sha1/aa/1111".to_string(),
+                    bytes: 3,
+                    version: RemoteVersion("\"etag-git\"".to_string())
+                }
+            ]
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(
+            requests[0].url,
+            "https://acct.blob.core.windows.net/team-container?comp=list&prefix=team-a%2Fasp%2Fobjects%2F&restype=container&sv=2024-11-04&sig=abc%2B123"
+        );
+        assert_eq!(
+            requests[1].url,
+            "https://acct.blob.core.windows.net/team-container?comp=list&marker=next-marker&prefix=team-a%2Fasp%2Fobjects%2F&restype=container&sv=2024-11-04&sig=abc%2B123"
+        );
+    }
+
+    #[test]
     fn s3_config_debug_redacts_secrets() {
         let debug = format!(
             "{:?}",
@@ -2204,5 +2916,20 @@ mod tests {
 
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("super-secret-token"));
+    }
+
+    #[test]
+    fn azure_blob_config_debug_redacts_sas_token() {
+        let debug = format!(
+            "{:?}",
+            AzureBlobRemoteConfig::new(
+                "https://acct.blob.core.windows.net",
+                "team-container",
+                "sv=2024-11-04&sig=super-secret-sas",
+            )
+        );
+
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("super-secret-sas"));
     }
 }
