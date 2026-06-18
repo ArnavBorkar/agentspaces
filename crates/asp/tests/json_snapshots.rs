@@ -78,6 +78,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
         "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
+        "cli_policy_explain" => include_str!("snapshots/cli_policy_explain.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_review" => include_str!("snapshots/cli_review.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
@@ -363,6 +364,38 @@ fn cli_config_shapes_match_snapshots() {
         &root,
     );
     snapshot("cli_config_diff", config_diff);
+}
+
+#[test]
+fn cli_policy_explain_shape_matches_snapshot() {
+    let (_tmp, root) = project();
+    ok_json(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        r#"[forks]
+max_active = 4
+
+[checkpoints]
+max_age_hours = 12
+
+[paths]
+protected = ["src/security/**"]
+deny_checkpoint = [".env", "**/*.pem"]
+
+[promote]
+require_clean_status = true
+require_checkpoint = true
+allowed_branch_prefixes = ["asp/", "review/"]
+
+[retention]
+keep_last = 20
+max_age_days = 30
+"#,
+    )
+    .unwrap();
+
+    let explain = normalize(ok_json(&root, &["policy", "explain"]), &root);
+    snapshot("cli_policy_explain", explain);
 }
 
 #[test]

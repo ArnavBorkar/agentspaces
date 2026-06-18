@@ -59,6 +59,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp manpage --json` | `#/$defs/manpageResult` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
+| `asp policy explain --json` | `#/$defs/policyExplainReport` |
 | `asp preflight --json` | `#/$defs/preflightReport` |
 | `asp secrets scan --json` | `#/$defs/secretScanReport` |
 | `asp evidence collect --json` | `#/$defs/evidenceReport` |
@@ -146,6 +147,11 @@ config files fail through the standard CLI error envelope with a corrective
 `matches` plus field-level `changes[]` entries for raw config fields and derived
 effective fields. The `--against` file is required and missing files fail
 through the standard error envelope instead of comparing against defaults.
+
+`asp policy explain --json` returns `policyExplainReport` with active
+`rules[]`. Each rule has `field`, `value`, human-readable `reason`, affected
+commands in `affects`, and an `enforced` timing note. Multi-value path and branch
+prefix settings are emitted as one rule per configured value.
 
 `asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
 git-object, CAS-blob, and ref counts split into uploaded/present/updated

@@ -29,6 +29,7 @@
     { "$ref": "#/$defs/manpageResult" },
     { "$ref": "#/$defs/noChanges" },
     { "$ref": "#/$defs/opencodeSetupReport" },
+    { "$ref": "#/$defs/policyExplainReport" },
     { "$ref": "#/$defs/policyValidateReport" },
     { "$ref": "#/$defs/preflightReport" },
     { "$ref": "#/$defs/promoteReport" },
@@ -931,6 +932,47 @@
         "path": { "type": "string" },
         "valid": { "const": true },
         "policy": { "$ref": "#/$defs/workspacePolicy" }
+      }
+    },
+    "policyExplainReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "valid", "rules"],
+      "properties": {
+        "path": { "type": "string" },
+        "valid": { "const": true },
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/policyExplanation" }
+        }
+      }
+    },
+    "policyExplanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "value", "reason", "affects", "enforced"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "forks.max_active",
+            "checkpoints.max_age_hours",
+            "paths.protected",
+            "paths.deny_checkpoint",
+            "promote.require_clean_status",
+            "promote.require_checkpoint",
+            "promote.allowed_branch_prefixes",
+            "retention.keep_last",
+            "retention.max_age_days"
+          ]
+        },
+        "value": true,
+        "reason": { "type": "string" },
+        "affects": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "enforced": { "type": "string" }
       }
     },
     "preflightReport": {

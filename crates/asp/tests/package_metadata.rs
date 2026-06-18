@@ -367,6 +367,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "diffHtmlOutputResult",
         "asp doctor --json --runbook",
         "doctorRunbookReport",
+        "asp policy explain --json",
+        "policyExplainReport",
         "asp evidence manifest --packet file.json --output manifest.json --json",
         "evidenceManifestOutputResult",
         "asp evidence verify --packet file.json --manifest manifest.json --json",
@@ -539,6 +541,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp manpage --json",
         "asp audit --json",
         "asp policy validate --json",
+        "asp policy explain --json",
         "asp preflight --json",
         "asp secrets scan --json",
         "asp evidence collect --json",
@@ -621,6 +624,12 @@ fn policy_docs_cover_config_pairing_for_promotion_rules() {
         "## Config Pairing",
         "asp --json config show > asp-config.json",
         "asp policy validate --json > asp-policy.json",
+        "asp policy explain",
+        "asp policy explain --json",
+        "#/$defs/policyExplainReport",
+        "`rules[]` entries",
+        "`field`, `value`, `reason`, `affects`, and `enforced`",
+        "which commands it affects",
         "asp-config.json.result.config.promote.branch_template",
         "asp-policy.json.result.policy.promote.allowed_branch_prefixes",
         "\"branch_template\": \"review/{workspace}/{fork}\"",
@@ -629,6 +638,21 @@ fn policy_docs_cover_config_pairing_for_promotion_rules() {
     ] {
         assert!(docs.contains(needle), "policy docs missing {needle}");
     }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in ["policyExplainReport", "policyExplanation"] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    assert!(
+        variants
+            .iter()
+            .any(|variant| variant["$ref"].as_str() == Some("#/$defs/policyExplainReport")),
+        "result schema anyOf missing policyExplainReport"
+    );
 }
 
 #[test]

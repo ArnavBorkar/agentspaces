@@ -473,6 +473,8 @@ struct SecretsScanArgs {
 enum PolicyCmd {
     /// Validate `.asp/policy.toml` and print the resolved policy.
     Validate,
+    /// Explain active policy rules and the commands they affect.
+    Explain,
 }
 
 #[derive(Subcommand)]
@@ -788,6 +790,22 @@ struct PolicyValidateReport {
     path: PathBuf,
     valid: bool,
     policy: asp_core::policy::Policy,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PolicyExplainReport {
+    path: PathBuf,
+    valid: bool,
+    rules: Vec<PolicyExplanation>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PolicyExplanation {
+    field: &'static str,
+    value: serde_json::Value,
+    reason: &'static str,
+    affects: &'static [&'static str],
+    enforced: &'static str,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1175,26 +1193,22 @@ fn run(cli: Cli) -> Result<(), Error> {
         Cmd::Policy { command } => match command {
             PolicyCmd::Validate => {
                 let ws = open(&cli.dir)?;
-                let report = PolicyValidateReport {
-                    path: ws.root().join(".asp/policy.toml"),
-                    valid: true,
-                    policy: ws.policy.clone(),
-                };
+                let report = policy_validate_report(&ws);
                 if json {
                     ui::print_json(true, &report);
                     return Ok(());
                 }
-                println!(
-                    "{} policy valid: {}",
-                    ui::green("✓"),
-                    ui::bold(&report.path.display().to_string())
-                );
-                let rules = policy_rule_count(&report.policy);
-                if rules == 0 {
-                    println!("  {}", ui::dim("no local policy rules are set"));
-                } else {
-                    println!("  active rules: {rules}");
+                print_policy_validate(&report);
+                Ok(())
+            }
+            PolicyCmd::Explain => {
+                let ws = open(&cli.dir)?;
+                let report = policy_explain_report(&ws);
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
                 }
+                print_policy_explain(&report);
                 Ok(())
             }
         },
@@ -2952,6 +2966,184 @@ fn policy_rule_count(policy: &asp_core::policy::Policy) -> usize {
         + usize::from(policy.promote.require_clean_status)
         + usize::from(policy.promote.require_checkpoint)
         + policy.promote.allowed_branch_prefixes.len()
+        + usize::from(policy.retention.keep_last.is_some())
+        + usize::from(policy.retention.max_age_days.is_some())
+}
+
+fn policy_validate_report(ws: &Workspace) -> PolicyValidateReport {
+    PolicyValidateReport {
+        path: ws.root().join(".asp/policy.toml"),
+        valid: true,
+        policy: ws.policy.clone(),
+    }
+}
+
+fn print_policy_validate(report: &PolicyValidateReport) {
+    println!(
+        "{} policy valid: {}",
+        ui::green("✓"),
+        ui::bold(&report.path.display().to_string())
+    );
+    let rules = policy_rule_count(&report.policy);
+    if rules == 0 {
+        println!("  {}", ui::dim("no local policy rules are set"));
+    } else {
+        println!("  active rules: {rules}");
+    }
+}
+
+fn policy_explain_report(ws: &Workspace) -> PolicyExplainReport {
+    PolicyExplainReport {
+        path: ws.root().join(".asp/policy.toml"),
+        valid: true,
+        rules: policy_explanations(&ws.policy),
+    }
+}
+
+fn policy_explanations(policy: &asp_core::policy::Policy) -> Vec<PolicyExplanation> {
+    let mut rules = Vec::new();
+    if let Some(value) = policy.forks.max_active {
+        push_policy_explanation(
+            &mut rules,
+            "forks.max_active",
+            &value,
+            "limits concurrent agent fan-out so reviews and cleanup stay bounded",
+            &["asp fork", "asp race"],
+            "before fork-point checkpoint capture or clone creation",
+        );
+    }
+    if let Some(value) = policy.checkpoints.max_age_hours {
+        push_policy_explanation(
+            &mut rules,
+            "checkpoints.max_age_hours",
+            &value,
+            "keeps risky operations anchored to a recent recoverable checkpoint",
+            &["asp fork", "asp restore", "asp undo", "asp promote"],
+            "before fork, restore, undo, or promote proceeds",
+        );
+    }
+    for pattern in &policy.paths.protected {
+        push_policy_explanation(
+            &mut rules,
+            "paths.protected",
+            pattern,
+            "protects sensitive or high-blast-radius paths from broad restore and promote operations",
+            &["asp restore", "asp undo", "asp promote"],
+            "after touched paths are known and before workspace writes or branch creation",
+        );
+    }
+    for pattern in &policy.paths.deny_checkpoint {
+        push_policy_explanation(
+            &mut rules,
+            "paths.deny_checkpoint",
+            pattern,
+            "keeps known secret or non-recoverable local files out of checkpoints",
+            &[
+                "asp checkpoint",
+                "asp fork",
+                "asp restore",
+                "asp undo",
+                "asp race",
+            ],
+            "during checkpoint capture, including safety and fork-point checkpoints",
+        );
+    }
+    if policy.promote.require_clean_status {
+        push_policy_explanation(
+            &mut rules,
+            "promote.require_clean_status",
+            &true,
+            "prevents landing a fork while the main workspace has unrelated local changes",
+            &["asp promote"],
+            "before the promoted branch is created",
+        );
+    }
+    if policy.promote.require_checkpoint {
+        push_policy_explanation(
+            &mut rules,
+            "promote.require_checkpoint",
+            &true,
+            "requires at least one checkpoint before a fork is landed into user git",
+            &["asp promote"],
+            "before the promoted branch is created",
+        );
+    }
+    for prefix in &policy.promote.allowed_branch_prefixes {
+        push_policy_explanation(
+            &mut rules,
+            "promote.allowed_branch_prefixes",
+            prefix,
+            "keeps promoted branches inside reviewable team-owned namespaces",
+            &["asp promote"],
+            "after the final branch name is resolved and before branch creation",
+        );
+    }
+    if let Some(value) = policy.retention.keep_last {
+        push_policy_explanation(
+            &mut rules,
+            "retention.keep_last",
+            &value,
+            "keeps a minimum recovery window even when older checkpoints are eligible",
+            &["asp retention plan"],
+            "during non-mutating retention planning",
+        );
+    }
+    if let Some(value) = policy.retention.max_age_days {
+        push_policy_explanation(
+            &mut rules,
+            "retention.max_age_days",
+            &value,
+            "marks old checkpoints as eligible while retaining protected recovery points",
+            &["asp retention plan"],
+            "during non-mutating retention planning",
+        );
+    }
+    rules
+}
+
+fn push_policy_explanation<T: serde::Serialize + ?Sized>(
+    rules: &mut Vec<PolicyExplanation>,
+    field: &'static str,
+    value: &T,
+    reason: &'static str,
+    affects: &'static [&'static str],
+    enforced: &'static str,
+) {
+    rules.push(PolicyExplanation {
+        field,
+        value: serde_json::to_value(value).expect("policy explanation value serializes"),
+        reason,
+        affects,
+        enforced,
+    });
+}
+
+fn print_policy_explain(report: &PolicyExplainReport) {
+    println!(
+        "{} policy explain: {}",
+        ui::green("✓"),
+        ui::bold(&report.path.display().to_string())
+    );
+    if report.rules.is_empty() {
+        println!("  {}", ui::dim("no local policy rules are set"));
+        return;
+    }
+
+    println!("  active rules: {}", report.rules.len());
+    for rule in &report.rules {
+        println!("  {}", ui::bold(rule.field));
+        println!("    value: {}", policy_explain_value_text(&rule.value));
+        println!("    why: {}", rule.reason);
+        println!("    affects: {}", rule.affects.join(", "));
+        println!("    enforced: {}", rule.enforced);
+    }
+}
+
+fn policy_explain_value_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        _ => serde_json::to_string(value).expect("policy explanation value encodes"),
+    }
 }
 
 fn review_report(ws: &Workspace) -> Result<ReviewReport, Error> {

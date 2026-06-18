@@ -49,6 +49,19 @@ Run `asp policy validate` to check the policy without attempting a workspace
 mutation. Add `--json` for CI or agent harnesses; a valid policy returns
 `#/$defs/policyValidateReport` from [docs/schemas.md](schemas.md).
 
+Run `asp policy explain` when reviewers need to understand why each active rule
+exists and which commands it affects:
+
+```bash
+asp policy explain
+asp policy explain --json
+```
+
+The JSON form returns `#/$defs/policyExplainReport` with `rules[]` entries that
+include `field`, `value`, `reason`, `affects`, and `enforced`. Path and branch
+prefix arrays are explained one entry at a time so owners can review each
+pattern independently.
+
 - Unknown tables or keys are rejected.
 - `forks.max_active` and `checkpoints.max_age_hours` must be greater than zero
   when set.

@@ -481,7 +481,7 @@ repeatable defaults, reviewable policy, and minimal per-repo hand editing.
   - [x] T36.1.5 Document a rollout checklist for adding `asp` to 10+ repos safely.
 - **S36.2 Organization rollout controls**
   - [x] T36.2.1 Add `asp config diff --against <file>` for reviewing local config drift.
-  - [ ] T36.2.2 Add `asp policy explain` to show why each rule exists and which commands it affects.
+  - [x] T36.2.2 Add `asp policy explain` to show why each rule exists and which commands it affects.
   - [ ] T36.2.3 Add org policy bundle examples for regulated, startup, and OSS maintainer workflows.
   - [ ] T36.2.4 Add CI examples that fail on unsafe config drift without mutating workspaces.
   - [ ] T36.2.5 Add docs for phased rollout, rollback, and owner handoff.

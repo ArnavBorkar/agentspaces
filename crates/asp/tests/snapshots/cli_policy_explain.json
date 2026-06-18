@@ -1,0 +1,122 @@
+{
+  "ok": true,
+  "result": {
+    "path": "<workspace-root>/.asp/policy.toml",
+    "rules": [
+      {
+        "affects": [
+          "asp fork",
+          "asp race"
+        ],
+        "enforced": "before fork-point checkpoint capture or clone creation",
+        "field": "forks.max_active",
+        "reason": "limits concurrent agent fan-out so reviews and cleanup stay bounded",
+        "value": 4
+      },
+      {
+        "affects": [
+          "asp fork",
+          "asp restore",
+          "asp undo",
+          "asp promote"
+        ],
+        "enforced": "before fork, restore, undo, or promote proceeds",
+        "field": "checkpoints.max_age_hours",
+        "reason": "keeps risky operations anchored to a recent recoverable checkpoint",
+        "value": 12
+      },
+      {
+        "affects": [
+          "asp restore",
+          "asp undo",
+          "asp promote"
+        ],
+        "enforced": "after touched paths are known and before workspace writes or branch creation",
+        "field": "paths.protected",
+        "reason": "protects sensitive or high-blast-radius paths from broad restore and promote operations",
+        "value": "src/security/**"
+      },
+      {
+        "affects": [
+          "asp checkpoint",
+          "asp fork",
+          "asp restore",
+          "asp undo",
+          "asp race"
+        ],
+        "enforced": "during checkpoint capture, including safety and fork-point checkpoints",
+        "field": "paths.deny_checkpoint",
+        "reason": "keeps known secret or non-recoverable local files out of checkpoints",
+        "value": ".env"
+      },
+      {
+        "affects": [
+          "asp checkpoint",
+          "asp fork",
+          "asp restore",
+          "asp undo",
+          "asp race"
+        ],
+        "enforced": "during checkpoint capture, including safety and fork-point checkpoints",
+        "field": "paths.deny_checkpoint",
+        "reason": "keeps known secret or non-recoverable local files out of checkpoints",
+        "value": "**/*.pem"
+      },
+      {
+        "affects": [
+          "asp promote"
+        ],
+        "enforced": "before the promoted branch is created",
+        "field": "promote.require_clean_status",
+        "reason": "prevents landing a fork while the main workspace has unrelated local changes",
+        "value": true
+      },
+      {
+        "affects": [
+          "asp promote"
+        ],
+        "enforced": "before the promoted branch is created",
+        "field": "promote.require_checkpoint",
+        "reason": "requires at least one checkpoint before a fork is landed into user git",
+        "value": true
+      },
+      {
+        "affects": [
+          "asp promote"
+        ],
+        "enforced": "after the final branch name is resolved and before branch creation",
+        "field": "promote.allowed_branch_prefixes",
+        "reason": "keeps promoted branches inside reviewable team-owned namespaces",
+        "value": "asp/"
+      },
+      {
+        "affects": [
+          "asp promote"
+        ],
+        "enforced": "after the final branch name is resolved and before branch creation",
+        "field": "promote.allowed_branch_prefixes",
+        "reason": "keeps promoted branches inside reviewable team-owned namespaces",
+        "value": "review/"
+      },
+      {
+        "affects": [
+          "asp retention plan"
+        ],
+        "enforced": "during non-mutating retention planning",
+        "field": "retention.keep_last",
+        "reason": "keeps a minimum recovery window even when older checkpoints are eligible",
+        "value": 20
+      },
+      {
+        "affects": [
+          "asp retention plan"
+        ],
+        "enforced": "during non-mutating retention planning",
+        "field": "retention.max_age_days",
+        "reason": "marks old checkpoints as eligible while retaining protected recovery points",
+        "value": 30
+      }
+    ],
+    "valid": true
+  }
+}

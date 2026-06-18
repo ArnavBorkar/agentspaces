@@ -11,6 +11,8 @@ security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 
 - `asp config show --json`, `asp config validate --json`, and
   `asp config diff --against <file> --json`
+- `asp policy validate --json` (`policyValidateReport`) and
+  `asp policy explain --json` (`policyExplainReport`)
 - `asp quickstart --json`
 - `asp completions <shell> --json`
 - `asp manpage --json`

@@ -887,6 +887,72 @@ fn policy_validate_reports_invalid_policy() {
 }
 
 #[test]
+fn policy_explain_reports_active_rules_and_affected_commands() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/policy.toml"),
+        r#"[forks]
+max_active = 4
+
+[checkpoints]
+max_age_hours = 12
+
+[paths]
+protected = ["src/security/**"]
+deny_checkpoint = [".env", "**/*.pem"]
+
+[promote]
+require_clean_status = true
+require_checkpoint = true
+allowed_branch_prefixes = ["asp/", "review/"]
+
+[retention]
+keep_last = 20
+max_age_days = 30
+"#,
+    )
+    .unwrap();
+
+    let human = ok(&root, &["policy", "explain"]);
+    assert!(human.contains("policy explain"), "{human}");
+    assert!(human.contains("forks.max_active"), "{human}");
+    assert!(human.contains("paths.protected"), "{human}");
+    assert!(human.contains("src/security/**"), "{human}");
+    assert!(human.contains("asp restore"), "{human}");
+    assert!(human.contains("promote.allowed_branch_prefixes"), "{human}");
+    assert!(human.contains("retention.keep_last"), "{human}");
+
+    let json = ok_json(&root, &["policy", "explain"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["valid"], true);
+    let rules = json["result"]["rules"].as_array().unwrap();
+    assert_eq!(rules.len(), 11);
+    let protected = rules
+        .iter()
+        .find(|rule| rule["field"] == "paths.protected")
+        .unwrap();
+    assert_eq!(protected["value"], "src/security/**");
+    assert!(protected["affects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|command| command == "asp promote"));
+    assert!(protected["reason"]
+        .as_str()
+        .unwrap()
+        .contains("high-blast-radius"));
+
+    let empty = tempfile::tempdir().unwrap();
+    let empty_root = empty.path().join("empty-policy");
+    std::fs::create_dir_all(&empty_root).unwrap();
+    ok(&empty_root, &["init"]);
+    let empty_json = ok_json(&empty_root, &["policy", "explain"]);
+    assert!(empty_json["result"]["rules"].as_array().unwrap().is_empty());
+    assert!(ok(&empty_root, &["policy", "explain"]).contains("no local policy rules"));
+}
+
+#[test]
 fn secrets_scan_reports_redacted_findings() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);
