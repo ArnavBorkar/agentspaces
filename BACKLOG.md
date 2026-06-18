@@ -496,7 +496,7 @@ the project.
   - [x] T37.1.1 Add an S3-compatible remote adapter behind the existing sync trait.
   - [x] T37.1.2 Add a GCS remote adapter with conditional-write tests.
   - [x] T37.1.3 Add an Azure Blob remote adapter with conditional-write tests.
-  - [ ] T37.1.4 Add integration-test fixtures that run against local emulators where possible.
+  - [x] T37.1.4 Add integration-test fixtures that run against local emulators where possible.
   - [x] T37.1.5 Document credential scopes and least-privilege bucket policies.
 - **S37.2 Sync security and conflict UX**
   - [ ] T37.2.1 Add client-side encryption design for remote blobs and refs.

@@ -85,4 +85,6 @@ continuation markers. The CLI will stay local-only until the credential,
 policy, and recovery UX is explicit enough for operators to audit.
 
 See [sync credential scopes](sync-credentials.md) for least-privilege bucket,
-container, and token guidance.
+container, and token guidance. See [sync emulator fixtures](sync-emulators.md)
+for ignored integration tests that can run against MinIO, fake-gcs-server, or
+Azurite.

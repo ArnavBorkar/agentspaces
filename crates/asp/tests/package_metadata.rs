@@ -261,6 +261,35 @@ fn sync_credential_docs_cover_least_privilege_storage_scopes() {
 }
 
 #[test]
+fn sync_emulator_docs_cover_local_backend_fixtures() {
+    let docs = fs::read_to_string(repo_file("docs/sync-emulators.md")).unwrap();
+
+    for needle in [
+        "scripts/sync-emulators.sh",
+        "ASP_SYNC_S3_ENDPOINT",
+        "ASP_SYNC_GCS_ENDPOINT",
+        "ASP_SYNC_AZURE_ENDPOINT",
+        "create an immutable object",
+        "replace the ref only when the prior remote version matches",
+        "do not delete remote objects",
+    ] {
+        assert!(docs.contains(needle), "sync emulator docs missing {needle}");
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/sync-emulators.md"),
+        "README should link sync emulator docs"
+    );
+
+    let sync = fs::read_to_string(repo_file("docs/sync.md")).unwrap();
+    assert!(
+        sync.contains("sync emulator fixtures"),
+        "sync docs should link emulator fixtures"
+    );
+}
+
+#[test]
 fn contributor_checklists_cover_schema_snapshot_updates() {
     let development = fs::read_to_string(repo_file("docs/development.md")).unwrap();
     for needle in [
