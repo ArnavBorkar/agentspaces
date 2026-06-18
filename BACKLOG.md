@@ -257,7 +257,7 @@
   - [x] T20.1.3 Add conditional-write semantics to the remote trait.
 - **S20.2 First sync command**
   - [x] T20.2.1 Add `asp sync push` for checkpoints and blobs to a local remote.
-  - [ ] T20.2.2 Add `asp sync fetch` that restores refs without overwriting newer local state.
+  - [x] T20.2.2 Add `asp sync fetch` that restores refs without overwriting newer local state.
 
 ## EPIC 21 — Security hardening
 

@@ -7,6 +7,7 @@ object-storage backends exist.
 
 ```bash
 asp sync push --remote /path/to/asp-remote
+asp sync fetch --remote /path/to/asp-remote
 asp sync push --json --remote /path/to/asp-remote
 ```
 
@@ -50,14 +51,23 @@ if sync reports a corrupt or missing local object.
 
 ## JSON Output
 
-The JSON result is `#/$defs/syncPushReport` from
-[docs/schemas.md](schemas.md). Counts are split into uploaded, already-present,
-created, unchanged, and updated buckets so automation can distinguish a first
-backup from an idempotent retry.
+The JSON results are `#/$defs/syncPushReport` and `#/$defs/syncFetchReport`
+from [docs/schemas.md](schemas.md). Counts are split into uploaded/downloaded,
+already-present, created/imported, unchanged, updated, and conflicted buckets
+so automation can distinguish a first backup, an idempotent retry, and a
+manual reconciliation case.
+
+## Fetch Behavior
+
+`asp sync fetch` imports missing checkpoint and meta refs only after remote git
+objects and CAS blobs verify locally. If a remote checkpoint sequence already
+exists locally with another target, fetch reports a conflict and leaves local
+refs untouched. The local head moves only when the remote head is newer in
+checkpoint-sequence terms or when the local head is missing.
 
 ## Current Limits
 
-This first command is push-only. It is enough to create an auditable remote
-backup, but it is not yet a full multi-device workflow. `asp sync fetch` is the
-next milestone and will import missing refs conservatively without overwriting
-newer local state.
+The first sync commands support local filesystem remotes only. They are enough
+to create and restore an auditable remote backup, but they are not yet a full
+multi-device reconciliation workflow. Conflict renumbering and object-storage
+backends are future milestones.

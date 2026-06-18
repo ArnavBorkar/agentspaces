@@ -101,8 +101,11 @@
   and a `sync_conflict` error code for compare-and-swap failures.
 - `asp sync push --remote <dir>` uploads checkpoint git objects, CAS blobs, and
   refs to a local filesystem remote with idempotent counts.
-- `docs/sync.md` documents the explicit opt-in sync boundary, pushed data, JSON
-  output, conflict behavior, and current push-only limit.
+- `asp sync fetch --remote <dir>` restores missing checkpoint refs, git objects,
+  and CAS blobs from a local filesystem remote without overwriting conflicting
+  local refs.
+- `docs/sync.md` documents the explicit opt-in sync boundary, pushed/fetched
+  data, JSON output, conflict behavior, and current local-remote limit.
 
 ### Fixed
 
@@ -163,6 +166,9 @@
   when conditional remote writes detect newer state.
 - Additive: `asp sync push --json --remote <dir>` returns `syncPushReport` with
   checkpoint, git-object, CAS-blob, and ref upload counts.
+- Additive: `asp sync fetch --json --remote <dir>` returns `syncFetchReport`
+  with imported refs, downloaded objects/blobs, head update status, and
+  explicit conflict entries.
 
 ## Automation Contract Rules
 

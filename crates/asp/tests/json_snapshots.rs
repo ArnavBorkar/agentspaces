@@ -59,6 +59,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
+        "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
         "cli_race" => include_str!("snapshots/cli_race.json"),
         "cli_review" => include_str!("snapshots/cli_review.json"),
         "cli_schema" => include_str!("snapshots/cli_schema.json"),
@@ -127,6 +128,27 @@ fn normalize_sync_push(mut value: Value, root: &Path) -> Value {
         "refs_created",
         "refs_present",
         "refs_replaced",
+    ] {
+        result[key] = json!(0);
+    }
+    value
+}
+
+fn normalize_sync_fetch(mut value: Value, root: &Path) -> Value {
+    normalize_value(&mut value, root);
+    let result = value
+        .get_mut("result")
+        .and_then(Value::as_object_mut)
+        .expect("sync fetch result");
+    result["remote"] = json!("<sync-remote>");
+    for key in [
+        "refs_imported",
+        "refs_present",
+        "refs_conflicted",
+        "git_objects_downloaded",
+        "git_objects_present",
+        "cas_blobs_downloaded",
+        "cas_blobs_present",
     ] {
         result[key] = json!(0);
     }
@@ -249,6 +271,11 @@ fn cli_json_shapes_match_snapshots() {
         &["sync", "push", "--remote", sync_remote.to_str().unwrap()],
     );
     snapshot("cli_sync_push", normalize_sync_push(sync_push, &root));
+    let sync_fetch = ok_json(
+        &root,
+        &["sync", "fetch", "--remote", sync_remote.to_str().unwrap()],
+    );
+    snapshot("cli_sync_fetch", normalize_sync_fetch(sync_fetch, &root));
 
     let race = ok_json(
         &root,

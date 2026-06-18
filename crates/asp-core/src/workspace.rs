@@ -383,6 +383,37 @@ pub struct SyncPushReport {
     pub refs_replaced: u64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncFetchReport {
+    pub remote: PathBuf,
+    pub workspace_id: String,
+    pub refs_imported: u64,
+    pub refs_present: u64,
+    pub refs_conflicted: u64,
+    pub git_objects_downloaded: u64,
+    pub git_objects_present: u64,
+    pub cas_blobs_downloaded: u64,
+    pub cas_blobs_present: u64,
+    pub head_updated: bool,
+    pub head_seq: Option<u64>,
+    pub conflicts: Vec<SyncRefConflict>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SyncRefConflict {
+    pub kind: String,
+    pub seq: u64,
+    pub local: Option<String>,
+    pub remote: Option<String>,
+    pub hint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SyncRef {
+    seq: u64,
+    target: String,
+}
+
 struct ScanResult {
     /// (path, needs_add): every user-visible change, with whether the
     /// worktree differs from the index for it (index-only changes — e.g.
@@ -1445,6 +1476,116 @@ impl Workspace {
         Ok(report)
     }
 
+    pub fn sync_fetch_local(&self, remote_root: impl AsRef<Path>) -> Result<SyncFetchReport> {
+        let _lock = StoreLock::acquire(&self.layout)?;
+        self.journal.heal()?;
+        let remote_root = remote_root.as_ref().to_path_buf();
+        let remote = LocalRemote::open(&remote_root)?;
+        let prefix = format!("asp-sync/v1/workspaces/{}", self.meta.id);
+        verify_remote_workspace(&remote, &prefix, &self.meta.id)?;
+
+        let local_checkpoints = self.checkpoint_refs()?;
+        let local_meta_refs = self.meta_refs()?;
+        let remote_checkpoints = remote_sync_refs(
+            &remote,
+            &format!("{prefix}/refs/checkpoints"),
+            "checkpoint_ref",
+        )?;
+        let remote_meta_refs =
+            remote_sync_refs(&remote, &format!("{prefix}/refs/meta"), "meta_ref")?;
+
+        let mut report = SyncFetchReport {
+            remote: remote_root,
+            workspace_id: self.meta.id.clone(),
+            refs_imported: 0,
+            refs_present: 0,
+            refs_conflicted: 0,
+            git_objects_downloaded: 0,
+            git_objects_present: 0,
+            cas_blobs_downloaded: 0,
+            cas_blobs_present: 0,
+            head_updated: false,
+            head_seq: self.head_seq_for(&local_checkpoints)?,
+            conflicts: Vec::new(),
+        };
+
+        let checkpoint_imports = plan_ref_imports(
+            "checkpoint_ref",
+            &remote_checkpoints,
+            &local_checkpoints,
+            &mut report,
+        );
+        let meta_imports =
+            plan_ref_imports("meta_ref", &remote_meta_refs, &local_meta_refs, &mut report);
+        if !report.conflicts.is_empty() {
+            report.refs_conflicted = report.conflicts.len() as u64;
+            return Ok(report);
+        }
+
+        let remote_git_objects = remote_git_objects(&remote, &prefix)?;
+        verify_git_object_batch(&remote_git_objects)?;
+        for (oid, bytes) in &remote_git_objects {
+            match write_local_git_object(self.shadow.git_dir(), oid, bytes)? {
+                PutOutcome::Created => report.git_objects_downloaded += 1,
+                PutOutcome::AlreadyExists => report.git_objects_present += 1,
+                PutOutcome::Replaced => unreachable!("local object writes do not replace"),
+            }
+        }
+
+        let remote_cas_blobs = remote_cas_blobs(&remote, &prefix)?;
+        for (hash, bytes) in &remote_cas_blobs {
+            match write_local_cas_blob(&self.layout.blobs(), hash, bytes)? {
+                PutOutcome::Created => report.cas_blobs_downloaded += 1,
+                PutOutcome::AlreadyExists => report.cas_blobs_present += 1,
+                PutOutcome::Replaced => unreachable!("local CAS writes do not replace"),
+            }
+        }
+
+        for remote_ref in checkpoint_imports {
+            ensure_checkpoint_object(&self.shadow, remote_ref.seq, &remote_ref.target)?;
+            self.shadow.update_ref(
+                &format!("{CHECKPOINT_REF_PREFIX}{}", remote_ref.seq),
+                &remote_ref.target,
+            )?;
+            report.refs_imported += 1;
+        }
+        for remote_ref in meta_imports {
+            ensure_git_object(
+                &self.shadow,
+                "meta manifest",
+                remote_ref.seq,
+                &remote_ref.target,
+            )?;
+            self.shadow.update_ref(
+                &format!("{META_REF_PREFIX}{}", remote_ref.seq),
+                &remote_ref.target,
+            )?;
+            report.refs_imported += 1;
+        }
+
+        if let Some(head) = remote_head_ref(&remote, &prefix)? {
+            let mut all_checkpoints = local_checkpoints.clone();
+            for (seq, remote_ref) in &remote_checkpoints {
+                all_checkpoints
+                    .entry(*seq)
+                    .or_insert(remote_ref.target.clone());
+            }
+            let current_head = self.head_seq_for(&local_checkpoints)?;
+            if current_head.is_none_or(|seq| head.seq > seq)
+                && all_checkpoints.get(&head.seq) == Some(&head.target)
+            {
+                ensure_checkpoint_object(&self.shadow, head.seq, &head.target)?;
+                self.shadow.update_ref(HEAD_REF, &head.target)?;
+                report.head_updated = true;
+                report.head_seq = Some(head.seq);
+            } else {
+                report.head_seq = current_head;
+            }
+        }
+
+        Ok(report)
+    }
+
     fn sync_git_object_ids(
         &self,
         checkpoints: &BTreeMap<u64, String>,
@@ -1506,6 +1647,15 @@ impl Workspace {
             }
         }
         Ok(hashes)
+    }
+
+    fn head_seq_for(&self, refs: &BTreeMap<u64, String>) -> Result<Option<u64>> {
+        let Some(head) = self.shadow.rev_parse(HEAD_REF)? else {
+            return Ok(None);
+        };
+        Ok(refs
+            .iter()
+            .find_map(|(seq, target)| (target == &head).then_some(*seq)))
     }
 
     /// Resolve "42" / "#42" / commit-sha-prefix to (seq, commit).
@@ -3183,6 +3333,406 @@ fn put_head_ref(
     }
 }
 
+fn verify_remote_workspace(remote: &LocalRemote, prefix: &str, workspace_id: &str) -> Result<()> {
+    let key = format!("{prefix}/workspace.json");
+    let Some(object) = remote.get(&key)? else {
+        return Err(Error::new(
+            ErrorCode::NothingToDo,
+            format!("sync remote has no workspace record for {workspace_id}"),
+        )
+        .with_hint("run `asp sync push --remote <dir>` from this workspace first"));
+    };
+    let value: serde_json::Value = serde_json::from_slice(&object.bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote workspace record is not valid JSON: {e}"),
+        )
+        .with_hint("inspect the sync remote before retrying")
+    })?;
+    if value.get("workspace_id").and_then(|id| id.as_str()) != Some(workspace_id) {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            "remote workspace record does not match this workspace id",
+        )
+        .with_hint(
+            "use the remote created for this workspace, or initialize a matching restore workspace",
+        ));
+    }
+    Ok(())
+}
+
+fn remote_sync_refs(
+    remote: &LocalRemote,
+    key_prefix: &str,
+    kind: &str,
+) -> Result<BTreeMap<u64, SyncRef>> {
+    let mut refs = BTreeMap::new();
+    for entry in remote.list(key_prefix)? {
+        if !entry.key.ends_with(".json") {
+            continue;
+        }
+        let object = remote.get(&entry.key)?.ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote listed ref {} but it is missing", entry.key),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+        let (seq, target) = sync_ref_fields(&object.bytes, &entry.key)?;
+        if refs.insert(seq, SyncRef { seq, target }).is_some() {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote has duplicate {kind} for checkpoint #{seq}"),
+            )
+            .with_hint("inspect the sync remote before retrying"));
+        }
+    }
+    Ok(refs)
+}
+
+fn remote_head_ref(remote: &LocalRemote, prefix: &str) -> Result<Option<SyncRef>> {
+    let key = format!("{prefix}/refs/head.json");
+    let Some(object) = remote.get(&key)? else {
+        return Ok(None);
+    };
+    let (seq, target) = sync_ref_fields(&object.bytes, &key)?;
+    Ok(Some(SyncRef { seq, target }))
+}
+
+fn plan_ref_imports(
+    kind: &str,
+    remote_refs: &BTreeMap<u64, SyncRef>,
+    local_refs: &BTreeMap<u64, String>,
+    report: &mut SyncFetchReport,
+) -> Vec<SyncRef> {
+    let mut imports = Vec::new();
+    for (seq, remote_ref) in remote_refs {
+        match local_refs.get(seq) {
+            Some(local) if local == &remote_ref.target => report.refs_present += 1,
+            Some(local) => report.conflicts.push(SyncRefConflict {
+                kind: kind.to_string(),
+                seq: *seq,
+                local: Some(local.clone()),
+                remote: Some(remote_ref.target.clone()),
+                hint: "fetch into a clean workspace or create a new checkpoint after reviewing both histories".to_string(),
+            }),
+            None => imports.push(remote_ref.clone()),
+        }
+    }
+    imports
+}
+
+fn remote_git_objects(remote: &LocalRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+    let object_prefix = format!("{prefix}/objects/git/sha1");
+    let mut objects = BTreeMap::new();
+    for entry in remote.list(&object_prefix)? {
+        let oid = remote_git_oid(&object_prefix, &entry.key)?;
+        let object = remote.get(&entry.key)?.ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote listed git object {} but it is missing", entry.key),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+        objects.insert(oid, object.bytes);
+    }
+    Ok(objects)
+}
+
+fn remote_git_oid(object_prefix: &str, key: &str) -> Result<String> {
+    let rest = key
+        .strip_prefix(&format!("{object_prefix}/"))
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote git object key is outside object prefix: {key}"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    let Some((fanout, tail)) = rest.split_once('/') else {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote git object key has invalid fanout: {key}"),
+        )
+        .with_hint("inspect the sync remote before retrying"));
+    };
+    let oid = format!("{fanout}{tail}");
+    if fanout.len() != 2 || tail.len() != 38 || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote git object key has invalid object id: {key}"),
+        )
+        .with_hint("inspect the sync remote before retrying"));
+    }
+    Ok(oid)
+}
+
+fn remote_cas_blobs(remote: &LocalRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+    let blob_prefix = format!("{prefix}/objects/blobs/blake3");
+    let mut blobs = BTreeMap::new();
+    for entry in remote.list(&blob_prefix)? {
+        let hash = remote_cas_hash(&blob_prefix, &entry.key)?;
+        let object = remote.get(&entry.key)?.ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote listed CAS blob {} but it is missing", entry.key),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+        blobs.insert(hash, object.bytes);
+    }
+    Ok(blobs)
+}
+
+fn remote_cas_hash(blob_prefix: &str, key: &str) -> Result<String> {
+    let hash = key
+        .strip_prefix(&format!("{blob_prefix}/"))
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote CAS key is outside blob prefix: {key}"),
+            )
+            .with_hint("inspect the sync remote before retrying")
+        })?;
+    if hash.len() != 64 || hash.contains('/') || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote CAS key has invalid BLAKE3 hash: {key}"),
+        )
+        .with_hint("inspect the sync remote before retrying"));
+    }
+    Ok(hash.to_string())
+}
+
+fn verify_git_object_batch(objects: &BTreeMap<String, Vec<u8>>) -> Result<()> {
+    if objects.is_empty() {
+        return Ok(());
+    }
+    let tmp = tempfile::tempdir()?;
+    let git_dir = tmp.path().join("verify.git");
+    let init = clean_git_command()
+        .args(["init", "--bare", "-q"])
+        .arg(&git_dir)
+        .output()
+        .map_err(|e| {
+            Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
+        })?;
+    if !init.status.success() {
+        return Err(Error::new(
+            ErrorCode::GitFailed,
+            format!(
+                "git init failed while verifying sync objects: {}",
+                String::from_utf8_lossy(&init.stderr).trim()
+            ),
+        ));
+    }
+    for (oid, bytes) in objects {
+        write_loose_object_bytes(&git_dir, oid, bytes)?;
+    }
+    for oid in objects.keys() {
+        let output = clean_git_command()
+            .arg("--git-dir")
+            .arg(&git_dir)
+            .args(["cat-file", "-e", oid])
+            .output()
+            .map_err(|e| {
+                Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
+            })?;
+        if !output.status.success() {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("remote git object {oid} does not verify"),
+            )
+            .with_hint("inspect the sync remote before retrying"));
+        }
+    }
+    Ok(())
+}
+
+fn write_local_git_object(git_dir: &Path, oid: &str, bytes: &[u8]) -> Result<PutOutcome> {
+    let path = loose_object_path(git_dir, oid)?;
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
+            let existing = std::fs::read(&path)?;
+            if existing == bytes {
+                return Ok(PutOutcome::AlreadyExists);
+            }
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("local shadow git object {oid} exists with different bytes"),
+            )
+            .with_hint("run `asp doctor`; preserve the workspace before retrying sync"));
+        }
+        Ok(_) => {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("local shadow git object path {oid} is not a regular file"),
+            )
+            .with_hint("run `asp doctor`; preserve the workspace before retrying sync"));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    write_loose_object_bytes(git_dir, oid, bytes)?;
+    Ok(PutOutcome::Created)
+}
+
+fn write_loose_object_bytes(git_dir: &Path, oid: &str, bytes: &[u8]) -> Result<()> {
+    let path = loose_object_path(git_dir, oid)?;
+    let parent = path.parent().ok_or_else(|| {
+        Error::new(
+            ErrorCode::Io,
+            format!("git object {oid} has no parent directory"),
+        )
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| {
+        Error::new(
+            ErrorCode::Io,
+            format!("temp git object in {}: {e}", parent.display()),
+        )
+        .with_source(e)
+    })?;
+    {
+        use std::io::Write;
+        tmp.write_all(bytes)?;
+    }
+    tmp.as_file().sync_data()?;
+    match tmp.persist_noclobber(&path) {
+        Ok(_) => {
+            let _ = sync_dir(parent);
+            Ok(())
+        }
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let meta = std::fs::symlink_metadata(&path)?;
+            if meta.is_file() && !meta.file_type().is_symlink() {
+                Ok(())
+            } else {
+                Err(Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("git object path {oid} appeared as a non-file"),
+                )
+                .with_hint("inspect the workspace or sync remote before retrying"))
+            }
+        }
+        Err(e) => {
+            let error = e.error;
+            Err(Error::new(
+                ErrorCode::Io,
+                format!("publish git object {}: {error}", path.display()),
+            )
+            .with_source(error))
+        }
+    }
+}
+
+fn loose_object_path(git_dir: &Path, oid: &str) -> Result<PathBuf> {
+    if oid.len() != 40 || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("invalid git object id: {oid}"),
+        )
+        .with_hint("inspect the sync remote before retrying"));
+    }
+    Ok(git_dir.join("objects").join(&oid[..2]).join(&oid[2..]))
+}
+
+fn write_local_cas_blob(cas_dir: &Path, hash: &str, bytes: &[u8]) -> Result<PutOutcome> {
+    let actual = blake3::hash(bytes).to_hex().to_string();
+    if actual != hash {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("remote CAS blob {hash} is corrupt (got {actual})"),
+        )
+        .with_hint("inspect the sync remote before retrying"));
+    }
+    let path = cas_dir.join(hash);
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
+            let local = blobs::hash_file(&path)?;
+            if local == hash {
+                return Ok(PutOutcome::AlreadyExists);
+            }
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("local CAS blob {hash} exists with different bytes"),
+            )
+            .with_hint("run `asp doctor --deep`; preserve the workspace before retrying sync"));
+        }
+        Ok(_) => {
+            return Err(Error::new(
+                ErrorCode::StoreCorrupt,
+                format!("local CAS blob path {hash} is not a regular file"),
+            )
+            .with_hint("run `asp doctor --deep`; preserve the workspace before retrying sync"));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    std::fs::create_dir_all(cas_dir)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(cas_dir).map_err(|e| {
+        Error::new(
+            ErrorCode::Io,
+            format!("temp CAS blob in {}: {e}", cas_dir.display()),
+        )
+        .with_source(e)
+    })?;
+    {
+        use std::io::Write;
+        tmp.write_all(bytes)?;
+    }
+    tmp.as_file().sync_data()?;
+    match tmp.persist_noclobber(&path) {
+        Ok(_) => {
+            let _ = sync_dir(cas_dir);
+            Ok(PutOutcome::Created)
+        }
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let local = blobs::hash_file(&path)?;
+            if local == hash {
+                Ok(PutOutcome::AlreadyExists)
+            } else {
+                Err(Error::new(
+                    ErrorCode::StoreCorrupt,
+                    format!("local CAS blob {hash} appeared with different bytes"),
+                )
+                .with_hint("run `asp doctor --deep`; preserve the workspace before retrying sync"))
+            }
+        }
+        Err(e) => {
+            let error = e.error;
+            Err(Error::new(
+                ErrorCode::Io,
+                format!("publish CAS blob {}: {error}", path.display()),
+            )
+            .with_source(error))
+        }
+    }
+}
+
+fn ensure_checkpoint_object(shadow: &Shadow, seq: u64, target: &str) -> Result<()> {
+    let rev = format!("{target}^{{commit}}");
+    if shadow.run(&["cat-file", "-e", &rev]).is_ok() {
+        return Ok(());
+    }
+    Err(Error::new(
+        ErrorCode::StoreCorrupt,
+        format!("remote checkpoint #{seq} points at missing commit {target}"),
+    )
+    .with_hint("rerun `asp sync push` from the source workspace, then retry fetch"))
+}
+
+fn ensure_git_object(shadow: &Shadow, label: &str, seq: u64, target: &str) -> Result<()> {
+    if shadow.run(&["cat-file", "-e", target]).is_ok() {
+        return Ok(());
+    }
+    Err(Error::new(
+        ErrorCode::StoreCorrupt,
+        format!("remote {label} #{seq} points at missing object {target}"),
+    )
+    .with_hint("rerun `asp sync push` from the source workspace, then retry fetch"))
+}
+
 fn sync_ref_fields(bytes: &[u8], key: &str) -> Result<(u64, String)> {
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| {
         Error::new(
@@ -3212,6 +3762,25 @@ fn sync_ref_fields(bytes: &[u8], key: &str) -> Result<(u64, String)> {
             .with_hint("inspect the sync remote before retrying")
         })?;
     Ok((seq, target.to_string()))
+}
+
+fn clean_git_command() -> Command {
+    let mut cmd = Command::new("git");
+    cmd.env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_NAMESPACE")
+        .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES");
+    cmd
+}
+
+fn sync_dir(path: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .open(path)?
+        .sync_all()
 }
 
 fn sanitize_name(label: &str) -> String {

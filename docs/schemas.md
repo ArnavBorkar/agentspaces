@@ -54,6 +54,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
 | `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
+| `asp sync fetch --json --remote <dir>` | `#/$defs/syncFetchReport` |
 | `asp checkpoint --json` | `#/$defs/checkpointInfo` or `#/$defs/noChanges` |
 | `asp log --json` | `#/$defs/journalEntries` |
 | `asp undo --json` | `#/$defs/restoreReport` |
@@ -85,6 +86,10 @@ filesystem capabilities, and removes the probe before exiting.
 `asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
 git-object, CAS-blob, and ref counts split into uploaded/present/updated
 buckets. It is an explicit opt-in command; no other asp command starts sync.
+`asp sync fetch --json --remote <dir>` returns `syncFetchReport` with imported
+ref counts, downloaded/present object counts, head update status, and explicit
+`conflicts` entries. Conflicting refs are reported without overwriting local
+state.
 
 `asp diff --json` result objects include `summary` totals plus grouped buckets
 by top-level path, language, and change type. The existing `rows` array remains

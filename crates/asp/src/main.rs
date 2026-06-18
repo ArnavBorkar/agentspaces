@@ -272,6 +272,12 @@ enum SyncCmd {
         #[arg(long, value_name = "DIR")]
         remote: PathBuf,
     },
+    /// Fetch missing checkpoints and blobs from a local filesystem remote.
+    Fetch {
+        /// Local remote directory to read.
+        #[arg(long, value_name = "DIR")]
+        remote: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -707,6 +713,57 @@ fn run(cli: Cli) -> Result<(), Error> {
                     "  refs:        {} created, {} unchanged, {} updated",
                     report.refs_created, report.refs_present, report.refs_replaced
                 );
+                Ok(())
+            }
+            SyncCmd::Fetch { remote } => {
+                let ws = open(&cli.dir)?;
+                let report = ws.sync_fetch_local(remote)?;
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                if report.refs_conflicted > 0 {
+                    println!(
+                        "{} sync fetch found {} conflict{} in {}",
+                        ui::yellow("!"),
+                        report.refs_conflicted,
+                        if report.refs_conflicted == 1 { "" } else { "s" },
+                        ui::bold(&report.remote.display().to_string())
+                    );
+                    for conflict in &report.conflicts {
+                        println!(
+                            "  {} #{}: local {}, remote {}",
+                            conflict.kind,
+                            conflict.seq,
+                            conflict.local.as_deref().unwrap_or("missing"),
+                            conflict.remote.as_deref().unwrap_or("missing")
+                        );
+                    }
+                    println!("  {}", ui::dim("local refs were left untouched"));
+                    return Ok(());
+                }
+                println!(
+                    "{} fetched sync remote {}",
+                    ui::green("✓"),
+                    ui::bold(&report.remote.display().to_string())
+                );
+                println!(
+                    "  refs:        {} imported, {} already present",
+                    report.refs_imported, report.refs_present
+                );
+                println!(
+                    "  git objects: {} downloaded, {} already present",
+                    report.git_objects_downloaded, report.git_objects_present
+                );
+                println!(
+                    "  CAS blobs:   {} downloaded, {} already present",
+                    report.cas_blobs_downloaded, report.cas_blobs_present
+                );
+                if report.head_updated {
+                    if let Some(seq) = report.head_seq {
+                        println!("  head:        updated to checkpoint #{seq}");
+                    }
+                }
                 Ok(())
             }
         },

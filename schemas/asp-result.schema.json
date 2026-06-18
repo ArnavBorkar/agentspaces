@@ -27,6 +27,7 @@
     { "$ref": "#/$defs/setupReport" },
     { "$ref": "#/$defs/statusReport" },
     { "$ref": "#/$defs/statsReport" },
+    { "$ref": "#/$defs/syncFetchReport" },
     { "$ref": "#/$defs/syncPushReport" },
     { "$ref": "#/$defs/doctorFindings" }
   ],
@@ -1014,6 +1015,56 @@
         "refs_created": { "$ref": "#/$defs/u64" },
         "refs_present": { "$ref": "#/$defs/u64" },
         "refs_replaced": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "syncFetchReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remote",
+        "workspace_id",
+        "refs_imported",
+        "refs_present",
+        "refs_conflicted",
+        "git_objects_downloaded",
+        "git_objects_present",
+        "cas_blobs_downloaded",
+        "cas_blobs_present",
+        "head_updated",
+        "head_seq",
+        "conflicts"
+      ],
+      "properties": {
+        "remote": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "refs_imported": { "$ref": "#/$defs/u64" },
+        "refs_present": { "$ref": "#/$defs/u64" },
+        "refs_conflicted": { "$ref": "#/$defs/u64" },
+        "git_objects_downloaded": { "$ref": "#/$defs/u64" },
+        "git_objects_present": { "$ref": "#/$defs/u64" },
+        "cas_blobs_downloaded": { "$ref": "#/$defs/u64" },
+        "cas_blobs_present": { "$ref": "#/$defs/u64" },
+        "head_updated": { "type": "boolean" },
+        "head_seq": { "$ref": "#/$defs/nullableU64" },
+        "conflicts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/syncRefConflict" }
+        }
+      }
+    },
+    "syncRefConflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "seq", "local", "remote", "hint"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["checkpoint_ref", "meta_ref"]
+        },
+        "seq": { "$ref": "#/$defs/u64" },
+        "local": { "$ref": "#/$defs/nullableString" },
+        "remote": { "$ref": "#/$defs/nullableString" },
+        "hint": { "type": "string" }
       }
     },
     "lastCheckpoint": {

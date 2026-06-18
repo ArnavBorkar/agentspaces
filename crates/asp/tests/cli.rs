@@ -32,6 +32,22 @@ fn ok_json(dir: &Path, args: &[&str]) -> serde_json::Value {
         .unwrap_or_else(|e| panic!("bad json from {args:?}: {e}\n{stdout}"))
 }
 
+fn shadow_git(root: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("--git-dir")
+        .arg(root.join(".asp/shadow.git"))
+        .args(args)
+        .output()
+        .expect("git spawns");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 fn project() -> (tempfile::TempDir, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("proj");
@@ -464,6 +480,95 @@ fn sync_push_uploads_checkpoints_and_blobs_to_local_remote() {
         serde_json::from_str(&String::from_utf8_lossy(&conflict.stdout)).unwrap();
     assert_eq!(err["error"]["code"], "sync_conflict");
     assert!(err["error"]["hint"].as_str().unwrap().contains("fetch"));
+}
+
+#[test]
+fn sync_fetch_restores_missing_local_refs_and_objects() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    let checkpoint = ok_json(&root, &["checkpoint", "-m", "base"]);
+    let commit = checkpoint["result"]["commit"].as_str().unwrap().to_string();
+    let remote = root.parent().unwrap().join("sync-remote");
+    ok(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+
+    shadow_git(&root, &["update-ref", "-d", "refs/asp/checkpoints/1"]);
+    shadow_git(&root, &["update-ref", "-d", "refs/asp/head"]);
+    for entry in std::fs::read_dir(root.join(".asp/shadow.git/objects")).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.len() == 2 && name.bytes().all(|b| b.is_ascii_hexdigit()) {
+            std::fs::remove_dir_all(entry.path()).unwrap();
+        }
+    }
+
+    let fetched = ok_json(
+        &root,
+        &["sync", "fetch", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(fetched["result"]["refs_imported"], 1);
+    assert!(
+        fetched["result"]["git_objects_downloaded"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert_eq!(fetched["result"]["head_updated"], true);
+    assert_eq!(fetched["result"]["head_seq"], 1);
+    assert_eq!(fetched["result"]["conflicts"], serde_json::json!([]));
+    shadow_git(&root, &["cat-file", "-e", &commit]);
+    ok(&root, &["status"]);
+}
+
+#[test]
+fn sync_fetch_reports_conflicts_without_overwriting_local_refs() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    let checkpoint = ok_json(&root, &["checkpoint", "-m", "base"]);
+    let commit = checkpoint["result"]["commit"].as_str().unwrap().to_string();
+    let remote = root.parent().unwrap().join("sync-remote");
+    let pushed = ok_json(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+    let workspace_id = pushed["result"]["workspace_id"].as_str().unwrap();
+    let base = remote.join("asp-sync/v1/workspaces").join(workspace_id);
+    std::fs::write(
+        base.join("refs/checkpoints/1.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "v": 1,
+            "name": "refs/asp/checkpoints/1",
+            "seq": 1,
+            "target": "0123456789012345678901234567890123456789",
+            "workspace_id": workspace_id,
+            "updated_at": "2099-01-01T00:00:00Z",
+            "writer": "test",
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let fetched = ok_json(
+        &root,
+        &["sync", "fetch", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(fetched["result"]["refs_conflicted"], 1);
+    assert_eq!(fetched["result"]["refs_imported"], 0);
+    assert_eq!(fetched["result"]["git_objects_downloaded"], 0);
+    let conflict = &fetched["result"]["conflicts"][0];
+    assert_eq!(conflict["kind"], "checkpoint_ref");
+    assert_eq!(conflict["seq"], 1);
+    assert_eq!(conflict["local"], commit);
+    assert_eq!(
+        conflict["remote"],
+        "0123456789012345678901234567890123456789"
+    );
+    assert_eq!(
+        shadow_git(&root, &["rev-parse", "refs/asp/checkpoints/1"]),
+        commit
+    );
 }
 
 #[test]
