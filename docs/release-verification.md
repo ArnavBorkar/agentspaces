@@ -63,6 +63,20 @@ Inspect the SBOM metadata:
 jq '.bomFormat, .specVersion, .metadata.component.name' "asp-v0.1.1-asp-sbom.cdx.json"
 ```
 
+## Installer fallback
+
+`install.sh` resolves the latest release through the GitHub releases API. In
+offline, proxied, or rate-limited environments, pin a known release tag and let
+the installer skip that API lookup:
+
+```bash
+ASP_INSTALL_VERSION=v0.1.1 sh install.sh
+```
+
+Checksum verification still runs for the selected archive. If the checksum
+download fails or the archive hash does not match, the installer stops and tells
+you not to run the downloaded archive.
+
 ## What this proves
 
 - the checksum file was signed by GitHub Actions running the tagged

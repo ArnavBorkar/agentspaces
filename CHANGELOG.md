@@ -118,9 +118,14 @@
 - `docs/secrets.md` documents secret scanning scope, redaction, and CI usage.
 - Local policy now supports `paths.deny_checkpoint` rules that block checkpoint
   capture of matching files with a corrective hint.
+- `install.sh` now gives actionable hints for unsupported platforms, offline
+  release lookup, failed downloads, checksum download failures, and checksum
+  mismatches.
 
 ### Fixed
 
+- `install.sh` avoids Unicode punctuation next to shell variables so POSIX
+  shells with `set -u` do not misparse download status messages.
 - Restore now rejects big-file materialization through symlinked worktree
   parents or reserved metadata paths before checkout writes pointer files.
 - Fork cleanup now removes symlinked registry paths without following them,
