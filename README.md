@@ -94,6 +94,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Generic MCP clients** — [docs/mcp-clients.md](docs/mcp-clients.md)
 - **Quickstart** — [docs/quickstart.md](docs/quickstart.md)
 - **Workspace config** — [docs/config.md](docs/config.md)
+- **Config review** — [docs/config-review.md](docs/config-review.md)
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
 - **Manpage generation** — [docs/manpage.md](docs/manpage.md)
 - **Command cheat sheet** — [docs/cheatsheet.md](docs/cheatsheet.md)

@@ -195,3 +195,24 @@ fn config_docs_cover_effective_config_inspection() {
         assert!(docs.contains(needle), "config docs missing {needle}");
     }
 }
+
+#[test]
+fn config_review_docs_cover_security_and_rollout_checks() {
+    let docs = fs::read_to_string(repo_file("docs/config-review.md")).unwrap();
+
+    for needle in [
+        "asp config validate",
+        "asp --json config show",
+        "asp policy validate --json",
+        "asp secrets scan",
+        "capture.excludes",
+        "capture.extra_excludes",
+        "capture.blob_threshold_mb",
+        "promote.branch_template",
+        "`.gitignore` alignment",
+        "Rollout Pattern",
+        "Red Flags",
+    ] {
+        assert!(docs.contains(needle), "config review docs missing {needle}");
+    }
+}
