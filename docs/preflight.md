@@ -20,7 +20,8 @@ The command checks:
 
 If any blocking check fails, `asp preflight` exits nonzero. JSON output still
 uses the normal success envelope so CI systems and agents can inspect the full
-report.
+report. Each check includes a runbook link; human output prints the link beside
+failing checks.
 
 ## CI Example
 

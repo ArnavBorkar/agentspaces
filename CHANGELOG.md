@@ -40,6 +40,8 @@
   asp preflight gates.
 - `docs/agent-preflight.md` documents preflight, checkpoint, setup, and race
   patterns before long-running agent harness work.
+- `asp preflight` now includes runbook links for checks so failing gates point
+  to the right triage docs in human and JSON output.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

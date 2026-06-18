@@ -275,6 +275,7 @@ fn preflight_docs_cover_ci_readiness_gate() {
         "asp doctor",
         "asp secrets scan",
         "exits nonzero",
+        "runbook link",
         "Do not pair it with `asp doctor --fix`",
     ] {
         assert!(docs.contains(needle), "preflight docs missing {needle}");

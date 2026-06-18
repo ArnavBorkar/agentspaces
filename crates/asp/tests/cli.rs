@@ -206,7 +206,9 @@ fn preflight_reports_readiness_and_blocks_secrets() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|check| check["name"] == "secrets" && check["ok"] == false));
+        .any(|check| check["name"] == "secrets"
+            && check["ok"] == false
+            && check["runbook"] == "docs/ignore-config-secrets.md"));
 }
 
 #[test]

@@ -487,6 +487,7 @@ struct PreflightCheck {
     name: &'static str,
     ok: bool,
     summary: String,
+    runbook: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     hint: Option<String>,
 }
@@ -2738,6 +2739,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
                     "defaults in effect"
                 }
             ),
+            runbook: "docs/config.md",
             hint: None,
         },
         PreflightCheck {
@@ -2748,6 +2750,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
             } else {
                 format!("valid; {policy_rules} active rule(s)")
             },
+            runbook: "docs/policy.md",
             hint: None,
         },
         PreflightCheck {
@@ -2762,6 +2765,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
                     doctor_blocking
                 )
             },
+            runbook: "docs/doctor-runbook.md",
             hint: (doctor_blocking > 0).then(|| {
                 if deep {
                     "run `asp doctor --deep --runbook` for details".to_string()
@@ -2781,6 +2785,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
             } else {
                 format!("{secret_count} likely secret(s) found")
             },
+            runbook: "docs/ignore-config-secrets.md",
             hint: (secret_count > 0).then(|| {
                 "run `asp secrets scan` and remove or protect the reported values".to_string()
             }),
@@ -2811,6 +2816,9 @@ fn print_preflight(report: &PreflightReport) {
         println!("{marker} {}: {}", check.name, check.summary);
         if let Some(hint) = &check.hint {
             println!("  hint: {hint}");
+        }
+        if !check.ok {
+            println!("  runbook: {}", ui::cyan(check.runbook));
         }
     }
     if report.ready {

@@ -395,7 +395,7 @@
   - [x] T31.1.2 Add GitHub Actions and GitLab CI examples for preflight gates.
   - [x] T31.1.3 Add preflight docs for agent harness launch checks before long-running work.
 - **S31.2 Failure triage**
-  - [ ] T31.2.1 Add preflight-to-runbook links for each failing check.
+  - [x] T31.2.1 Add preflight-to-runbook links for each failing check.
   - [ ] T31.2.2 Add machine-readable preflight check IDs for stable CI annotations.
 
 ---
