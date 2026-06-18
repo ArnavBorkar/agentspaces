@@ -106,6 +106,8 @@
   local refs.
 - `docs/sync.md` documents the explicit opt-in sync boundary, pushed/fetched
   data, JSON output, conflict behavior, and current local-remote limit.
+- `SECURITY.md` now includes a threat model diagram, assets, trusted and
+  untrusted inputs, in-scope vulnerability classes, and explicit non-goals.
 
 ### Fixed
 

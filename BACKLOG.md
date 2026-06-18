@@ -264,7 +264,7 @@
 **Done when:** threat models are documented, tests cover known file-system attacks, and security-sensitive behavior fails closed.
 
 - **S21.1 Threat coverage**
-  - [ ] T21.1.1 Expand SECURITY.md with threat model diagrams and non-goals.
+  - [x] T21.1.1 Expand SECURITY.md with threat model diagrams and non-goals.
   - [ ] T21.1.2 Add symlink and hardlink attack regression tests around store paths and fork cleanup.
   - [ ] T21.1.3 Add fuzzing harnesses for config, journal, MCP params, and hook payload parsing.
 - **S21.2 Secret safety**
