@@ -17,6 +17,7 @@
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
     { "$ref": "#/$defs/doctorRunbookReport" },
+    { "$ref": "#/$defs/drillRecoveryReport" },
     { "$ref": "#/$defs/evidenceManifestOutputResult" },
     { "$ref": "#/$defs/evidenceOutputResult" },
     { "$ref": "#/$defs/evidenceReport" },
@@ -612,6 +613,49 @@
         "description": { "type": "string" },
         "command": { "type": "string" },
         "destructive": { "type": "boolean" }
+      }
+    },
+    "drillRecoveryReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "status",
+        "workspace_root",
+        "checkpoint",
+        "recovered_tree",
+        "index_file",
+        "files_restored",
+        "stock_git_commands",
+        "current_workspace_untouched",
+        "next_actions"
+      ],
+      "properties": {
+        "kind": { "const": "recovery" },
+        "status": { "const": "passed" },
+        "workspace_root": { "type": "string" },
+        "checkpoint": { "$ref": "#/$defs/drillCheckpoint" },
+        "recovered_tree": { "type": "string" },
+        "index_file": { "type": "string" },
+        "files_restored": { "$ref": "#/$defs/u64" },
+        "stock_git_commands": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "current_workspace_untouched": { "const": true },
+        "next_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "drillCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "commit"],
+      "properties": {
+        "seq": { "$ref": "#/$defs/u64" },
+        "commit": { "$ref": "#/$defs/gitOid" }
       }
     },
     "evidenceOutputResult": {

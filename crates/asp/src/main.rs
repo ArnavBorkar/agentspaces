@@ -11,10 +11,11 @@ mod race;
 mod ui;
 
 use std::collections::BTreeMap;
-use std::io::Read;
+use std::fs;
+use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use asp_core::journal::{Entry, Op, Source};
 use asp_core::store::{atomic_write, find_root, ASP_DIR, FORMAT_VERSION};
@@ -95,6 +96,11 @@ enum Cmd {
     Bench {
         #[command(subcommand)]
         command: BenchCmd,
+    },
+    /// Rehearse incident-response drills without mutating the workspace.
+    Drill {
+        #[command(subcommand)]
+        command: DrillCmd,
     },
     /// Print supported schema and format versions.
     Schema,
@@ -404,6 +410,19 @@ enum BenchCmd {
     /// Report local filesystem capabilities used by asp benchmarks and forks.
     #[command(name = "self")]
     Self_,
+}
+
+#[derive(Subcommand)]
+enum DrillCmd {
+    /// Restore a checkpoint into a temp directory using only stock git.
+    Recovery(DrillRecoveryArgs),
+}
+
+#[derive(Args)]
+struct DrillRecoveryArgs {
+    /// Checkpoint to restore (#seq or commit prefix). Defaults to the latest checkpoint.
+    #[arg(long, value_name = "CHECKPOINT")]
+    checkpoint: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -897,6 +916,26 @@ struct DiffHtmlOutputResult {
     bytes: u64,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct DrillRecoveryReport {
+    kind: &'static str,
+    status: &'static str,
+    workspace_root: PathBuf,
+    checkpoint: DrillCheckpoint,
+    recovered_tree: PathBuf,
+    index_file: PathBuf,
+    files_restored: u64,
+    stock_git_commands: Vec<String>,
+    current_workspace_untouched: bool,
+    next_actions: Vec<&'static str>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DrillCheckpoint {
+    seq: u64,
+    commit: String,
+}
+
 fn parse_source(s: &str) -> Result<Source, String> {
     match s {
         "manual" => Ok(Source::Manual),
@@ -1157,6 +1196,18 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::print_json(true, &report);
                 } else {
                     bench::print_self_report(&report);
+                }
+                Ok(())
+            }
+        },
+        Cmd::Drill { command } => match command {
+            DrillCmd::Recovery(args) => {
+                let ws = open(&cli.dir)?;
+                let report = drill_recovery(&ws, &args)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_drill_recovery(&report);
                 }
                 Ok(())
             }
@@ -2270,6 +2321,249 @@ fn op_name(op: &Op) -> &'static str {
         Op::Promote => "promote",
         Op::Discard => "discard",
     }
+}
+
+fn drill_recovery(ws: &Workspace, args: &DrillRecoveryArgs) -> Result<DrillRecoveryReport, Error> {
+    let checkpoint_spec = match args.checkpoint.as_deref() {
+        Some(spec) => spec.to_string(),
+        None => ws
+            .status()?
+            .last_checkpoint
+            .map(|checkpoint| checkpoint.seq.to_string())
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorCode::NothingToDo,
+                    "recovery drill needs at least one checkpoint",
+                )
+                .with_hint(
+                    "run `asp checkpoint -m \"baseline\"` first, then rerun `asp drill recovery`",
+                )
+            })?,
+    };
+    let (seq, commit) = ws.resolve_checkpoint(&checkpoint_spec)?;
+    let recovered_tree = create_unique_temp_dir("asp-drill-recovery")?;
+    let index_file = recovered_tree.with_extension("index");
+    let git_dir = ws.shadow().git_dir().to_path_buf();
+    let checkpoint_ref = format!("refs/asp/checkpoints/{seq}");
+
+    let mut stock_git_commands = Vec::new();
+    let show_ref = [
+        "show-ref".to_string(),
+        "--verify".to_string(),
+        checkpoint_ref,
+    ];
+    stock_git_commands.push(format_drill_git_command(
+        &git_dir,
+        &recovered_tree,
+        &index_file,
+        &show_ref,
+    ));
+    run_drill_git(&git_dir, &recovered_tree, &index_file, &show_ref)?;
+
+    let ls_tree = [
+        "ls-tree".to_string(),
+        "-r".to_string(),
+        "-z".to_string(),
+        "--name-only".to_string(),
+        commit.clone(),
+    ];
+    stock_git_commands.push(format_drill_git_command(
+        &git_dir,
+        &recovered_tree,
+        &index_file,
+        &ls_tree,
+    ));
+    let files_restored = run_drill_git(&git_dir, &recovered_tree, &index_file, &ls_tree)?
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .count() as u64;
+
+    let read_tree = ["read-tree".to_string(), commit.clone()];
+    stock_git_commands.push(format_drill_git_command(
+        &git_dir,
+        &recovered_tree,
+        &index_file,
+        &read_tree,
+    ));
+    run_drill_git(&git_dir, &recovered_tree, &index_file, &read_tree)?;
+
+    let checkout_index = [
+        "checkout-index".to_string(),
+        "-a".to_string(),
+        "-f".to_string(),
+    ];
+    stock_git_commands.push(format_drill_git_command(
+        &git_dir,
+        &recovered_tree,
+        &index_file,
+        &checkout_index,
+    ));
+    run_drill_git(&git_dir, &recovered_tree, &index_file, &checkout_index)?;
+
+    Ok(DrillRecoveryReport {
+        kind: "recovery",
+        status: "passed",
+        workspace_root: ws.root().to_path_buf(),
+        checkpoint: DrillCheckpoint { seq, commit },
+        recovered_tree,
+        index_file,
+        files_restored,
+        stock_git_commands,
+        current_workspace_untouched: true,
+        next_actions: vec![
+            "inspect the recovered_tree path if you need proof for an incident drill",
+            "remove recovered_tree and index_file after the drill evidence is captured",
+            "run `asp doctor --deep` in the original workspace before trusting a backup",
+        ],
+    })
+}
+
+fn run_drill_git(
+    git_dir: &Path,
+    work_tree: &Path,
+    index_file: &Path,
+    args: &[String],
+) -> Result<Vec<u8>, Error> {
+    let command_text = format!("git {}", args.join(" "));
+    let output = Command::new("git")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env("GIT_DIR", git_dir)
+        .env("GIT_WORK_TREE", work_tree)
+        .env("GIT_INDEX_FILE", index_file)
+        .args(args)
+        .output()
+        .map_err(|e| {
+            if e.kind() == ErrorKind::NotFound {
+                Error::new(ErrorCode::GitMissing, "git is not installed or not on PATH")
+                    .with_hint("install git and rerun `asp drill recovery`")
+                    .with_source(e)
+            } else {
+                let message = format!("failed to spawn {command_text}: {e}");
+                Error::new(ErrorCode::GitFailed, message)
+                    .with_hint(
+                        "check that git can run in this shell, then rerun `asp drill recovery`",
+                    )
+                    .with_source(e)
+            }
+        })?;
+    if output.status.success() {
+        return Ok(output.stdout);
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    let detail = if stderr.is_empty() {
+        format!("exit status {}", output.status)
+    } else {
+        stderr.to_string()
+    };
+    Err(Error::new(
+        ErrorCode::GitFailed,
+        format!("stock git recovery command failed: {command_text}: {detail}"),
+    )
+    .with_hint(
+        "run `asp doctor --deep`; if shadow git is corrupt, restore `.asp/` from backup and rerun `asp drill recovery`",
+    ))
+}
+
+fn create_unique_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
+    let base = std::env::temp_dir();
+    for attempt in 0..100u32 {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let path = base.join(format!("{prefix}-{}-{nanos}-{attempt}", std::process::id()));
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                let message = format!(
+                    "cannot create recovery drill directory {}: {e}",
+                    path.display()
+                );
+                return Err(Error::new(ErrorCode::Io, message)
+                    .with_hint(
+                        "set TMPDIR to a writable local directory and rerun `asp drill recovery`",
+                    )
+                    .with_source(e));
+            }
+        }
+    }
+    Err(Error::new(
+        ErrorCode::Io,
+        "could not allocate a unique recovery drill directory",
+    )
+    .with_hint("remove stale asp-drill-recovery-* directories from the system temp directory and rerun `asp drill recovery`"))
+}
+
+fn format_drill_git_command(
+    git_dir: &Path,
+    work_tree: &Path,
+    index_file: &Path,
+    args: &[String],
+) -> String {
+    let mut parts = vec![
+        format!("GIT_DIR={}", quote_shell(&git_dir.display().to_string())),
+        format!(
+            "GIT_WORK_TREE={}",
+            quote_shell(&work_tree.display().to_string())
+        ),
+        format!(
+            "GIT_INDEX_FILE={}",
+            quote_shell(&index_file.display().to_string())
+        ),
+        "git".to_string(),
+    ];
+    parts.extend(args.iter().map(|arg| quote_shell(arg)));
+    parts.join(" ")
+}
+
+fn quote_shell(value: &str) -> String {
+    if !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_./:=+".contains(&byte))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn print_drill_recovery(report: &DrillRecoveryReport) {
+    println!("{} recovery drill passed with stock git", ui::green("✓"));
+    println!(
+        "  checkpoint:     {} {}",
+        ui::cyan(&format!("#{}", report.checkpoint.seq)),
+        ui::dim(short_oid(&report.checkpoint.commit))
+    );
+    println!(
+        "  recovered tree: {}",
+        ui::bold(&report.recovered_tree.display().to_string())
+    );
+    println!(
+        "  index file:     {}",
+        ui::bold(&report.index_file.display().to_string())
+    );
+    println!("  files restored: {}", report.files_restored);
+    println!(
+        "  workspace:      {}",
+        if report.current_workspace_untouched {
+            ui::green("untouched")
+        } else {
+            ui::yellow("check manually")
+        }
+    );
+    println!("  commands:       {}", report.stock_git_commands.len());
+    if let Some(next) = report.next_actions.first() {
+        println!("  next:           {}", ui::dim(next));
+    }
+}
+
+fn short_oid(oid: &str) -> &str {
+    oid.get(..12).unwrap_or(oid)
 }
 
 fn secrets_scan(ws: &Workspace, args: &SecretsScanArgs) -> Result<SecretsScanReport, Error> {

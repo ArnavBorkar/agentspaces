@@ -529,7 +529,7 @@ blocked with precise, actionable diagnostics for unsupported cases.
 produce minimal forensic evidence afterward.
 
 - **S39.1 Recovery drill automation**
-  - [ ] T39.1.1 Add `asp drill recovery` to rehearse stock-git restore in a temp directory.
+  - [x] T39.1.1 Add `asp drill recovery` to rehearse stock-git restore in a temp directory.
   - [ ] T39.1.2 Add `asp drill fork` to prove fork cleanup and promote paths on the current filesystem.
   - [ ] T39.1.3 Add JSON drill reports for audit systems.
   - [ ] T39.1.4 Add CI examples that run non-destructive recovery drills on schedule.

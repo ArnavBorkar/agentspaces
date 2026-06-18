@@ -41,6 +41,9 @@
   diagnostics, and Windows CI verifies Developer Mode /
   `SeCreateSymbolicLinkPrivilege` guidance while native workspace commands
   remain fail-closed.
+- `asp drill recovery` rehearses checkpoint recovery into a temp directory with
+  stock Git against `.asp/shadow.git`, reporting JSON evidence without touching
+  the current workspace.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

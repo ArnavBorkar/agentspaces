@@ -204,6 +204,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
         "asp setup codex",
         "## Recover work",
         "asp restore 12 path/to/file",
+        "asp drill recovery",
         "asp doctor --runbook",
         "## Run agent races",
         "asp race -n 3",
@@ -597,6 +598,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "evidenceManifestOutputResult",
         "asp evidence verify --packet file.json --manifest manifest.json --json",
         "evidenceVerifyReport",
+        "asp drill recovery --json",
+        "drillRecoveryReport",
         "_None currently._",
         "## Audit Rule",
         "the Result Map points at an existing shared schema",
@@ -776,6 +779,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp sync status --json --remote <dir>",
         "asp sync push --json --remote <dir>",
         "asp sync fetch --json --remote <dir>",
+        "asp drill recovery --json",
         "asp checkpoint --json",
         "asp log --json",
         "asp undo --json",
@@ -1424,6 +1428,54 @@ fn bench_self_schema_documents_first_run_prerequisites() {
             .iter()
             .any(|field| field.as_str() == Some("prerequisites")),
         "benchSelfReport should require prerequisites"
+    );
+}
+
+#[test]
+fn schema_docs_cover_recovery_drill_contract() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp drill recovery --json",
+        "#/$defs/drillRecoveryReport",
+        "`stock_git_commands`",
+        "`current_workspace_untouched: true`",
+        "Failures use the standard error envelope",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let drills = fs::read_to_string(repo_file("docs/drills.md")).unwrap();
+    for needle in [
+        "asp drill recovery",
+        "asp drill recovery --checkpoint 42",
+        "git read-tree <checkpoint-commit>",
+        "git checkout-index -a -f",
+        "The live workspace is not restored",
+        "Failure Triage",
+        "Large files managed through the sidecar",
+    ] {
+        assert!(drills.contains(needle), "drill docs missing {needle}");
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/drills.md"),
+        "README should link incident drills"
+    );
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in ["drillRecoveryReport", "drillCheckpoint"] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    assert!(
+        variants
+            .iter()
+            .any(|variant| variant["$ref"] == "#/$defs/drillRecoveryReport"),
+        "result schema anyOf missing drillRecoveryReport"
     );
 }
 

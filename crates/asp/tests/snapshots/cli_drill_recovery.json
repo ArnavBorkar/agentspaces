@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "result": {
+    "kind": "recovery",
+    "status": "passed",
+    "workspace_root": "<workspace-root>",
+    "checkpoint": {
+      "seq": 1,
+      "commit": "<git-oid>"
+    },
+    "recovered_tree": "<recovered-tree>",
+    "index_file": "<recovery-index>",
+    "files_restored": 2,
+    "stock_git_commands": [
+      "<stock-git-command>",
+      "<stock-git-command>",
+      "<stock-git-command>",
+      "<stock-git-command>"
+    ],
+    "current_workspace_untouched": true,
+    "next_actions": [
+      "inspect the recovered_tree path if you need proof for an incident drill",
+      "remove recovered_tree and index_file after the drill evidence is captured",
+      "run `asp doctor --deep` in the original workspace before trusting a backup"
+    ]
+  }
+}

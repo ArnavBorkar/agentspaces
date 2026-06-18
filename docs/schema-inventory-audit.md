@@ -7,7 +7,8 @@ This audit compares shipped `asp --json` command surfaces against
 ## Covered Surfaces
 
 The Result Map now covers the core workspace, policy, config, readiness,
-security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
+security, evidence, drills, sync, review, diff, race, diagnostics, and setup
+payloads:
 
 - `asp config show --json`, `asp config validate --json`, and
   `asp config diff --against <file> --json`
@@ -32,6 +33,7 @@ security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 - `asp doctor --json` (`doctorFindings`) and
   `asp doctor --json --runbook` (`doctorRunbookReport`)
 - raw SARIF exports for `asp preflight --sarif` and `asp secrets scan --sarif`
+- `asp drill recovery --json` (`drillRecoveryReport`)
 
 ## Follow-Up Inventory
 

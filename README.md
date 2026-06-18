@@ -114,6 +114,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Enterprise support boundaries** — [docs/enterprise-support-boundaries.md](docs/enterprise-support-boundaries.md)
 - **Support ticket templates** — [docs/support-ticket-templates.md](docs/support-ticket-templates.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
+- **Incident drills** — [docs/drills.md](docs/drills.md)
 - **Sync** — [docs/sync.md](docs/sync.md)
 - **Sync remote recovery** — [docs/sync-recovery.md](docs/sync-recovery.md)
 - **Sync credential scopes** — [docs/sync-credentials.md](docs/sync-credentials.md)

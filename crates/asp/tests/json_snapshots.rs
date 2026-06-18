@@ -58,6 +58,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
+        "cli_drill_recovery" => include_str!("snapshots/cli_drill_recovery.json"),
         "cli_config_show" => include_str!("snapshots/cli_config_show.json"),
         "cli_config_validate" => include_str!("snapshots/cli_config_validate.json"),
         "cli_config_diff" => include_str!("snapshots/cli_config_diff.json"),
@@ -195,13 +196,41 @@ fn normalize_sync_status(mut value: Value, root: &Path) -> Value {
     value
 }
 
+fn normalize_drill_recovery(mut value: Value, root: &Path) -> Value {
+    normalize_value(&mut value, root);
+    let result = value
+        .get_mut("result")
+        .and_then(Value::as_object_mut)
+        .expect("drill recovery result");
+    let commands = result["stock_git_commands"]
+        .as_array()
+        .expect("stock git commands");
+    assert_eq!(commands.len(), 4);
+    assert!(commands
+        .iter()
+        .any(|command| command.as_str().unwrap().contains("read-tree")));
+    assert!(commands
+        .iter()
+        .any(|command| command.as_str().unwrap().contains("checkout-index")));
+    result["recovered_tree"] = json!("<recovered-tree>");
+    result["index_file"] = json!("<recovery-index>");
+    result["stock_git_commands"] = json!([
+        "<stock-git-command>",
+        "<stock-git-command>",
+        "<stock-git-command>",
+        "<stock-git-command>"
+    ]);
+    value
+}
+
 fn normalize_value(value: &mut Value, root: &Path) {
     match value {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 match key.as_str() {
                     "root" | "path" | "against_path" | "packet" | "manifest_file" | "log_file"
-                    | "settings_file" | "config_file" | "directory" | "workspace_root" => {
+                    | "settings_file" | "config_file" | "directory" | "workspace_root"
+                    | "recovered_tree" | "index_file" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_path(s, root));
                         } else {
@@ -297,6 +326,17 @@ fn cli_json_shapes_match_snapshots() {
 
     let checkpoint = ok_json(&root, &["checkpoint", "-m", "base"]);
     snapshot("cli_checkpoint", normalize(checkpoint, &root));
+
+    let drill_recovery = ok_json(&root, &["drill", "recovery"]);
+    let recovered_tree =
+        PathBuf::from(drill_recovery["result"]["recovered_tree"].as_str().unwrap());
+    let index_file = PathBuf::from(drill_recovery["result"]["index_file"].as_str().unwrap());
+    snapshot(
+        "cli_drill_recovery",
+        normalize_drill_recovery(drill_recovery, &root),
+    );
+    let _ = std::fs::remove_dir_all(recovered_tree);
+    let _ = std::fs::remove_file(index_file);
 
     let status = ok_json(&root, &["status"]);
     snapshot("cli_status", normalize(status, &root));

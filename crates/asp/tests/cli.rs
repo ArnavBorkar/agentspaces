@@ -145,6 +145,78 @@ fn bench_self_runs_outside_workspace() {
 }
 
 #[test]
+fn drill_recovery_restores_checkpoint_with_stock_git() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+
+    std::fs::write(root.join("src/app.py"), "print('v2')\n").unwrap();
+    std::fs::remove_file(root.join("README.md")).unwrap();
+
+    let human = ok(&root, &["drill", "recovery"]);
+    assert!(human.contains("recovery drill passed"), "{human}");
+    assert!(human.contains("stock git"), "{human}");
+    assert!(human.contains("workspace:"), "{human}");
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/app.py")).unwrap(),
+        "print('v2')\n",
+        "the drill must not mutate the current workspace"
+    );
+    assert!(
+        !root.join("README.md").exists(),
+        "the drill must not restore files into the current workspace"
+    );
+
+    let json = ok_json(&root, &["drill", "recovery", "--checkpoint", "1"]);
+    assert_eq!(json["ok"], true);
+    let result = &json["result"];
+    assert_eq!(result["kind"], "recovery");
+    assert_eq!(result["status"], "passed");
+    assert_eq!(result["checkpoint"]["seq"], 1);
+    assert_eq!(result["files_restored"], 2);
+    assert_eq!(result["current_workspace_untouched"], true);
+    assert!(result["checkpoint"]["commit"]
+        .as_str()
+        .unwrap()
+        .bytes()
+        .all(|byte| byte.is_ascii_hexdigit()));
+
+    let recovered_tree = PathBuf::from(result["recovered_tree"].as_str().unwrap());
+    let index_file = PathBuf::from(result["index_file"].as_str().unwrap());
+    assert!(recovered_tree.is_dir());
+    assert!(index_file.is_file());
+    assert_eq!(
+        std::fs::read_to_string(recovered_tree.join("src/app.py")).unwrap(),
+        "print('v1')\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(recovered_tree.join("README.md")).unwrap(),
+        "# demo\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/app.py")).unwrap(),
+        "print('v2')\n"
+    );
+    assert!(!root.join("README.md").exists());
+
+    let commands = result["stock_git_commands"].as_array().unwrap();
+    assert_eq!(commands.len(), 4);
+    let commands = commands
+        .iter()
+        .map(|value| value.as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(commands.iter().any(|command| command.contains("show-ref")));
+    assert!(commands.iter().any(|command| command.contains("ls-tree")));
+    assert!(commands.iter().any(|command| command.contains("read-tree")));
+    assert!(commands
+        .iter()
+        .any(|command| command.contains("checkout-index")));
+
+    let _ = std::fs::remove_dir_all(recovered_tree);
+    let _ = std::fs::remove_file(index_file);
+}
+
+#[test]
 fn quickstart_is_context_aware_and_json() {
     let tmp = tempfile::tempdir().unwrap();
 

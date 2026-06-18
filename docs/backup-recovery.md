@@ -94,6 +94,20 @@ Run a drill before a pilot. Do it in a temporary directory so production files
 are not touched:
 
 ```bash
+asp drill recovery
+asp drill recovery --checkpoint 42
+asp --json drill recovery > asp-recovery-drill.json
+```
+
+`asp drill recovery` restores a checkpoint into a unique temp directory using
+stock `git` against `.asp/shadow.git`, reports the recovered tree and temporary
+index file, and leaves the current workspace untouched. See
+[docs/drills.md](drills.md) for the JSON contract, cleanup steps, and failure
+triage.
+
+The equivalent manual stock-git flow is:
+
+```bash
 mkdir -p /tmp/asp-drill
 rm -f /tmp/asp-drill.index
 GIT_DIR=/path/to/repo/.asp/shadow.git \
@@ -116,7 +130,8 @@ large file with stock tools.
 
 Success criteria:
 
-- `git log --all` lists the expected checkpoints.
+- `asp drill recovery` reports `status: passed`, or `git log --all` lists the
+  expected checkpoints during the manual fallback.
 - A recent checkpoint materializes into the temporary directory.
 - Large-file pointer paths can be matched to files in `.asp/blobs/`.
 - `asp doctor --deep` is clean in the original workspace.

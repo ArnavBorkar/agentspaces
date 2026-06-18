@@ -54,6 +54,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp config validate --json` | `#/$defs/configShowReport` |
 | `asp config diff --against <file> --json` | `#/$defs/configDiffReport` |
 | `asp bench self --json` | `#/$defs/benchSelfReport` |
+| `asp drill recovery --json` | `#/$defs/drillRecoveryReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp completions <shell> --json` | `#/$defs/completionResult` |
 | `asp manpage --json` | `#/$defs/manpageResult` |
@@ -143,6 +144,16 @@ removes the probe before exiting. Each prerequisite has an `id`, `ok`,
 `severity`, `summary`, and nullable `hint` so first-run tooling can surface
 platform, symlink privilege, hardlink, atomic-rename, and copy-on-write fork
 issues without parsing prose.
+
+`asp drill recovery --json` restores the latest checkpoint, or the checkpoint
+named with `--checkpoint`, into a unique temp directory using stock `git`
+commands against `.asp/shadow.git`. Successful reports include
+`kind: "recovery"`, `status: "passed"`, checkpoint `seq` and `commit`,
+`recovered_tree`, `index_file`, `files_restored`, the executed
+`stock_git_commands`, `current_workspace_untouched: true`, and `next_actions`
+for cleanup and follow-up validation. Failures use the standard error envelope
+with corrective hints, so incident automation can fail closed without parsing
+human output.
 
 `asp config show --json` and `asp config validate --json` both return
 `configShowReport` when the effective config parses successfully. Invalid
