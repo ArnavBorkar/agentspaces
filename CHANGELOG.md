@@ -7,6 +7,9 @@
 - `asp-core` now includes an S3-compatible sync remote adapter behind the
   `SyncRemote` trait, with SigV4 signing, ETag conditional writes, scoped
   prefixes, and paginated `ListObjectsV2` parsing.
+- `asp-core` now includes a GCS sync remote adapter behind the `SyncRemote`
+  trait, with bearer-token requests, object-generation conditional writes,
+  scoped prefixes, and paginated JSON object listing.
 - `docs/sync-credentials.md` documents least-privilege S3-compatible, GCS, and
   Azure Blob credential scopes for user-owned sync storage.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`

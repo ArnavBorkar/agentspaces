@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use fs2::FileExt;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
 
@@ -29,6 +30,13 @@ pub struct LocalRemote {
 pub struct S3Remote<T> {
     config: S3RemoteConfig,
     endpoint: S3Endpoint,
+    transport: T,
+}
+
+#[derive(Debug, Clone)]
+pub struct GcsRemote<T> {
+    config: GcsRemoteConfig,
+    endpoint: GcsEndpoint,
     transport: T,
 }
 
@@ -95,6 +103,46 @@ impl S3RemoteConfig {
     }
 }
 
+#[derive(Clone)]
+pub struct GcsRemoteConfig {
+    pub endpoint: String,
+    pub bucket: String,
+    pub bearer_token: String,
+    pub prefix: String,
+}
+
+impl fmt::Debug for GcsRemoteConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GcsRemoteConfig")
+            .field("endpoint", &self.endpoint)
+            .field("bucket", &self.bucket)
+            .field("bearer_token", &"<redacted>")
+            .field("prefix", &self.prefix)
+            .finish()
+    }
+}
+
+impl GcsRemoteConfig {
+    pub fn new(bucket: impl Into<String>, bearer_token: impl Into<String>) -> Self {
+        Self {
+            endpoint: "https://storage.googleapis.com".to_string(),
+            bucket: bucket.into(),
+            bearer_token: bearer_token.into(),
+            prefix: String::new(),
+        }
+    }
+
+    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.endpoint = endpoint.into();
+        self
+    }
+
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum S3Method {
     Get,
@@ -108,6 +156,12 @@ impl S3Method {
             Self::Put => "PUT",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GcsMethod {
+    Get,
+    Post,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,14 +203,62 @@ impl S3Response {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GcsRequest {
+    pub method: GcsMethod,
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GcsResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+impl GcsResponse {
+    pub fn new(
+        status: u16,
+        headers: Vec<(impl Into<String>, impl Into<String>)>,
+        body: Vec<u8>,
+    ) -> Self {
+        Self {
+            status,
+            headers: headers
+                .into_iter()
+                .map(|(name, value)| (name.into(), value.into()))
+                .collect(),
+            body,
+        }
+    }
+
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
+}
+
 pub trait S3Transport: Send + Sync {
     fn send(&self, request: S3Request) -> Result<S3Response>;
+}
+
+pub trait GcsTransport: Send + Sync {
+    fn send(&self, request: GcsRequest) -> Result<GcsResponse>;
 }
 
 #[derive(Debug, Clone)]
 struct S3Endpoint {
     scheme: String,
     authority: String,
+    origin: String,
+}
+
+#[derive(Debug, Clone)]
+struct GcsEndpoint {
     origin: String,
 }
 
@@ -221,7 +323,7 @@ impl<T: S3Transport> S3Remote<T> {
         if config.secret_access_key.is_empty() {
             return Err(s3_config_error("S3 secret access key must be non-empty"));
         }
-        config.prefix = normalize_s3_prefix(&config.prefix)?;
+        config.prefix = normalize_remote_prefix(&config.prefix)?;
         let endpoint = parse_s3_endpoint(&config.endpoint)?;
         Ok(Self {
             config,
@@ -543,6 +645,259 @@ struct S3RequestTarget {
     origin: String,
     canonical_uri: String,
     host_header: String,
+}
+
+impl<T: GcsTransport> GcsRemote<T> {
+    pub fn new(mut config: GcsRemoteConfig, transport: T) -> Result<Self> {
+        if config.bucket.trim().is_empty()
+            || config.bucket.contains('/')
+            || config.bucket.contains('\\')
+            || config.bucket.bytes().any(|b| b.is_ascii_control())
+        {
+            return Err(gcs_config_error(
+                "GCS bucket name must be non-empty and must not contain path separators",
+            ));
+        }
+        if config.bearer_token.trim().is_empty() {
+            return Err(gcs_config_error("GCS bearer token must be non-empty"));
+        }
+        config.prefix = normalize_remote_prefix(&config.prefix)?;
+        let endpoint = parse_gcs_endpoint(&config.endpoint)?;
+        Ok(Self {
+            config,
+            endpoint,
+            transport,
+        })
+    }
+
+    pub fn config(&self) -> &GcsRemoteConfig {
+        &self.config
+    }
+
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+
+    fn get_request(&self, key: &str) -> Result<GcsRequest> {
+        let scoped_key = self.scoped_key(key)?;
+        self.request(
+            GcsMethod::Get,
+            &format!(
+                "/storage/v1/b/{}/o/{}",
+                percent_encode_path_segment(&self.config.bucket),
+                percent_encode_query(&scoped_key)
+            ),
+            vec![("alt".to_string(), "media".to_string())],
+            Vec::new(),
+            vec![("Accept".to_string(), "application/octet-stream".to_string())],
+        )
+    }
+
+    fn list_request(&self, prefix: &str, page_token: Option<&str>) -> Result<GcsRequest> {
+        let mut query = vec![("prefix".to_string(), self.scoped_list_prefix(prefix)?)];
+        if let Some(token) = page_token {
+            query.push(("pageToken".to_string(), token.to_string()));
+        }
+        self.request(
+            GcsMethod::Get,
+            &format!(
+                "/storage/v1/b/{}/o",
+                percent_encode_path_segment(&self.config.bucket)
+            ),
+            query,
+            Vec::new(),
+            vec![("Accept".to_string(), "application/json".to_string())],
+        )
+    }
+
+    fn upload_request(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        generation_match: &str,
+    ) -> Result<GcsRequest> {
+        let scoped_key = self.scoped_key(key)?;
+        self.request(
+            GcsMethod::Post,
+            &format!(
+                "/upload/storage/v1/b/{}/o",
+                percent_encode_path_segment(&self.config.bucket)
+            ),
+            vec![
+                (
+                    "ifGenerationMatch".to_string(),
+                    generation_match.to_string(),
+                ),
+                ("name".to_string(), scoped_key),
+                ("uploadType".to_string(), "media".to_string()),
+            ],
+            bytes.to_vec(),
+            vec![(
+                "Content-Type".to_string(),
+                "application/octet-stream".to_string(),
+            )],
+        )
+    }
+
+    fn request(
+        &self,
+        method: GcsMethod,
+        path: &str,
+        query: Vec<(String, String)>,
+        body: Vec<u8>,
+        mut headers: Vec<(String, String)>,
+    ) -> Result<GcsRequest> {
+        headers.push((
+            "Authorization".to_string(),
+            format!("Bearer {}", self.config.bearer_token),
+        ));
+        Ok(GcsRequest {
+            method,
+            url: if query.is_empty() {
+                format!("{}{}", self.endpoint.origin, path)
+            } else {
+                format!(
+                    "{}{}?{}",
+                    self.endpoint.origin,
+                    path,
+                    canonical_query(&query)
+                )
+            },
+            headers,
+            body,
+        })
+    }
+
+    fn scoped_key(&self, key: &str) -> Result<String> {
+        validate_key(key)?;
+        if self.config.prefix.is_empty() {
+            Ok(key.to_string())
+        } else {
+            Ok(format!("{}/{}", self.config.prefix, key))
+        }
+    }
+
+    fn scoped_list_prefix(&self, prefix: &str) -> Result<String> {
+        let prefix = normalize_prefix(prefix)?;
+        let scoped = match (self.config.prefix.is_empty(), prefix.is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => prefix,
+            (false, true) => format!("{}/", self.config.prefix),
+            (false, false) => format!("{}/{prefix}/", self.config.prefix),
+        };
+        if scoped.is_empty() || scoped.ends_with('/') {
+            Ok(scoped)
+        } else {
+            Ok(format!("{scoped}/"))
+        }
+    }
+
+    fn unscoped_key(&self, key: &str) -> Option<String> {
+        if self.config.prefix.is_empty() {
+            Some(key.to_string())
+        } else {
+            key.strip_prefix(&format!("{}/", self.config.prefix))
+                .map(|rest| rest.to_string())
+        }
+    }
+}
+
+impl<T: GcsTransport> SyncRemote for GcsRemote<T> {
+    fn get(&self, key: &str) -> Result<Option<RemoteObject>> {
+        let request = self.get_request(key)?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 => {
+                let version = gcs_generation_version(&response, key)?;
+                Ok(Some(RemoteObject {
+                    bytes: response.body,
+                    version,
+                }))
+            }
+            404 => Ok(None),
+            status => Err(gcs_status_error(status, format!("read object '{key}'"))),
+        }
+    }
+
+    fn list(&self, prefix: &str) -> Result<Vec<RemoteEntry>> {
+        let mut entries = Vec::new();
+        let mut page_token = None;
+        loop {
+            let request = self.list_request(prefix, page_token.as_deref())?;
+            let response = self.transport.send(request)?;
+            if response.status != 200 {
+                return Err(gcs_status_error(
+                    response.status,
+                    format!("list prefix '{prefix}'"),
+                ));
+            }
+            let page = parse_gcs_list_page(&response.body)?;
+            for object in page.items {
+                let Some(key) = self.unscoped_key(&object.name) else {
+                    continue;
+                };
+                validate_key(&key)?;
+                entries.push(RemoteEntry {
+                    key,
+                    bytes: object.size,
+                    version: RemoteVersion(object.generation),
+                });
+            }
+            let Some(next) = page.next_page_token else {
+                break;
+            };
+            page_token = Some(next);
+        }
+        entries.sort_by(|a, b| a.key.cmp(&b.key));
+        Ok(entries)
+    }
+
+    fn put_immutable(&self, key: &str, bytes: &[u8]) -> Result<PutOutcome> {
+        let request = self.upload_request(key, bytes, "0")?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 | 201 => Ok(PutOutcome::Created),
+            409 | 412 => match self.get(key)? {
+                Some(existing) if existing.bytes == bytes => Ok(PutOutcome::AlreadyExists),
+                Some(_) => Err(remote_corrupt(format!(
+                    "remote immutable key '{key}' already exists with different bytes"
+                ))),
+                None => Err(sync_conflict(format!(
+                    "remote immutable key '{key}' changed during conditional create"
+                ))),
+            },
+            status => Err(gcs_status_error(
+                status,
+                format!("write immutable object '{key}'"),
+            )),
+        }
+    }
+
+    fn put_if_match(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        expected: Option<&RemoteVersion>,
+    ) -> Result<PutOutcome> {
+        let Some(expected) = expected else {
+            return self.put_immutable(key, bytes);
+        };
+        let request = self.upload_request(key, bytes, expected.token())?;
+        let response = self.transport.send(request)?;
+        match response.status {
+            200 | 201 => Ok(PutOutcome::Replaced),
+            409 | 412 => Err(sync_conflict(format!(
+                "remote key '{key}' changed before conditional write"
+            ))),
+            404 => Err(sync_conflict(format!(
+                "remote key '{key}' is missing; conditional write expected an existing version"
+            ))),
+            status => Err(gcs_status_error(
+                status,
+                format!("conditionally write object '{key}'"),
+            )),
+        }
+    }
 }
 
 impl LocalRemote {
@@ -957,7 +1312,40 @@ fn parse_s3_endpoint(endpoint: &str) -> Result<S3Endpoint> {
     })
 }
 
-fn normalize_s3_prefix(prefix: &str) -> Result<String> {
+fn gcs_config_error(message: impl Into<String>) -> Error {
+    Error::new(ErrorCode::Io, message).with_hint("fix the GCS remote configuration and retry sync")
+}
+
+fn gcs_status_error(status: u16, action: impl AsRef<str>) -> Error {
+    Error::new(
+        ErrorCode::Io,
+        format!("GCS remote failed to {}: HTTP {status}", action.as_ref()),
+    )
+    .with_hint("verify the endpoint, credentials, bucket policy, and object prefix")
+}
+
+fn parse_gcs_endpoint(endpoint: &str) -> Result<GcsEndpoint> {
+    let endpoint = endpoint.trim().trim_end_matches('/');
+    let rest = endpoint
+        .strip_prefix("https://")
+        .or_else(|| endpoint.strip_prefix("http://"))
+        .ok_or_else(|| gcs_config_error("GCS endpoint must start with http:// or https://"))?;
+    if rest.is_empty()
+        || rest.contains('/')
+        || rest.contains('?')
+        || rest.contains('#')
+        || rest.contains('@')
+    {
+        return Err(gcs_config_error(
+            "GCS endpoint must be an origin such as https://storage.googleapis.com",
+        ));
+    }
+    Ok(GcsEndpoint {
+        origin: endpoint.to_string(),
+    })
+}
+
+fn normalize_remote_prefix(prefix: &str) -> Result<String> {
     let prefix = prefix.trim_matches('/');
     if prefix.is_empty() {
         Ok(String::new())
@@ -1212,6 +1600,68 @@ fn in_s3_contents(path: &[String]) -> bool {
     path.iter().any(|element| element == "Contents")
 }
 
+fn gcs_generation_version(response: &GcsResponse, key: &str) -> Result<RemoteVersion> {
+    response
+        .header("x-goog-generation")
+        .map(|generation| RemoteVersion(generation.to_string()))
+        .ok_or_else(|| {
+            remote_corrupt(format!(
+                "GCS response for key '{key}' did not include an x-goog-generation version"
+            ))
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GcsListPage {
+    items: Vec<GcsListedObject>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GcsListedObject {
+    name: String,
+    size: u64,
+    generation: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawGcsListPage {
+    #[serde(default)]
+    items: Vec<RawGcsListedObject>,
+    next_page_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawGcsListedObject {
+    name: String,
+    size: String,
+    generation: String,
+}
+
+fn parse_gcs_list_page(bytes: &[u8]) -> Result<GcsListPage> {
+    let raw: RawGcsListPage = serde_json::from_slice(bytes)
+        .map_err(|e| remote_corrupt(format!("GCS list response is not valid JSON: {e}")))?;
+    let mut items = Vec::new();
+    for item in raw.items {
+        let size = item.size.parse::<u64>().map_err(|e| {
+            remote_corrupt(format!(
+                "GCS list object '{}' has a non-numeric size: {e}",
+                item.name
+            ))
+        })?;
+        items.push(GcsListedObject {
+            name: item.name,
+            size,
+            generation: item.generation,
+        });
+    }
+    Ok(GcsListPage {
+        items,
+        next_page_token: raw.next_page_token,
+    })
+}
+
 fn version_for(bytes: &[u8]) -> RemoteVersion {
     RemoteVersion(blake3::hash(bytes).to_hex().to_string())
 }
@@ -1230,6 +1680,12 @@ mod tests {
     struct RecordingS3Transport {
         responses: Mutex<VecDeque<S3Response>>,
         requests: Mutex<Vec<S3Request>>,
+    }
+
+    #[derive(Debug)]
+    struct RecordingGcsTransport {
+        responses: Mutex<VecDeque<GcsResponse>>,
+        requests: Mutex<Vec<GcsRequest>>,
     }
 
     impl RecordingS3Transport {
@@ -1254,6 +1710,28 @@ mod tests {
         }
     }
 
+    impl RecordingGcsTransport {
+        fn new(responses: Vec<GcsResponse>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into()),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn requests(&self) -> Vec<GcsRequest> {
+            self.requests.lock().unwrap().clone()
+        }
+    }
+
+    impl GcsTransport for RecordingGcsTransport {
+        fn send(&self, request: GcsRequest) -> Result<GcsResponse> {
+            self.requests.lock().unwrap().push(request);
+            self.responses.lock().unwrap().pop_front().ok_or_else(|| {
+                Error::new(ErrorCode::Io, "mock GCS transport has no queued response")
+            })
+        }
+    }
+
     fn test_s3_remote(responses: Vec<S3Response>) -> S3Remote<RecordingS3Transport> {
         S3Remote::new(
             S3RemoteConfig::new(
@@ -1269,7 +1747,24 @@ mod tests {
         .unwrap()
     }
 
+    fn test_gcs_remote(responses: Vec<GcsResponse>) -> GcsRemote<RecordingGcsTransport> {
+        GcsRemote::new(
+            GcsRemoteConfig::new("team-bucket", "token").with_prefix("/team-a/asp/"),
+            RecordingGcsTransport::new(responses),
+        )
+        .unwrap()
+    }
+
     fn request_header<'a>(request: &'a S3Request, name: &str) -> &'a str {
+        request
+            .headers
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+            .unwrap_or_else(|| panic!("missing request header {name}"))
+    }
+
+    fn gcs_request_header<'a>(request: &'a GcsRequest, name: &str) -> &'a str {
         request
             .headers
             .iter()
@@ -1546,6 +2041,140 @@ mod tests {
     }
 
     #[test]
+    fn gcs_remote_uploads_immutable_with_generation_precondition() {
+        let remote = test_gcs_remote(vec![GcsResponse::new(
+            200,
+            vec![("x-goog-generation", "11")],
+            Vec::new(),
+        )]);
+
+        assert_eq!(
+            remote
+                .put_immutable("objects/git/sha1/aa/1111", b"one")
+                .unwrap(),
+            PutOutcome::Created
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        assert_eq!(request.method, GcsMethod::Post);
+        assert_eq!(
+            request.url,
+            "https://storage.googleapis.com/upload/storage/v1/b/team-bucket/o?ifGenerationMatch=0&name=team-a%2Fasp%2Fobjects%2Fgit%2Fsha1%2Faa%2F1111&uploadType=media"
+        );
+        assert_eq!(request.body, b"one");
+        assert_eq!(gcs_request_header(request, "Authorization"), "Bearer token");
+        assert_eq!(
+            gcs_request_header(request, "Content-Type"),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn gcs_remote_treats_same_immutable_bytes_as_present() {
+        let remote = test_gcs_remote(vec![
+            GcsResponse::new(412, Vec::<(&str, &str)>::new(), Vec::new()),
+            GcsResponse::new(200, vec![("x-goog-generation", "12")], b"one".to_vec()),
+        ]);
+
+        assert_eq!(
+            remote
+                .put_immutable("objects/git/sha1/aa/1111", b"one")
+                .unwrap(),
+            PutOutcome::AlreadyExists
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].method, GcsMethod::Post);
+        assert_eq!(requests[1].method, GcsMethod::Get);
+        assert_eq!(
+            requests[1].url,
+            "https://storage.googleapis.com/storage/v1/b/team-bucket/o/team-a%2Fasp%2Fobjects%2Fgit%2Fsha1%2Faa%2F1111?alt=media"
+        );
+    }
+
+    #[test]
+    fn gcs_remote_uses_generations_for_conditional_ref_writes() {
+        let remote = test_gcs_remote(vec![
+            GcsResponse::new(200, Vec::<(&str, &str)>::new(), Vec::new()),
+            GcsResponse::new(412, Vec::<(&str, &str)>::new(), Vec::new()),
+        ]);
+        let version = RemoteVersion("12345".to_string());
+
+        assert_eq!(
+            remote
+                .put_if_match("refs/head.json", br#"{"seq":2}"#, Some(&version))
+                .unwrap(),
+            PutOutcome::Replaced
+        );
+        let stale = remote
+            .put_if_match("refs/head.json", br#"{"seq":3}"#, Some(&version))
+            .unwrap_err();
+        assert_eq!(stale.code, ErrorCode::SyncConflict);
+
+        let requests = remote.transport().requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].url.contains("ifGenerationMatch=12345"));
+        assert!(requests[1].url.contains("ifGenerationMatch=12345"));
+    }
+
+    #[test]
+    fn gcs_remote_lists_paginated_prefixed_objects() {
+        let first_page = br#"{
+          "items": [
+            {
+              "name": "team-a/asp/objects/git/sha1/aa/1111",
+              "size": "3",
+              "generation": "11"
+            }
+          ],
+          "nextPageToken": "next-page"
+        }"#;
+        let second_page = br#"{
+          "items": [
+            {
+              "name": "team-a/asp/objects/blobs/blake3/bbbb",
+              "size": "4",
+              "generation": "12"
+            }
+          ]
+        }"#;
+        let remote = test_gcs_remote(vec![
+            GcsResponse::new(200, Vec::<(&str, &str)>::new(), first_page.to_vec()),
+            GcsResponse::new(200, Vec::<(&str, &str)>::new(), second_page.to_vec()),
+        ]);
+
+        let entries = remote.list("objects").unwrap();
+        assert_eq!(
+            entries,
+            vec![
+                RemoteEntry {
+                    key: "objects/blobs/blake3/bbbb".to_string(),
+                    bytes: 4,
+                    version: RemoteVersion("12".to_string())
+                },
+                RemoteEntry {
+                    key: "objects/git/sha1/aa/1111".to_string(),
+                    bytes: 3,
+                    version: RemoteVersion("11".to_string())
+                }
+            ]
+        );
+
+        let requests = remote.transport().requests();
+        assert_eq!(
+            requests[0].url,
+            "https://storage.googleapis.com/storage/v1/b/team-bucket/o?prefix=team-a%2Fasp%2Fobjects%2F"
+        );
+        assert_eq!(
+            requests[1].url,
+            "https://storage.googleapis.com/storage/v1/b/team-bucket/o?pageToken=next-page&prefix=team-a%2Fasp%2Fobjects%2F"
+        );
+    }
+
+    #[test]
     fn s3_config_debug_redacts_secrets() {
         let debug = format!(
             "{:?}",
@@ -1563,5 +2192,17 @@ mod tests {
         assert!(debug.contains("session_token_present"));
         assert!(!debug.contains("super-secret"));
         assert!(!debug.contains("temporary-token"));
+    }
+
+    #[test]
+    fn gcs_config_debug_redacts_bearer_token() {
+        let debug = format!(
+            "{:?}",
+            GcsRemoteConfig::new("team-bucket", "super-secret-token")
+                .with_endpoint("https://storage.googleapis.com")
+        );
+
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("super-secret-token"));
     }
 }

@@ -71,13 +71,15 @@ The `asp` CLI sync commands support local filesystem remotes only. They are
 enough to create and restore an auditable remote backup, but they are not yet a
 full multi-device reconciliation workflow.
 
-`asp-core` also includes an S3-compatible adapter behind the `SyncRemote` trait
-for integrators that are ready to wire their own credential loading and HTTP
-transport. The adapter signs AWS SigV4 requests, scopes keys under an optional
-prefix, maps remote versions to S3 ETags, uses `If-None-Match: *` for immutable
-objects, uses `If-Match` for compare-and-swap ref writes, and parses paginated
-`ListObjectsV2` responses. The CLI will stay local-only until the credential,
-policy, and recovery UX is explicit enough for operators to audit.
+`asp-core` also includes S3-compatible and GCS adapters behind the `SyncRemote`
+trait for integrators that are ready to wire their own credential loading and
+HTTP transport. The S3 adapter signs AWS SigV4 requests, maps remote versions
+to S3 ETags, and parses paginated `ListObjectsV2` responses. The GCS adapter
+uses OAuth bearer-token requests, maps remote versions to object generations,
+uses `ifGenerationMatch=0` for immutable objects, uses generation matches for
+compare-and-swap ref writes, and parses paginated JSON object listings. The CLI
+will stay local-only until the credential, policy, and recovery UX is explicit
+enough for operators to audit.
 
 See [sync credential scopes](sync-credentials.md) for least-privilege bucket,
 container, and token guidance.

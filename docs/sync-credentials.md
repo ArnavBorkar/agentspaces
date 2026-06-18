@@ -93,7 +93,7 @@ actions to a sync writer.
 
 ## Google Cloud Storage
 
-A GCS adapter should use generation preconditions for the same create-only and
+The GCS adapter uses generation preconditions for the same create-only and
 compare-and-swap behavior. The minimum custom role should include:
 
 - `storage.objects.list`;
