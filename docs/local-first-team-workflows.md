@@ -23,6 +23,8 @@ Keep the evidence small and reviewable:
 | Fork comparison | `asp forks` or `asp race compare --name <race>` | Shows candidate work and ranking. |
 | Promoted branch diff | `git diff main...asp/<fork>` | Gives reviewers normal code-review context. |
 | Diagnostics bundle | `asp diagnostics --output asp-diagnostics.json` | Redacted support and incident evidence. |
+| Evidence packet | `asp evidence collect --output asp-evidence.json` | Redacted support handoff with preflight, schema, and recent audit context. |
+| Evidence manifest | `asp evidence manifest --packet asp-evidence.json --output asp-evidence.manifest.json` | Binds the shared packet name, byte length, and SHA-256 digest. |
 | Test output | Team's normal test command | Proves the chosen lane works. |
 
 Do not attach full diagnostics with paths, race logs, or fork contents to public
@@ -228,5 +230,6 @@ Automation must not:
 - [Local engine governance](local-engine-governance.md)
 - [Future control plane constraints](control-plane-constraints.md)
 - [Enterprise support boundaries](enterprise-support-boundaries.md)
+- [Support ticket templates](support-ticket-templates.md)
 - [Enterprise workflow playbooks](playbooks.md)
 - [Trust model whitepaper](trust-model.md)

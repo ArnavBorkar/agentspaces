@@ -78,6 +78,11 @@ Keep the packet, `asp-evidence.manifest.json`, and the signature or Sigstore
 bundle together. The signature proves the manifest; the manifest binds the
 reviewed packet bytes through `sha256`.
 
+For copyable public, private incident, security, and CI ticket formats, use the
+[support ticket templates](support-ticket-templates.md). Each template calls out
+the expected redaction statement, manifest verification command, and signature
+artifact before any richer support escalation.
+
 ## Review Checklist
 
 Before sharing:

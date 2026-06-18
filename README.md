@@ -109,6 +109,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Future control plane constraints** — [docs/control-plane-constraints.md](docs/control-plane-constraints.md)
 - **Local-first team workflows** — [docs/local-first-team-workflows.md](docs/local-first-team-workflows.md)
 - **Enterprise support boundaries** — [docs/enterprise-support-boundaries.md](docs/enterprise-support-boundaries.md)
+- **Support ticket templates** — [docs/support-ticket-templates.md](docs/support-ticket-templates.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Sync** — [docs/sync.md](docs/sync.md)
 - **Monorepo tuning** — [docs/monorepo-tuning.md](docs/monorepo-tuning.md)

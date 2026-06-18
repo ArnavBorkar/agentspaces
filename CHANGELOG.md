@@ -89,6 +89,9 @@
 - `asp evidence verify` validates packet artifact name, byte length, and
   SHA-256 digest against a manifest, returning structured JSON and nonzero
   status on mismatch.
+- `docs/support-ticket-templates.md` adds public, private incident, security,
+  and CI evidence handoff templates with redaction, manifest verification, and
+  signature expectations.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

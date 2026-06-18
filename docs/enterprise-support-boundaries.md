@@ -37,7 +37,13 @@ Default support packet:
 ```bash
 asp --version
 asp doctor --deep
-asp diagnostics --output asp-diagnostics.json
+asp evidence collect --output asp-evidence.json
+asp evidence manifest \
+  --packet asp-evidence.json \
+  --output asp-evidence.manifest.json
+asp evidence verify \
+  --packet asp-evidence.json \
+  --manifest asp-evidence.manifest.json
 asp --json status > asp-status.json
 asp --json stats > asp-stats.json
 ```
@@ -140,6 +146,7 @@ account.
 
 ## Related Docs
 
+- [Support ticket templates](support-ticket-templates.md)
 - [Diagnostics bundles](diagnostics.md)
 - [Trust model whitepaper](trust-model.md)
 - [Future control plane constraints](control-plane-constraints.md)

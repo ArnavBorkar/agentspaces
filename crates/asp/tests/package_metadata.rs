@@ -673,6 +673,7 @@ fn evidence_docs_cover_redacted_local_packets() {
         "cosign sign-blob",
         "cosign verify-blob",
         "minisign",
+        "support ticket templates",
         "## Review Checklist",
         "redaction.paths_redacted",
         "audit_details_included",
@@ -682,6 +683,46 @@ fn evidence_docs_cover_redacted_local_packets() {
     ] {
         assert!(docs.contains(needle), "evidence docs missing {needle}");
     }
+}
+
+#[test]
+fn support_ticket_templates_cover_evidence_handoff() {
+    let docs = fs::read_to_string(repo_file("docs/support-ticket-templates.md")).unwrap();
+    for needle in [
+        "# Support Ticket Templates",
+        "## Public Issue",
+        "## Private Support Incident",
+        "## Security Or Sensitive Data Report",
+        "## CI Evidence Handoff",
+        "## Collection Commands",
+        "## Maintainer Intake",
+        "asp evidence collect --output asp-evidence.json",
+        "asp evidence manifest",
+        "asp evidence verify",
+        "asp-evidence.manifest.json",
+        "redaction.paths_redacted",
+        "redaction.secrets_redacted",
+        "audit_messages_included",
+        "audit_details_included",
+        "Sigstore",
+        "minisign",
+        "cosign verify-blob",
+        "asp-preflight.sarif",
+        "asp-secrets.sarif",
+        "retention expectation",
+        "Do not ask for source archives",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "support ticket templates missing {needle}"
+        );
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/support-ticket-templates.md"),
+        "README should link support ticket templates"
+    );
 }
 
 #[test]
