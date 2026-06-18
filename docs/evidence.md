@@ -28,6 +28,63 @@ Use `--deep` when the packet should include deep preflight doctor checks such
 as CAS verification. Use `--include-paths` only for a private support channel
 where full local paths are acceptable.
 
+## Signed Manifest
+
+When an evidence packet leaves a workstation or CI runner, attach a small
+manifest and sign that manifest with the same external tooling used for release
+verification.
+
+```bash
+asp evidence collect --output asp-evidence.json
+python3 - <<'PY'
+import hashlib
+import json
+import pathlib
+import time
+
+packet = pathlib.Path("asp-evidence.json")
+manifest = {
+    "artifact": str(packet),
+    "bytes": packet.stat().st_size,
+    "sha256": hashlib.sha256(packet.read_bytes()).hexdigest(),
+    "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    "created_by": "asp evidence collect",
+}
+pathlib.Path("asp-evidence.manifest.json").write_text(
+    json.dumps(manifest, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+```
+
+Sign with Sigstore when the environment already uses keyless signing:
+
+```bash
+cosign sign-blob \
+  --bundle asp-evidence.manifest.sigstore.json \
+  asp-evidence.manifest.json
+```
+
+Verify later with the expected identity for the signer:
+
+```bash
+cosign verify-blob \
+  --bundle asp-evidence.manifest.sigstore.json \
+  --certificate-identity-regexp "<expected signer identity>" \
+  asp-evidence.manifest.json
+```
+
+For offline teams, use minisign instead:
+
+```bash
+minisign -S -m asp-evidence.manifest.json -x asp-evidence.manifest.minisig
+minisign -Vm asp-evidence.manifest.json -x asp-evidence.manifest.minisig -P "<public key>"
+```
+
+Keep the packet, `asp-evidence.manifest.json`, and the signature or Sigstore
+bundle together. The signature proves the manifest; the manifest binds the
+reviewed packet bytes through `sha256`.
+
 ## Review Checklist
 
 Before sharing:
