@@ -4,6 +4,8 @@
 Every field is optional, and a missing or empty config file means defaults.
 For team review workflows, see [config review](config-review.md).
 For copyable starting points, see [config templates](config-templates.md).
+For `.gitignore` and secrets coordination, see
+[ignore/config/secrets coordination](ignore-config-secrets.md).
 
 The parser is strict: unknown tables or keys are rejected with a
 `store_corrupt` error and a hint to fix the TOML or delete the file to restore

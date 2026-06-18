@@ -236,3 +236,27 @@ fn config_template_docs_cover_common_repository_shapes() {
         assert!(docs.contains(needle), "config templates missing {needle}");
     }
 }
+
+#[test]
+fn ignore_config_secrets_docs_cover_cross_file_ownership() {
+    let docs = fs::read_to_string(repo_file("docs/ignore-config-secrets.md")).unwrap();
+
+    for needle in [
+        ".gitignore",
+        ".asp/config.toml",
+        ".asp/policy.toml",
+        "asp secrets scan",
+        "capture.extra_excludes",
+        "protected paths",
+        "git check-ignore -v",
+        "asp config validate",
+        "asp policy validate --json",
+        "CI Gate",
+        "Do not run `asp doctor --fix`",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "ignore/config/secrets docs missing {needle}"
+        );
+    }
+}

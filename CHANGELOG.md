@@ -32,6 +32,8 @@
   reviewing `.asp/config.toml` changes and rollout risks.
 - `docs/config-templates.md` adds copyable `.asp/config.toml` starting points
   for monorepos, media-heavy repos, and generated-code repos.
+- `docs/ignore-config-secrets.md` explains how teams should coordinate
+  `.gitignore`, `.asp/config.toml`, `.asp/policy.toml`, and secrets scanning.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

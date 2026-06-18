@@ -3,6 +3,9 @@
 Use this guide when a platform, security, or enablement team reviews changes to
 `.asp/config.toml`.
 
+For cross-file ownership between `.gitignore`, `.asp/config.toml`, policy, and
+secret scanning, see [ignore/config/secrets coordination](ignore-config-secrets.md).
+
 ## Review commands
 
 ```bash
