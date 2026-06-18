@@ -75,6 +75,8 @@
   effective config review and promote branch-prefix checks.
 - `docs/schema-inventory-audit.md` now tracks shipped `--json` surfaces that
   still need Result Map rows, schema definitions, or snapshot coverage.
+- Metadata tests now require known CLI JSON surfaces to be either documented in
+  `docs/schemas.md` or explicitly tracked in the schema inventory audit.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

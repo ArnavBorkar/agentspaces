@@ -282,6 +282,71 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
 }
 
 #[test]
+fn known_cli_json_surfaces_are_mapped_or_audited() {
+    let schemas = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
+
+    let mapped = [
+        "asp init --json",
+        "asp status --json",
+        "asp stats --json",
+        "asp config show --json",
+        "asp config validate --json",
+        "asp bench self --json",
+        "asp schema --json",
+        "asp audit --json",
+        "asp policy validate --json",
+        "asp preflight --json",
+        "asp secrets scan --json",
+        "asp evidence collect --json",
+        "asp evidence collect --json --output file.json",
+        "asp retention plan --json",
+        "asp sync push --json --remote <dir>",
+        "asp sync fetch --json --remote <dir>",
+        "asp checkpoint --json",
+        "asp log --json",
+        "asp undo --json",
+        "asp restore --json",
+        "asp fork --json",
+        "asp forks --json",
+        "asp review --json",
+        "asp diff --json",
+        "asp promote --json",
+        "asp discard --json",
+        "asp race --json",
+        "asp race compare --json",
+        "asp setup claude --json",
+        "asp doctor --json",
+        "asp diagnostics --json",
+        "asp diagnostics --json --output file.json",
+    ];
+    for command in mapped {
+        assert!(
+            schemas.contains(command),
+            "mapped CLI JSON surface missing from docs/schemas.md: {command}"
+        );
+    }
+
+    let audited_followups = [
+        "asp quickstart --json",
+        "asp completions <shell> --json",
+        "asp manpage --json",
+        "asp setup codex --json",
+        "asp setup opencode --json",
+        "asp diff --json --patch",
+        "asp diff --json --stat",
+        "asp diff --json --html --output review.html",
+        "asp doctor --json --runbook",
+    ];
+    for command in audited_followups {
+        assert!(
+            audit.contains(command),
+            "unmapped CLI JSON surface missing from schema inventory audit: {command}"
+        );
+    }
+}
+
+#[test]
 fn config_review_docs_cover_security_and_rollout_checks() {
     let docs = fs::read_to_string(repo_file("docs/config-review.md")).unwrap();
 
