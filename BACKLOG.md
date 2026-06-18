@@ -458,7 +458,7 @@
 - **S35.2 Support handoff workflows**
   - [x] T35.2.1 Add support-ticket templates that reference redaction, manifest, and signature expectations.
   - [x] T35.2.2 Add CI examples that upload evidence packet, manifest, and SARIF artifacts together.
-  - [ ] T35.2.3 Add signing guidance for Sigstore and offline minisign flows using CLI-generated manifests.
+  - [x] T35.2.3 Add signing guidance for Sigstore and offline minisign flows using CLI-generated manifests.
 
 ---
 

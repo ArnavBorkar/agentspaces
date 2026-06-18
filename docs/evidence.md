@@ -50,29 +50,74 @@ the full local path to the packet. Verification recomputes the packet digest
 and exits nonzero when the artifact name, byte length, or SHA-256 digest does
 not match.
 
+Sign the manifest, not the packet. Reviewers should verify in this order:
+
+1. verify the manifest signature;
+2. run `asp evidence verify` to bind the manifest back to the packet bytes;
+3. open the evidence packet only after both checks pass.
+
+If the packet changes after signing, regenerate the manifest and signature.
+Appending a note, reformatting JSON, or changing redaction settings changes the
+packet bytes and invalidates the old manifest.
+
+## Sigstore Keyless Signing
+
 Sign with Sigstore when the environment already uses keyless signing:
 
 ```bash
 cosign sign-blob \
+  --yes \
   --bundle asp-evidence.manifest.sigstore.json \
   asp-evidence.manifest.json
 ```
 
-Verify later with the expected identity for the signer:
+Verify later with the expected identity and issuer for the signer:
 
 ```bash
 cosign verify-blob \
   --bundle asp-evidence.manifest.sigstore.json \
   --certificate-identity-regexp "<expected signer identity>" \
+  --certificate-oidc-issuer "<expected OIDC issuer>" \
   asp-evidence.manifest.json
 ```
 
-For offline teams, use minisign instead:
+For GitHub Actions, the issuer is normally
+`https://token.actions.githubusercontent.com`, and the identity should identify
+the workflow that produced the packet:
 
 ```bash
-minisign -S -m asp-evidence.manifest.json -x asp-evidence.manifest.minisig
-minisign -Vm asp-evidence.manifest.json -x asp-evidence.manifest.minisig -P "<public key>"
+cosign verify-blob \
+  --bundle asp-evidence.manifest.sigstore.json \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --certificate-identity-regexp "https://github.com/<org>/<repo>/.github/workflows/<workflow>.yml@refs/.*" \
+  asp-evidence.manifest.json
 ```
+
+For workstation signing, record the human or service identity shown by
+`cosign sign-blob` in the ticket. Do not accept "some valid Sigstore signature"
+as sufficient evidence; the identity and issuer must match the channel where
+the packet was produced.
+
+## Offline Minisign Signing
+
+Use minisign when the signer cannot use online OIDC identity or the support
+process requires an offline public key.
+
+```bash
+minisign -G -p asp-evidence.pub -s asp-evidence.sec
+minisign -S \
+  -s asp-evidence.sec \
+  -m asp-evidence.manifest.json \
+  -x asp-evidence.manifest.minisig
+minisign -Vm asp-evidence.manifest.json \
+  -x asp-evidence.manifest.minisig \
+  -p asp-evidence.pub
+```
+
+Publish `asp-evidence.pub` through the same trusted channel used for release or
+incident keys, not inside the same ticket as the first signature. Rotate the key
+when access changes, and keep the old public key available for the retention
+period of tickets it signed.
 
 Keep the packet, `asp-evidence.manifest.json`, and the signature or Sigstore
 bundle together. The signature proves the manifest; the manifest binds the

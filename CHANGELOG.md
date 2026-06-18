@@ -94,6 +94,9 @@
   signature expectations.
 - `docs/ci.md` adds GitHub Actions and GitLab evidence-bundle examples that
   upload packets, manifests, verification logs, and SARIF artifacts together.
+- `docs/evidence.md` expands evidence manifest signing guidance for Sigstore
+  keyless identities, GitHub Actions OIDC verification, and offline minisign
+  key workflows.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
