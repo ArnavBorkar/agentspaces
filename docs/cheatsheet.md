@@ -5,6 +5,7 @@ Use this as the daily `asp` workflow map.
 ## Start safely
 
 ```bash
+asp quickstart
 asp init
 asp status
 asp checkpoint -m "baseline"

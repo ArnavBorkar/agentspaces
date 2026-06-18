@@ -15,7 +15,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
-use asp_core::store::{atomic_write, FORMAT_VERSION};
+use asp_core::store::{atomic_write, find_root, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, DiffTextMode, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -65,6 +65,8 @@ enum Cmd {
     Status,
     /// Local store statistics: checkpoints, forks, blobs, size, recent timings.
     Stats,
+    /// Print a safe first-five-minutes workflow for the current directory.
+    Quickstart,
     /// Benchmark and local filesystem probes.
     Bench {
         #[command(subcommand)]
@@ -417,6 +419,28 @@ struct SchemaInfo {
 }
 
 #[derive(Debug, serde::Serialize)]
+struct QuickstartReport {
+    directory: PathBuf,
+    workspace_root: Option<PathBuf>,
+    initialized: bool,
+    steps: Vec<QuickstartStep>,
+    docs: Vec<QuickstartDoc>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct QuickstartStep {
+    title: &'static str,
+    commands: Vec<&'static str>,
+    purpose: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct QuickstartDoc {
+    title: &'static str,
+    path: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
 struct PolicyValidateReport {
     path: PathBuf,
     valid: bool,
@@ -618,6 +642,15 @@ fn run(cli: Cli) -> Result<(), Error> {
                 }
                 println!();
                 print!("{}", ui::table(&rows));
+            }
+            Ok(())
+        }
+        Cmd::Quickstart => {
+            let report = quickstart_report(cwd(&cli.dir)?);
+            if json {
+                ui::print_json(true, &report);
+            } else {
+                print_quickstart(&report);
             }
             Ok(())
         }
@@ -2471,6 +2504,98 @@ fn print_diff_summary(summary: &asp_core::workspace::DiffSummary) {
     print_diff_summary_table("path", &summary.by_path);
     print_diff_summary_table("language", &summary.by_language);
     print_diff_summary_table("change", &summary.by_change_type);
+}
+
+fn quickstart_report(directory: PathBuf) -> QuickstartReport {
+    let workspace_root = find_root(&directory);
+    let initialized = workspace_root.is_some();
+    let mut steps = Vec::new();
+
+    if !initialized {
+        steps.push(QuickstartStep {
+            title: "Adopt this directory",
+            commands: vec!["asp init"],
+            purpose: "Creates .asp metadata only; it does not capture files or write your .git.",
+        });
+    }
+
+    steps.extend([
+        QuickstartStep {
+            title: "Check the workspace",
+            commands: vec!["asp status"],
+            purpose: "Shows dirty files, the latest checkpoint, and active forks.",
+        },
+        QuickstartStep {
+            title: "Capture a baseline",
+            commands: vec!["asp checkpoint -m \"baseline\""],
+            purpose: "Records the current tree so later agent changes are easy to compare or undo.",
+        },
+        QuickstartStep {
+            title: "Wire your agent client",
+            commands: vec!["asp setup codex", "asp setup opencode", "asp setup claude"],
+            purpose: "Run the one command for the harness you use so checkpoints and MCP tools are available.",
+        },
+        QuickstartStep {
+            title: "Try work in disposable forks",
+            commands: vec!["asp race -n 3 -- <agent command>"],
+            purpose: "Runs competing attempts side by side without risking the main workspace.",
+        },
+        QuickstartStep {
+            title: "Review and land the winner",
+            commands: vec!["asp forks", "asp diff --fork <name>", "asp promote <name>"],
+            purpose: "Compares candidates, inspects changes, and promotes the winner as an ordinary git branch.",
+        },
+        QuickstartStep {
+            title: "Recover or diagnose",
+            commands: vec!["asp undo", "asp doctor --explain"],
+            purpose: "Steps back from bad changes or explains the next repair action when the store needs attention.",
+        },
+    ]);
+
+    QuickstartReport {
+        directory,
+        workspace_root,
+        initialized,
+        steps,
+        docs: vec![
+            QuickstartDoc {
+                title: "Quickstart guide",
+                path: "docs/quickstart.md",
+            },
+            QuickstartDoc {
+                title: "Command cheat sheet",
+                path: "docs/cheatsheet.md",
+            },
+            QuickstartDoc {
+                title: "30-minute evaluation guide",
+                path: "docs/evaluation.md",
+            },
+        ],
+    }
+}
+
+fn print_quickstart(report: &QuickstartReport) {
+    println!("{}", ui::bold("asp quickstart"));
+    println!("  directory: {}", report.directory.display());
+    match &report.workspace_root {
+        Some(root) => println!("  workspace: {}", root.display()),
+        None => println!("  workspace: not initialized"),
+    }
+    println!();
+
+    for (index, step) in report.steps.iter().enumerate() {
+        println!("{}. {}", index + 1, ui::bold(step.title));
+        for command in &step.commands {
+            println!("   {}", ui::cyan(command));
+        }
+        println!("   {}", step.purpose);
+        println!();
+    }
+
+    println!("{}", ui::bold("Docs"));
+    for doc in &report.docs {
+        println!("  {} - {}", doc.title, doc.path);
+    }
 }
 
 fn review_cell(review: &asp_core::workspace::ForkReviewSignals) -> String {

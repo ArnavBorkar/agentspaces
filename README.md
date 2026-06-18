@@ -92,6 +92,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Codex integration** — [docs/codex.md](docs/codex.md)
 - **OpenCode integration** — [docs/opencode.md](docs/opencode.md)
 - **Generic MCP clients** — [docs/mcp-clients.md](docs/mcp-clients.md)
+- **Quickstart** — [docs/quickstart.md](docs/quickstart.md)
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
 - **Manpage generation** — [docs/manpage.md](docs/manpage.md)
 - **Command cheat sheet** — [docs/cheatsheet.md](docs/cheatsheet.md)

@@ -79,6 +79,38 @@ fn bench_self_runs_outside_workspace() {
 }
 
 #[test]
+fn quickstart_is_context_aware_and_json() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    let human = ok(tmp.path(), &["quickstart"]);
+    assert!(human.contains("workspace: not initialized"), "{human}");
+    assert!(human.contains("asp init"), "{human}");
+    assert!(human.contains("asp checkpoint -m \"baseline\""), "{human}");
+    assert!(human.contains("docs/quickstart.md"), "{human}");
+
+    let json = ok_json(tmp.path(), &["quickstart"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["initialized"], false);
+    assert!(json["result"]["workspace_root"].is_null());
+    assert_eq!(
+        json["result"]["steps"][0]["commands"][0],
+        serde_json::json!("asp init")
+    );
+
+    ok(tmp.path(), &["init"]);
+    let initialized = ok_json(tmp.path(), &["quickstart"]);
+    assert_eq!(initialized["result"]["initialized"], true);
+    assert_eq!(
+        initialized["result"]["workspace_root"],
+        serde_json::json!(tmp.path())
+    );
+    assert_eq!(
+        initialized["result"]["steps"][0]["title"],
+        serde_json::json!("Check the workspace")
+    );
+}
+
+#[test]
 fn completions_emit_shell_scripts_and_json() {
     let tmp = tempfile::tempdir().unwrap();
     let bash = ok(tmp.path(), &["completions", "bash"]);

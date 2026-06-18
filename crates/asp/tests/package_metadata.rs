@@ -111,6 +111,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
 
     let expected = [
         "## Start safely",
+        "asp quickstart",
         "asp init",
         "asp checkpoint -m \"baseline\"",
         "asp setup codex",
@@ -131,5 +132,23 @@ fn command_cheat_sheet_covers_daily_workflows() {
 
     for needle in expected {
         assert!(docs.contains(needle), "cheat sheet missing {needle}");
+    }
+}
+
+#[test]
+fn quickstart_docs_cover_safe_first_five_minutes() {
+    let docs = fs::read_to_string(repo_file("docs/quickstart.md")).unwrap();
+
+    for needle in [
+        "asp quickstart",
+        "read-only",
+        "asp init",
+        "asp checkpoint -m \"baseline\"",
+        "asp race -n 3 -- <agent command>",
+        "asp promote <name>",
+        "asp undo",
+        "asp doctor --explain",
+    ] {
+        assert!(docs.contains(needle), "quickstart docs missing {needle}");
     }
 }
