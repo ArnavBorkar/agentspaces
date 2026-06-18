@@ -124,6 +124,9 @@ container, and token guidance. See [sync emulator fixtures](sync-emulators.md)
 for ignored integration tests that can run against MinIO, fake-gcs-server, or
 Azurite.
 
+See [sync remote recovery](sync-recovery.md) for restoring checkpointed source
+from a remote-only backup when the local `.asp/` store is missing.
+
 See [sync client-side encryption design](sync-encryption.md) for the planned
 encrypted remote namespace, key hierarchy, object envelope, ref CAS behavior,
 rotation, and recovery model.

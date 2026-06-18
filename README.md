@@ -115,6 +115,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **Support ticket templates** — [docs/support-ticket-templates.md](docs/support-ticket-templates.md)
 - **Backup and disaster recovery** — [docs/backup-recovery.md](docs/backup-recovery.md)
 - **Sync** — [docs/sync.md](docs/sync.md)
+- **Sync remote recovery** — [docs/sync-recovery.md](docs/sync-recovery.md)
 - **Sync credential scopes** — [docs/sync-credentials.md](docs/sync-credentials.md)
 - **Sync encryption design** — [docs/sync-encryption.md](docs/sync-encryption.md)
 - **Sync emulator fixtures** — [docs/sync-emulators.md](docs/sync-emulators.md)

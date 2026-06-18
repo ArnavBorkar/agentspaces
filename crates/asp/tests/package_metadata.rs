@@ -307,6 +307,39 @@ fn sync_docs_cover_resumable_interruption_retries() {
 }
 
 #[test]
+fn sync_recovery_docs_cover_remote_only_restore_runbook() {
+    let docs = fs::read_to_string(repo_file("docs/sync-recovery.md")).unwrap();
+
+    for needle in [
+        "remote-only backup",
+        "asp-sync/v1/workspaces/<workspace-id>/",
+        "workspace.json",
+        "refs/checkpoints",
+        "objects/git/sha1",
+        "objects/blobs/blake3",
+        "git init --bare recovered-shadow.git",
+        "git --git-dir recovered-shadow.git update-ref",
+        "git --git-dir recovered-shadow.git archive",
+        "large-file sidecars",
+        "current CLI does not fully rebuild `.asp/`",
+    ] {
+        assert!(docs.contains(needle), "sync recovery docs missing {needle}");
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/sync-recovery.md"),
+        "README should link sync recovery docs"
+    );
+
+    let sync = fs::read_to_string(repo_file("docs/sync.md")).unwrap();
+    assert!(
+        sync.contains("sync remote recovery"),
+        "sync docs should link remote recovery docs"
+    );
+}
+
+#[test]
 fn sync_encryption_docs_cover_remote_object_protection_design() {
     let docs = fs::read_to_string(repo_file("docs/sync-encryption.md")).unwrap();
 
