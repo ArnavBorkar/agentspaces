@@ -15,7 +15,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use asp_core::journal::{Entry, Op, Source};
-use asp_core::store::{atomic_write, find_root, FORMAT_VERSION};
+use asp_core::store::{atomic_write, find_root, ASP_DIR, FORMAT_VERSION};
 use asp_core::workspace::{CheckpointOpts, DiffTextMode, Finding, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -67,6 +67,11 @@ enum Cmd {
     Stats,
     /// Print a safe first-five-minutes workflow for the current directory.
     Quickstart,
+    /// Inspect effective workspace configuration.
+    Config {
+        #[command(subcommand)]
+        command: ConfigCmd,
+    },
     /// Benchmark and local filesystem probes.
     Bench {
         #[command(subcommand)]
@@ -316,6 +321,12 @@ enum SyncCmd {
 }
 
 #[derive(Subcommand)]
+enum ConfigCmd {
+    /// Show effective `.asp/config.toml` settings.
+    Show,
+}
+
+#[derive(Subcommand)]
 enum SetupHarness {
     /// Claude Code: auto-checkpoint hooks (file edits + bash) and .mcp.json.
     Claude {
@@ -441,6 +452,16 @@ struct QuickstartStep {
 struct QuickstartDoc {
     title: &'static str,
     path: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ConfigShowReport {
+    root: PathBuf,
+    path: PathBuf,
+    exists: bool,
+    config: asp_core::config::Config,
+    shadow_excludes: Vec<String>,
+    blob_threshold_bytes: u64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -677,6 +698,18 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
+        Cmd::Config { command } => match command {
+            ConfigCmd::Show => {
+                let ws = open(&cli.dir)?;
+                let report = config_show_report(&ws);
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_config_show(&report);
+                }
+                Ok(())
+            }
+        },
         Cmd::Bench { command } => match command {
             BenchCmd::Self_ => {
                 let report = bench::self_report(&cwd(&cli.dir)?)?;
@@ -2543,6 +2576,50 @@ fn print_diff_summary(summary: &asp_core::workspace::DiffSummary) {
     print_diff_summary_table("path", &summary.by_path);
     print_diff_summary_table("language", &summary.by_language);
     print_diff_summary_table("change", &summary.by_change_type);
+}
+
+fn config_show_report(ws: &Workspace) -> ConfigShowReport {
+    let path = ws.root().join(ASP_DIR).join("config.toml");
+    ConfigShowReport {
+        root: ws.root().to_path_buf(),
+        exists: path.is_file(),
+        path,
+        config: ws.config.clone(),
+        shadow_excludes: ws.config.shadow_excludes(),
+        blob_threshold_bytes: ws.config.blob_threshold_bytes(),
+    }
+}
+
+fn print_config_show(report: &ConfigShowReport) {
+    println!("{}", ui::bold(&format!("config {}", report.root.display())));
+    println!(
+        "  file: {} ({})",
+        report.path.display(),
+        if report.exists {
+            "present"
+        } else {
+            "missing; defaults in effect"
+        }
+    );
+    println!(
+        "  blob threshold: {} MiB ({})",
+        report.config.capture.blob_threshold_mb,
+        human_bytes(report.blob_threshold_bytes)
+    );
+    println!(
+        "  promote branch: {}",
+        report.config.promote.branch_template
+    );
+
+    let mut rows = vec![vec!["EFFECTIVE CHECKPOINT EXCLUDE".to_string()]];
+    rows.extend(
+        report
+            .shadow_excludes
+            .iter()
+            .map(|pattern| vec![pattern.clone()]),
+    );
+    println!();
+    print!("{}", ui::table(&rows));
 }
 
 fn quickstart_report(directory: PathBuf) -> QuickstartReport {

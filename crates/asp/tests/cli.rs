@@ -111,6 +111,35 @@ fn quickstart_is_context_aware_and_json() {
 }
 
 #[test]
+fn config_show_reports_effective_workspace_settings() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nextra_excludes = [\"coverage/\"]\nblob_threshold_mb = 10\n\n[promote]\nbranch_template = \"review/{workspace}/{fork}\"\n",
+    )
+    .unwrap();
+
+    let human = ok(&root, &["config", "show"]);
+    assert!(human.contains("coverage/"), "{human}");
+    assert!(human.contains("10 MiB"), "{human}");
+    assert!(human.contains("review/{workspace}/{fork}"), "{human}");
+
+    let json = ok_json(&root, &["config", "show"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["exists"], true);
+    assert_eq!(json["result"]["config"]["capture"]["blob_threshold_mb"], 10);
+    assert_eq!(
+        json["result"]["config"]["promote"]["branch_template"],
+        "review/{workspace}/{fork}"
+    );
+    assert_eq!(json["result"]["blob_threshold_bytes"], 10 * 1024 * 1024);
+    let excludes = json["result"]["shadow_excludes"].as_array().unwrap();
+    assert!(excludes.iter().any(|value| value == "/.asp/"));
+    assert!(excludes.iter().any(|value| value == "coverage/"));
+}
+
+#[test]
 fn completions_emit_shell_scripts_and_json() {
     let tmp = tempfile::tempdir().unwrap();
     let bash = ok(tmp.path(), &["completions", "bash"]);

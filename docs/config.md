@@ -7,6 +7,17 @@ The parser is strict: unknown tables or keys are rejected with a
 `store_corrupt` error and a hint to fix the TOML or delete the file to restore
 defaults.
 
+Inspect the effective config from the CLI:
+
+```bash
+asp config show
+asp --json config show
+```
+
+The report includes whether `.asp/config.toml` exists, the resolved config
+values, the effective checkpoint excludes written into the shadow git repo, the
+large-file blob threshold in bytes, and the promote branch template.
+
 ## Schema
 
 ```toml

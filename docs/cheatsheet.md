@@ -60,6 +60,7 @@ asp discard race-3 --force
 ```bash
 asp audit --path src/lib.rs
 asp audit --format jsonl
+asp config show
 asp policy validate --json
 asp retention plan
 asp secrets scan

@@ -124,6 +124,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
         "asp promote race-2",
         "## Audit and policy",
         "asp secrets scan",
+        "asp config show",
         "## Sync and support",
         "asp sync push",
         "## Shell and packaging",
@@ -173,5 +174,20 @@ fn doctor_runbook_docs_cover_common_repair_scenarios() {
         "asp diagnostics --output diagnostics.json",
     ] {
         assert!(docs.contains(needle), "doctor runbook missing {needle}");
+    }
+}
+
+#[test]
+fn config_docs_cover_effective_config_inspection() {
+    let docs = fs::read_to_string(repo_file("docs/config.md")).unwrap();
+
+    for needle in [
+        "asp config show",
+        "asp --json config show",
+        "effective checkpoint excludes",
+        "large-file blob threshold",
+        "promote branch template",
+    ] {
+        assert!(docs.contains(needle), "config docs missing {needle}");
     }
 }

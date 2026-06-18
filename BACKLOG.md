@@ -372,6 +372,20 @@
 
 ---
 
+## EPIC 30 — Configuration visibility and rollout safety
+
+**Done when:** teams can inspect, validate, review, and roll out workspace configuration changes without guessing which defaults are active.
+
+- **S30.1 Config inspection**
+  - [x] T30.1.1 Add `asp config show` with human and JSON output for effective settings.
+  - [ ] T30.1.2 Add `asp config validate` as a non-mutating CI-friendly check that does not require other workspace reads.
+  - [ ] T30.1.3 Add config review guidance for security and platform teams.
+- **S30.2 Safe rollout templates**
+  - [ ] T30.2.1 Add example config templates for monorepos, media-heavy repos, and generated-code repos.
+  - [ ] T30.2.2 Add docs for coordinating `.gitignore`, `.asp/config.toml`, and secrets policy.
+
+---
+
 ## Decision log (newest first)
 
 - 2026-06-11 · Doctor never deletes directories it can't prove asp created — fork() registers Pending intent entries before cloning; cleanup is registry-driven, heuristics are info-only. (From review: rm -rf of `cp -r proj proj@backup` was possible.)
