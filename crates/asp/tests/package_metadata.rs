@@ -205,6 +205,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
         "## Recover work",
         "asp restore 12 path/to/file",
         "asp drill recovery",
+        "asp drill fork",
         "asp doctor --runbook",
         "## Run agent races",
         "asp race -n 3",
@@ -600,6 +601,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "evidenceVerifyReport",
         "asp drill recovery --json",
         "drillRecoveryReport",
+        "asp drill fork --json",
+        "drillForkReport",
         "_None currently._",
         "## Audit Rule",
         "the Result Map points at an existing shared schema",
@@ -780,6 +783,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp sync push --json --remote <dir>",
         "asp sync fetch --json --remote <dir>",
         "asp drill recovery --json",
+        "asp drill fork --json",
         "asp checkpoint --json",
         "asp log --json",
         "asp undo --json",
@@ -1476,6 +1480,56 @@ fn schema_docs_cover_recovery_drill_contract() {
             .iter()
             .any(|variant| variant["$ref"] == "#/$defs/drillRecoveryReport"),
         "result schema anyOf missing drillRecoveryReport"
+    );
+}
+
+#[test]
+fn schema_docs_cover_fork_drill_contract() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp drill fork --json",
+        "#/$defs/drillForkReport",
+        "`cleanup.path_removed`",
+        "`promote.branch_preview`",
+        "`promote.ready`",
+        "`current_workspace_files_untouched: true`",
+        "`promote.ready: false`",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let drills = fs::read_to_string(repo_file("docs/drills.md")).unwrap();
+    for needle in [
+        "asp drill fork",
+        "does not create a user git branch",
+        "does update `.asp/` metadata",
+        "Fork Failure Triage",
+        "`cleanup.registry_status`",
+        "`promote.ready`",
+        "creating and deleting branches",
+    ] {
+        assert!(drills.contains(needle), "drill docs missing {needle}");
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in [
+        "drillForkReport",
+        "drillForkInfo",
+        "drillForkCompare",
+        "drillForkCleanup",
+        "drillPromoteReadiness",
+    ] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    assert!(
+        variants
+            .iter()
+            .any(|variant| variant["$ref"] == "#/$defs/drillForkReport"),
+        "result schema anyOf missing drillForkReport"
     );
 }
 

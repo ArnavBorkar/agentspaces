@@ -55,6 +55,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp config diff --against <file> --json` | `#/$defs/configDiffReport` |
 | `asp bench self --json` | `#/$defs/benchSelfReport` |
 | `asp drill recovery --json` | `#/$defs/drillRecoveryReport` |
+| `asp drill fork --json` | `#/$defs/drillForkReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp completions <shell> --json` | `#/$defs/completionResult` |
 | `asp manpage --json` | `#/$defs/manpageResult` |
@@ -154,6 +155,16 @@ commands against `.asp/shadow.git`. Successful reports include
 for cleanup and follow-up validation. Failures use the standard error envelope
 with corrective hints, so incident automation can fail closed without parsing
 human output.
+
+`asp drill fork --json` creates a disposable fork with the real fork engine,
+observes it through `asp forks` comparison logic, discards it through the normal
+cleanup guard, and reports promote readiness without creating a user git branch.
+Successful reports include `kind: "fork"`, `fork.name`, `fork.path`,
+`fork.method`, `compare.seen`, `cleanup.path_removed`,
+`cleanup.registry_status`, `promote.branch_preview`,
+`promote.branch_exists`, `promote.ready`, and
+`current_workspace_files_untouched: true`. If the workspace has no user `.git`,
+the drill still passes but reports `promote.ready: false`.
 
 `asp config show --json` and `asp config validate --json` both return
 `configShowReport` when the effective config parses successfully. Invalid

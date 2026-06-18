@@ -217,6 +217,67 @@ fn drill_recovery_restores_checkpoint_with_stock_git() {
 }
 
 #[test]
+fn drill_fork_creates_compares_and_discards_temp_fork() {
+    let (_tmp, root) = project();
+    let git_init = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .arg("init")
+        .output()
+        .expect("git init spawns");
+    assert!(
+        git_init.status.success(),
+        "git init failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&git_init.stdout),
+        String::from_utf8_lossy(&git_init.stderr)
+    );
+    ok(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+
+    let human = ok(&root, &["drill", "fork"]);
+    assert!(human.contains("fork drill passed"), "{human}");
+    assert!(human.contains("cleanup:"), "{human}");
+    assert!(human.contains("promote:"), "{human}");
+
+    let json = ok_json(&root, &["drill", "fork"]);
+    assert_eq!(json["ok"], true);
+    let result = &json["result"];
+    assert_eq!(result["kind"], "fork");
+    assert_eq!(result["status"], "passed");
+    assert_eq!(result["compare"]["seen"], true);
+    assert_eq!(result["compare"]["files_changed"], 0);
+    assert_eq!(result["cleanup"]["discarded"], true);
+    assert_eq!(result["cleanup"]["path_removed"], true);
+    assert_eq!(result["cleanup"]["registry_status"], "discarded");
+    assert_eq!(result["promote"]["user_git_repo"], true);
+    assert_eq!(result["promote"]["branch_exists"], false);
+    assert_eq!(result["promote"]["ready"], true);
+    assert_eq!(
+        result["promote"]["rehearsal"],
+        "readiness_only_no_branch_created"
+    );
+    assert_eq!(result["current_workspace_files_untouched"], true);
+
+    let fork_path = PathBuf::from(result["fork"]["path"].as_str().unwrap());
+    assert!(!fork_path.exists(), "drill fork path should be removed");
+    let branch = result["promote"]["branch_preview"].as_str().unwrap();
+    assert!(branch.starts_with("asp/asp-drill-fork-"), "{branch}");
+    let branch_ref = format!("refs/heads/{branch}");
+    let branch_check = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["show-ref", "--verify", "--quiet", &branch_ref])
+        .status()
+        .expect("git show-ref spawns");
+    assert_eq!(branch_check.code(), Some(1), "drill must not create branch");
+
+    let status = ok_json(&root, &["status"]);
+    assert_eq!(status["result"]["active_forks"], 0);
+    let forks = ok_json(&root, &["forks"]);
+    assert_eq!(forks["result"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn quickstart_is_context_aware_and_json() {
     let tmp = tempfile::tempdir().unwrap();
 

@@ -416,6 +416,8 @@ enum BenchCmd {
 enum DrillCmd {
     /// Restore a checkpoint into a temp directory using only stock git.
     Recovery(DrillRecoveryArgs),
+    /// Create and discard a disposable fork to verify local fork hygiene.
+    Fork,
 }
 
 #[derive(Args)]
@@ -936,6 +938,52 @@ struct DrillCheckpoint {
     commit: String,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct DrillForkReport {
+    kind: &'static str,
+    status: &'static str,
+    workspace_root: PathBuf,
+    fork: DrillForkInfo,
+    compare: DrillForkCompare,
+    cleanup: DrillForkCleanup,
+    promote: DrillPromoteReadiness,
+    current_workspace_files_untouched: bool,
+    next_actions: Vec<&'static str>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DrillForkInfo {
+    name: String,
+    path: PathBuf,
+    fork_point_seq: u64,
+    method: asp_core::fork::CloneMethod,
+    duration_ms: u64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DrillForkCompare {
+    seen: bool,
+    files_changed: u64,
+    active_forks_observed: u64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DrillForkCleanup {
+    discarded: bool,
+    path_removed: bool,
+    registry_status: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DrillPromoteReadiness {
+    user_git_repo: bool,
+    branch_preview: String,
+    branch_exists: Option<bool>,
+    ready: bool,
+    rehearsal: &'static str,
+    note: String,
+}
+
 fn parse_source(s: &str) -> Result<Source, String> {
     match s {
         "manual" => Ok(Source::Manual),
@@ -1208,6 +1256,16 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::print_json(true, &report);
                 } else {
                     print_drill_recovery(&report);
+                }
+                Ok(())
+            }
+            DrillCmd::Fork => {
+                let ws = open(&cli.dir)?;
+                let report = drill_fork(&ws)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_drill_fork(&report);
                 }
                 Ok(())
             }
@@ -2418,6 +2476,209 @@ fn drill_recovery(ws: &Workspace, args: &DrillRecoveryArgs) -> Result<DrillRecov
     })
 }
 
+fn drill_fork(ws: &Workspace) -> Result<DrillForkReport, Error> {
+    let fork_label = unique_drill_name("asp-drill-fork");
+    let info = ws.fork(Some(fork_label), Some(Source::Manual))?;
+    let promote = match drill_promote_readiness(ws, &info.name) {
+        Ok(promote) => promote,
+        Err(err) => {
+            let _ = ws.discard(&info.name, true);
+            return Err(err);
+        }
+    };
+
+    let compare = match drill_compare_fork(ws, &info.name) {
+        Ok(compare) => compare,
+        Err(err) => {
+            let _ = ws.discard(&info.name, true);
+            return Err(err);
+        }
+    };
+    if !compare.seen {
+        let _ = ws.discard(&info.name, true);
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!(
+                "fork drill could not observe temporary fork '{}'",
+                info.name
+            ),
+        )
+        .with_hint("run `asp doctor --fix`, then rerun `asp drill fork`"));
+    }
+
+    ws.discard(&info.name, false)?;
+    let path_removed = !info.path.exists();
+    let registry = ws.fork_registry()?;
+    let registry_status = registry
+        .forks
+        .iter()
+        .rev()
+        .find(|record| record.name == info.name)
+        .map(|record| fork_status_name(record.status).to_string())
+        .unwrap_or_else(|| "missing".to_string());
+    if !path_removed || registry_status != "discarded" {
+        return Err(Error::new(
+            ErrorCode::StoreCorrupt,
+            format!("fork drill cleanup did not complete for '{}'", info.name),
+        )
+        .with_hint(format!(
+            "inspect {}, then run `asp doctor --fix`",
+            info.path.display()
+        )));
+    }
+
+    Ok(DrillForkReport {
+        kind: "fork",
+        status: "passed",
+        workspace_root: ws.root().to_path_buf(),
+        fork: DrillForkInfo {
+            name: info.name,
+            path: info.path,
+            fork_point_seq: info.fork_point_seq,
+            method: info.method,
+            duration_ms: info.duration_ms,
+        },
+        compare,
+        cleanup: DrillForkCleanup {
+            discarded: true,
+            path_removed,
+            registry_status,
+        },
+        promote,
+        current_workspace_files_untouched: true,
+        next_actions: vec![
+            "run `asp forks` to confirm no active drill forks remain",
+            "initialize user git before relying on promote in incident workflows",
+            "run `asp drill recovery` to pair fork cleanup with checkpoint recovery evidence",
+        ],
+    })
+}
+
+fn drill_compare_fork(ws: &Workspace, fork_name: &str) -> Result<DrillForkCompare, Error> {
+    let rows = ws.fork_compare()?;
+    let row = rows.iter().find(|row| row.name == fork_name);
+    Ok(DrillForkCompare {
+        seen: row.is_some(),
+        files_changed: row.map(|row| row.files_changed).unwrap_or(0),
+        active_forks_observed: rows.len() as u64,
+    })
+}
+
+fn drill_promote_readiness(
+    ws: &Workspace,
+    fork_name: &str,
+) -> Result<DrillPromoteReadiness, Error> {
+    let workspace_name = ws
+        .root()
+        .file_name()
+        .map(|name| drill_sanitize_component(&name.to_string_lossy(), "workspace"))
+        .unwrap_or_else(|| "workspace".to_string());
+    let branch_preview = ws
+        .config
+        .render_promote_branch(fork_name, &workspace_name, &ws.meta.id);
+    let user_git_repo = ws.root().join(".git").exists();
+    let branch_exists = if user_git_repo {
+        Some(drill_user_branch_exists(ws.root(), &branch_preview)?)
+    } else {
+        None
+    };
+    let ready = branch_exists == Some(false);
+    let note = if !user_git_repo {
+        "promote readiness only: this workspace has no user .git repo".to_string()
+    } else if branch_exists == Some(true) {
+        format!("promote readiness only: branch '{branch_preview}' already exists")
+    } else {
+        format!("promote readiness only: branch '{branch_preview}' is available")
+    };
+
+    Ok(DrillPromoteReadiness {
+        user_git_repo,
+        branch_preview,
+        branch_exists,
+        ready,
+        rehearsal: "readiness_only_no_branch_created",
+        note,
+    })
+}
+
+fn drill_user_branch_exists(root: &Path, branch: &str) -> Result<bool, Error> {
+    let ref_name = format!("refs/heads/{branch}");
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["show-ref", "--verify", "--quiet", &ref_name])
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .output()
+        .map_err(|e| {
+            if e.kind() == ErrorKind::NotFound {
+                Error::new(ErrorCode::GitMissing, "git is not installed or not on PATH")
+                    .with_hint("install git and rerun `asp drill fork`")
+                    .with_source(e)
+            } else {
+                let message = format!("failed to inspect user git branch '{branch}': {e}");
+                Error::new(ErrorCode::GitFailed, message)
+                    .with_hint("check that git can run in this shell, then rerun `asp drill fork`")
+                    .with_source(e)
+            }
+        })?;
+    if output.status.success() {
+        return Ok(true);
+    }
+    if output.status.code() == Some(1) {
+        return Ok(false);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    let detail = if stderr.is_empty() {
+        format!("exit status {}", output.status)
+    } else {
+        stderr.to_string()
+    };
+    Err(Error::new(
+        ErrorCode::GitFailed,
+        format!("failed to inspect user git branch '{branch}': {detail}"),
+    )
+    .with_hint("run `git status` in the workspace, then rerun `asp drill fork`"))
+}
+
+fn unique_drill_name(prefix: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("{prefix}-{}-{nanos}", std::process::id())
+}
+
+fn drill_sanitize_component(label: &str, fallback: &str) -> String {
+    let sanitized: String = label
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let sanitized = sanitized.trim_matches('-').to_string();
+    if sanitized.is_empty() {
+        fallback.to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn fork_status_name(status: asp_core::store::ForkStatus) -> &'static str {
+    match status {
+        asp_core::store::ForkStatus::Pending => "pending",
+        asp_core::store::ForkStatus::Active => "active",
+        asp_core::store::ForkStatus::Promoted => "promoted",
+        asp_core::store::ForkStatus::Discarded => "discarded",
+    }
+}
+
 fn run_drill_git(
     git_dir: &Path,
     work_tree: &Path,
@@ -2560,6 +2821,54 @@ fn print_drill_recovery(report: &DrillRecoveryReport) {
     if let Some(next) = report.next_actions.first() {
         println!("  next:           {}", ui::dim(next));
     }
+}
+
+fn print_drill_fork(report: &DrillForkReport) {
+    println!("{} fork drill passed", ui::green("✓"));
+    println!(
+        "  fork:           {} {}",
+        ui::bold(&report.fork.name),
+        ui::dim(&format!(
+            "({:?}, {} ms)",
+            report.fork.method, report.fork.duration_ms
+        ))
+    );
+    println!(
+        "  fork point:     {}",
+        ui::cyan(&format!("#{}", report.fork.fork_point_seq))
+    );
+    println!(
+        "  compared:       {} ({} active fork{} observed)",
+        if report.compare.seen {
+            ui::green("yes")
+        } else {
+            ui::red("no")
+        },
+        report.compare.active_forks_observed,
+        if report.compare.active_forks_observed == 1 {
+            ""
+        } else {
+            "s"
+        }
+    );
+    println!(
+        "  cleanup:        {} (path removed: {})",
+        ui::green(&report.cleanup.registry_status),
+        if report.cleanup.path_removed {
+            ui::green("yes")
+        } else {
+            ui::red("no")
+        }
+    );
+    println!(
+        "  promote:        {} {}",
+        if report.promote.ready {
+            ui::green("ready")
+        } else {
+            ui::yellow("not ready")
+        },
+        ui::dim(&report.promote.note)
+    );
 }
 
 fn short_oid(oid: &str) -> &str {

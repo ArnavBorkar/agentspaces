@@ -92,3 +92,59 @@ Then validate the original workspace:
 ```bash
 asp doctor --deep
 ```
+
+## Fork Drill
+
+Run the fork drill to prove the current filesystem can create, inspect, and
+clean up an `asp` fork:
+
+```bash
+asp drill fork
+```
+
+The drill uses the same engine paths as normal fork operations:
+
+1. Creates a uniquely named disposable fork with `asp fork` internals.
+2. Observes that fork through the same comparison path as `asp forks`.
+3. Discards the fork through the normal cleanup guard.
+4. Checks whether a future `asp promote` would have a user `.git` repository
+   and an available preview branch name.
+
+The fork drill does not create a user git branch, does not push, and does not
+edit files in the original workspace. It does update `.asp/` metadata and the
+journal because real fork and discard operations are the thing being tested.
+
+Use JSON output for audit evidence:
+
+```bash
+asp --json drill fork > asp-fork-drill.json
+```
+
+The JSON result includes:
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | Always `fork` for this drill. |
+| `fork.name` / `fork.path` | The temporary fork that was created. |
+| `fork.method` | Clone method used on this filesystem. |
+| `compare.seen` | Whether fork comparison observed the temporary fork. |
+| `cleanup.path_removed` | Whether discard removed the fork directory. |
+| `cleanup.registry_status` | Final fork registry state, normally `discarded`. |
+| `promote.branch_preview` | Branch name a future promote would use by default. |
+| `promote.ready` | Whether a user git repo exists and the preview branch is available. |
+| `current_workspace_files_untouched` | Always `true` for a successful drill. |
+
+## Fork Failure Triage
+
+| Symptom | Likely Cause | Corrective Action |
+| --- | --- | --- |
+| `fork_exists` | A previous drill or user fork reused the generated name. | Rerun the drill; names include process and timestamp entropy. |
+| `cross_volume` | The workspace is on a filesystem where fork destinations would cross volumes. | Move the workspace so its parent directory is on the same volume, then rerun. |
+| `policy_violation` | Local policy blocks another fork or requires a fresher checkpoint. | Run `asp policy explain`, resolve the policy condition, and rerun. |
+| `fork_has_unpromoted_work` | The disposable fork changed unexpectedly before cleanup. | Inspect the reported fork path, then run `asp discard <fork> --force` if the work is disposable. |
+| `store_corrupt` during cleanup | Fork registry and filesystem state disagree. | Run `asp doctor --fix`, verify no drill fork directories remain, and rerun. |
+
+If `promote.ready` is `false` because `user_git_repo` is `false`, initialize or
+clone the project with ordinary Git before relying on `asp promote` during an
+incident workflow. The drill intentionally reports readiness rather than
+creating and deleting branches in the user's repository.

@@ -44,6 +44,8 @@
 - `asp drill recovery` rehearses checkpoint recovery into a temp directory with
   stock Git against `.asp/shadow.git`, reporting JSON evidence without touching
   the current workspace.
+- `asp drill fork` creates, compares, and discards a disposable fork while
+  reporting promote readiness without creating a user git branch.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

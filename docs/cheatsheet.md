@@ -23,6 +23,7 @@ asp undo
 asp restore 12
 asp restore 12 path/to/file
 asp drill recovery
+asp drill fork
 asp doctor --explain
 asp doctor --runbook
 asp doctor --fix

@@ -17,6 +17,7 @@
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
     { "$ref": "#/$defs/doctorRunbookReport" },
+    { "$ref": "#/$defs/drillForkReport" },
     { "$ref": "#/$defs/drillRecoveryReport" },
     { "$ref": "#/$defs/evidenceManifestOutputResult" },
     { "$ref": "#/$defs/evidenceOutputResult" },
@@ -656,6 +657,87 @@
       "properties": {
         "seq": { "$ref": "#/$defs/u64" },
         "commit": { "$ref": "#/$defs/gitOid" }
+      }
+    },
+    "drillForkReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "status",
+        "workspace_root",
+        "fork",
+        "compare",
+        "cleanup",
+        "promote",
+        "current_workspace_files_untouched",
+        "next_actions"
+      ],
+      "properties": {
+        "kind": { "const": "fork" },
+        "status": { "const": "passed" },
+        "workspace_root": { "type": "string" },
+        "fork": { "$ref": "#/$defs/drillForkInfo" },
+        "compare": { "$ref": "#/$defs/drillForkCompare" },
+        "cleanup": { "$ref": "#/$defs/drillForkCleanup" },
+        "promote": { "$ref": "#/$defs/drillPromoteReadiness" },
+        "current_workspace_files_untouched": { "const": true },
+        "next_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "drillForkInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "fork_point_seq", "method", "duration_ms"],
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "fork_point_seq": { "$ref": "#/$defs/u64" },
+        "method": { "$ref": "#/$defs/cloneMethod" },
+        "duration_ms": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "drillForkCompare": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seen", "files_changed", "active_forks_observed"],
+      "properties": {
+        "seen": { "type": "boolean" },
+        "files_changed": { "$ref": "#/$defs/u64" },
+        "active_forks_observed": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "drillForkCleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discarded", "path_removed", "registry_status"],
+      "properties": {
+        "discarded": { "type": "boolean" },
+        "path_removed": { "type": "boolean" },
+        "registry_status": { "$ref": "#/$defs/forkStatus" }
+      }
+    },
+    "drillPromoteReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "user_git_repo",
+        "branch_preview",
+        "branch_exists",
+        "ready",
+        "rehearsal",
+        "note"
+      ],
+      "properties": {
+        "user_git_repo": { "type": "boolean" },
+        "branch_preview": { "type": "string" },
+        "branch_exists": { "$ref": "#/$defs/nullableBool" },
+        "ready": { "type": "boolean" },
+        "rehearsal": { "const": "readiness_only_no_branch_created" },
+        "note": { "type": "string" }
       }
     },
     "evidenceOutputResult": {

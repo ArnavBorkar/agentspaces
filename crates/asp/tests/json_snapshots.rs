@@ -59,6 +59,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_drill_recovery" => include_str!("snapshots/cli_drill_recovery.json"),
+        "cli_drill_fork" => include_str!("snapshots/cli_drill_fork.json"),
         "cli_config_show" => include_str!("snapshots/cli_config_show.json"),
         "cli_config_validate" => include_str!("snapshots/cli_config_validate.json"),
         "cli_config_diff" => include_str!("snapshots/cli_config_diff.json"),
@@ -223,6 +224,23 @@ fn normalize_drill_recovery(mut value: Value, root: &Path) -> Value {
     value
 }
 
+fn normalize_drill_fork(mut value: Value, root: &Path) -> Value {
+    normalize_value(&mut value, root);
+    let result = value
+        .get_mut("result")
+        .and_then(Value::as_object_mut)
+        .expect("drill fork result");
+    result["fork"]["name"] = json!("<fork-name>");
+    result["fork"]["path"] = json!("<fork-path>");
+    result["fork"]["method"] = json!("<clone-method>");
+    result["promote"]["branch_preview"] = json!("<branch-preview>");
+    if let Some(note) = result["promote"]["note"].as_str() {
+        assert!(note.contains("promote readiness only"), "{note}");
+    }
+    result["promote"]["note"] = json!("<promote-note>");
+    value
+}
+
 fn normalize_value(value: &mut Value, root: &Path) {
     match value {
         Value::Object(map) => {
@@ -303,6 +321,18 @@ fn normalize_text(s: &str, root: &Path) -> String {
         normalized = normalized.replace(&candidate, "<workspace-root>");
     }
     normalized
+}
+
+#[test]
+fn cli_drill_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+
+    let fork = ok_json(&root, &["drill", "fork"]);
+    assert!(!PathBuf::from(fork["result"]["fork"]["path"].as_str().unwrap()).exists());
+    snapshot("cli_drill_fork", normalize_drill_fork(fork, &root));
 }
 
 #[test]

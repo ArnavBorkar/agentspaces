@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "result": {
+    "kind": "fork",
+    "status": "passed",
+    "workspace_root": "<workspace-root>",
+    "fork": {
+      "name": "<fork-name>",
+      "path": "<fork-path>",
+      "fork_point_seq": 1,
+      "method": "<clone-method>",
+      "duration_ms": 0
+    },
+    "compare": {
+      "seen": true,
+      "files_changed": 0,
+      "active_forks_observed": 1
+    },
+    "cleanup": {
+      "discarded": true,
+      "path_removed": true,
+      "registry_status": "discarded"
+    },
+    "promote": {
+      "user_git_repo": false,
+      "branch_preview": "<branch-preview>",
+      "branch_exists": null,
+      "ready": false,
+      "rehearsal": "readiness_only_no_branch_created",
+      "note": "<promote-note>"
+    },
+    "current_workspace_files_untouched": true,
+    "next_actions": [
+      "run `asp forks` to confirm no active drill forks remain",
+      "initialize user git before relying on promote in incident workflows",
+      "run `asp drill recovery` to pair fork cleanup with checkpoint recovery evidence"
+    ]
+  }
+}
