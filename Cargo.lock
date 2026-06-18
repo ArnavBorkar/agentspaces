@@ -84,6 +84,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "time",
+ "toml",
 ]
 
 [[package]]

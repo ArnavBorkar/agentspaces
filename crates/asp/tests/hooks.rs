@@ -1,5 +1,5 @@
-//! Hook integration tests: `asp setup claude` file wiring and `asp hook-event`
-//! behavior with real Claude Code-shaped payloads.
+//! Harness integration tests: setup file wiring and `asp hook-event` behavior
+//! with real Claude Code-shaped payloads.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -88,6 +88,83 @@ fn setup_claude_wires_everything_and_is_reversible() {
         serde_json::from_str(&std::fs::read_to_string(root.join(".mcp.json")).unwrap()).unwrap();
     assert!(mcp["mcpServers"].get("agentspaces").is_none());
     assert!(root.join(".asp").exists());
+}
+
+#[test]
+fn setup_codex_writes_mcp_config_without_clobbering() {
+    let (_tmp, root) = project();
+    let codex_dir = root.join(".codex");
+    std::fs::create_dir_all(&codex_dir).unwrap();
+    std::fs::write(
+        codex_dir.join("config.toml"),
+        r#"# keep my comments
+model = "gpt-5.5"
+
+[mcp_servers.existing]
+command = "existing-tool"
+"#,
+    )
+    .unwrap();
+
+    let out = asp(&root, &["setup", "codex"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let config = std::fs::read_to_string(codex_dir.join("config.toml")).unwrap();
+    assert!(config.contains("# keep my comments"));
+    assert!(config.contains("model = \"gpt-5.5\""));
+    assert!(config.contains("[mcp_servers.existing]"));
+    assert!(config.contains("# agentspaces: begin asp setup codex"));
+    assert!(config.contains("[mcp_servers.agentspaces]"));
+    assert!(config.contains("args = [\"mcp\"]"));
+    let parsed: toml::Value = toml::from_str(&config).unwrap();
+    assert_eq!(
+        parsed["mcp_servers"]["agentspaces"]["command"].as_str(),
+        Some("asp")
+    );
+
+    let out = asp(&root, &["setup", "codex"]);
+    assert!(out.status.success());
+    let config = std::fs::read_to_string(codex_dir.join("config.toml")).unwrap();
+    assert_eq!(
+        config.matches("[mcp_servers.agentspaces]").count(),
+        1,
+        "setup should be idempotent"
+    );
+
+    let out = asp(&root, &["setup", "codex", "--remove"]);
+    assert!(out.status.success());
+    let config = std::fs::read_to_string(codex_dir.join("config.toml")).unwrap();
+    assert!(config.contains("# keep my comments"));
+    assert!(config.contains("[mcp_servers.existing]"));
+    assert!(!config.contains("[mcp_servers.agentspaces]"));
+    assert!(!config.contains("asp setup codex"));
+    assert!(root.join(".asp").exists());
+}
+
+#[test]
+fn setup_codex_refuses_to_clobber_unmanaged_agentspaces_server() {
+    let (_tmp, root) = project();
+    let codex_dir = root.join(".codex");
+    std::fs::create_dir_all(&codex_dir).unwrap();
+    let original = r#"[mcp_servers.agentspaces]
+command = "custom"
+"#;
+    std::fs::write(codex_dir.join("config.toml"), original).unwrap();
+
+    let out = asp(&root, &["setup", "codex"]);
+
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("already contains [mcp_servers.agentspaces]"));
+    assert!(stderr.contains("hint:"), "{stderr}");
+    assert_eq!(
+        std::fs::read_to_string(codex_dir.join("config.toml")).unwrap(),
+        original
+    );
 }
 
 #[test]

@@ -89,6 +89,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **FAQ** — [docs/FAQ.md](docs/FAQ.md)
 - **Architecture** — [docs/architecture.md](docs/architecture.md)
 - **Trust model whitepaper** — [docs/trust-model.md](docs/trust-model.md)
+- **Codex integration** — [docs/codex.md](docs/codex.md)
 - **Open-core boundary policy** — [docs/open-core-boundary.md](docs/open-core-boundary.md)
 - **Local engine governance** — [docs/local-engine-governance.md](docs/local-engine-governance.md)
 - **Future control plane constraints** — [docs/control-plane-constraints.md](docs/control-plane-constraints.md)

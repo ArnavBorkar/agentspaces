@@ -1,4 +1,4 @@
-//! Claude Code integration: hook event handling + one-command setup.
+//! Agent harness integrations: hook event handling + one-command setup.
 //!
 //! `asp setup claude` wires the project into Claude Code:
 //!   - PostToolUse hooks on file-editing tools and Bash → auto-checkpoint
@@ -6,6 +6,9 @@
 //!     bash side-effects)
 //!   - PreToolUse hook on Bash → checkpoint manual edits before commands run
 //!   - `.mcp.json` registration of the `asp mcp` server
+//!
+//! `asp setup codex` registers the same MCP server in Codex's documented
+//! `.codex/config.toml` shape.
 //!
 //! `asp hook-event` (hidden) is the command those hooks invoke: it reads the
 //! hook JSON from stdin and takes a provenance-stamped checkpoint. It NEVER
@@ -21,6 +24,8 @@ use serde_json::{json, Value};
 
 /// Tools whose completion should snapshot the tree.
 const FILE_TOOLS: &str = "Write|Edit|MultiEdit|NotebookEdit";
+const CODEX_BLOCK_START: &str = "# agentspaces: begin asp setup codex";
+const CODEX_BLOCK_END: &str = "# agentspaces: end asp setup codex";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HookEvent {
@@ -105,6 +110,14 @@ pub struct SetupReport {
     pub removed: bool,
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct CodexSetupReport {
+    pub config_file: PathBuf,
+    pub user_scope: bool,
+    pub mcp_registered: bool,
+    pub removed: bool,
+}
+
 /// Install (or remove) the Claude Code integration.
 pub fn setup_claude(root: &Path, user_scope: bool, remove: bool) -> Result<SetupReport, Error> {
     let settings_file = if user_scope {
@@ -157,6 +170,166 @@ pub fn setup_claude(root: &Path, user_scope: bool, remove: bool) -> Result<Setup
         hooks_installed: !remove,
         removed: remove,
     })
+}
+
+/// Install (or remove) the Codex MCP configuration.
+pub fn setup_codex(root: &Path, user_scope: bool, remove: bool) -> Result<CodexSetupReport, Error> {
+    let config_file = if user_scope {
+        home_dir()?.join(".codex").join("config.toml")
+    } else {
+        root.join(".codex").join("config.toml")
+    };
+
+    let existing = read_text_file(&config_file)?;
+    let next = if remove {
+        remove_codex_block(existing.as_deref(), &config_file)?
+    } else {
+        Some(install_codex_block(
+            existing.as_deref().unwrap_or(""),
+            &config_file,
+        )?)
+    };
+
+    if let Some(text) = next {
+        if text.trim().is_empty() {
+            if config_file.exists() {
+                std::fs::remove_file(&config_file)?;
+            }
+        } else {
+            write_text_file(&config_file, &text)?;
+        }
+    }
+
+    Ok(CodexSetupReport {
+        config_file,
+        user_scope,
+        mcp_registered: !remove,
+        removed: remove,
+    })
+}
+
+fn codex_mcp_block() -> &'static str {
+    r#"# agentspaces: begin asp setup codex
+[mcp_servers.agentspaces]
+command = "asp"
+args = ["mcp"]
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+# agentspaces: end asp setup codex
+"#
+}
+
+fn install_codex_block(existing: &str, path: &Path) -> Result<String, Error> {
+    validate_codex_toml(path, existing)?;
+    if let Some((start, end)) = codex_block_range(existing)? {
+        let mut out = String::new();
+        out.push_str(&existing[..start]);
+        out.push_str(codex_mcp_block());
+        out.push_str(&existing[end..]);
+        validate_codex_toml(path, &out)?;
+        return Ok(out);
+    }
+
+    if codex_has_agentspaces_server(existing, path)? {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!(
+                "{} already contains [mcp_servers.agentspaces]",
+                path.display()
+            ),
+        )
+        .with_hint(
+            "rename or remove the existing Codex MCP server entry, then re-run `asp setup codex`",
+        ));
+    }
+
+    let mut out = existing.trim_end().to_string();
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+    out.push_str(codex_mcp_block());
+    validate_codex_toml(path, &out)?;
+    Ok(out)
+}
+
+fn remove_codex_block(existing: Option<&str>, path: &Path) -> Result<Option<String>, Error> {
+    let Some(existing) = existing else {
+        return Ok(None);
+    };
+    validate_codex_toml(path, existing)?;
+    if let Some((start, end)) = codex_block_range(existing)? {
+        let mut out = String::new();
+        out.push_str(existing[..start].trim_end());
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(existing[end..].trim_start());
+        validate_codex_toml(path, &out)?;
+        return Ok(Some(out));
+    }
+
+    if codex_has_agentspaces_server(existing, path)? {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!(
+                "{} contains an unmanaged [mcp_servers.agentspaces]",
+                path.display()
+            ),
+        )
+        .with_hint(
+            "remove or rename that Codex MCP server entry manually; asp will not delete unmanaged config",
+        ));
+    }
+
+    Ok(None)
+}
+
+fn codex_block_range(text: &str) -> Result<Option<(usize, usize)>, Error> {
+    let Some(start) = text.find(CODEX_BLOCK_START) else {
+        return Ok(None);
+    };
+    let Some(end_offset) = text[start..].find(CODEX_BLOCK_END) else {
+        return Err(Error::new(
+            ErrorCode::Io,
+            "Codex config contains an incomplete agentspaces managed block",
+        )
+        .with_hint("remove the partial block, then re-run `asp setup codex`"));
+    };
+    let mut end = start + end_offset + CODEX_BLOCK_END.len();
+    if text[end..].starts_with("\r\n") {
+        end += 2;
+    } else if text[end..].starts_with('\n') {
+        end += 1;
+    }
+    Ok(Some((start, end)))
+}
+
+fn codex_has_agentspaces_server(text: &str, path: &Path) -> Result<bool, Error> {
+    if text.trim().is_empty() {
+        return Ok(false);
+    }
+    let parsed: toml::Value = toml::from_str(text).map_err(|e| codex_toml_error(path, e))?;
+    Ok(parsed
+        .get("mcp_servers")
+        .and_then(|servers| servers.get("agentspaces"))
+        .is_some())
+}
+
+fn validate_codex_toml(path: &Path, text: &str) -> Result<(), Error> {
+    if text.trim().is_empty() {
+        return Ok(());
+    }
+    toml::from_str::<toml::Value>(text)
+        .map(|_| ())
+        .map_err(|e| codex_toml_error(path, e))
+}
+
+fn codex_toml_error(path: &Path, error: toml::de::Error) -> Error {
+    Error::new(
+        ErrorCode::Io,
+        format!("{} is not valid TOML: {error}", path.display()),
+    )
+    .with_hint("fix the Codex config TOML, then re-run `asp setup codex`")
 }
 
 fn hook_command() -> Value {
@@ -256,6 +429,21 @@ fn write_json_file(path: &Path, value: &Value) -> Result<(), Error> {
     let text = serde_json::to_string_pretty(value)
         .map_err(|e| Error::new(ErrorCode::Io, format!("encode: {e}")))?;
     asp_core::store::atomic_write(path, format!("{text}\n").as_bytes())
+}
+
+fn read_text_file(path: &Path) -> Result<Option<String>, Error> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn write_text_file(path: &Path, text: &str) -> Result<(), Error> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    asp_core::store::atomic_write(path, text.as_bytes())
 }
 
 fn home_dir() -> Result<PathBuf, Error> {

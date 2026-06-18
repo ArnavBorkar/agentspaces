@@ -312,6 +312,15 @@ enum SetupHarness {
         #[arg(long)]
         remove: bool,
     },
+    /// Codex: project-scoped MCP registration in .codex/config.toml.
+    Codex {
+        /// Write ~/.codex/config.toml instead of project .codex/config.toml.
+        #[arg(long)]
+        user: bool,
+        /// Remove the integration instead of installing it.
+        #[arg(long)]
+        remove: bool,
+    },
 }
 
 #[derive(Args)]
@@ -1285,6 +1294,52 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::dim(
                         "note: `asp` must be on PATH for hooks to fire (restart Claude Code after install)"
                     )
+                );
+                Ok(())
+            }
+            SetupHarness::Codex { user, remove } => {
+                // Setting up implies the directory should be a workspace.
+                let dir = cwd(&cli.dir)?;
+                let root = match Workspace::open(&dir) {
+                    Ok(ws) => ws.root().to_path_buf(),
+                    Err(_) if !remove => {
+                        let ws = Workspace::init(&dir, None)?;
+                        if !json {
+                            println!(
+                                "{} initialized asp workspace at {}",
+                                ui::green("✓"),
+                                ws.root().display()
+                            );
+                        }
+                        ws.root().to_path_buf()
+                    }
+                    Err(e) => return Err(e),
+                };
+                let report = hooks::setup_codex(&root, user, remove)?;
+                if json {
+                    ui::print_json(true, &report);
+                    return Ok(());
+                }
+                if remove {
+                    println!("{} Codex integration removed", ui::green("✓"));
+                    return Ok(());
+                }
+                println!(
+                    "{} Codex MCP server registered → {}",
+                    ui::green("✓"),
+                    report.config_file.display()
+                );
+                if !user {
+                    println!(
+                        "{}",
+                        ui::dim(
+                            "note: Codex loads project .codex/config.toml after the project is trusted"
+                        )
+                    );
+                }
+                println!(
+                    "{}",
+                    ui::dim("note: restart Codex or open a new session, then use /mcp to inspect servers")
                 );
                 Ok(())
             }
