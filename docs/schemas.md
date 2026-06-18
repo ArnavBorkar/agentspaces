@@ -48,6 +48,8 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp init --json` | `#/$defs/initResult` |
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
+| `asp config show --json` | `#/$defs/configShowReport` |
+| `asp config validate --json` | `#/$defs/configShowReport` |
 | `asp bench self --json` | `#/$defs/benchSelfReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp audit --json` | `#/$defs/journalEntries` |
@@ -112,6 +114,11 @@ as a breaking CLI JSON schema change.
 `asp bench self --json` can run outside an initialized workspace. It creates a
 short-lived probe directory under the selected `-C` path, reports the observed
 filesystem capabilities, and removes the probe before exiting.
+
+`asp config show --json` and `asp config validate --json` both return
+`configShowReport` when the effective config parses successfully. Invalid
+config files fail through the standard CLI error envelope with a corrective
+`hint`, so successful results always carry `valid: true`.
 
 `asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
 git-object, CAS-blob, and ref counts split into uploaded/present/updated

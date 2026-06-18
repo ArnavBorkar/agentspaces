@@ -6,6 +6,7 @@
   "anyOf": [
     { "$ref": "#/$defs/benchSelfReport" },
     { "$ref": "#/$defs/checkpointInfo" },
+    { "$ref": "#/$defs/configShowReport" },
     { "$ref": "#/$defs/diagnosticBundle" },
     { "$ref": "#/$defs/diagnosticsOutputResult" },
     { "$ref": "#/$defs/diffHtmlOutputResult" },
@@ -116,6 +117,31 @@
         "files_changed": { "$ref": "#/$defs/u64" },
         "duration_ms": { "$ref": "#/$defs/u64" },
         "message": { "type": "string" }
+      }
+    },
+    "configShowReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "path",
+        "exists",
+        "valid",
+        "config",
+        "shadow_excludes",
+        "blob_threshold_bytes"
+      ],
+      "properties": {
+        "root": { "type": "string" },
+        "path": { "type": "string" },
+        "exists": { "type": "boolean" },
+        "valid": { "const": true },
+        "config": { "$ref": "#/$defs/workspaceConfig" },
+        "shadow_excludes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blob_threshold_bytes": { "$ref": "#/$defs/u64" }
       }
     },
     "diagnosticBundle": {
@@ -816,6 +842,37 @@
           "properties": {
             "keep_last": { "$ref": "#/$defs/nullableU64" },
             "max_age_days": { "$ref": "#/$defs/nullableU64" }
+          }
+        }
+      }
+    },
+    "workspaceConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture", "promote"],
+      "properties": {
+        "capture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["excludes", "extra_excludes", "blob_threshold_mb"],
+          "properties": {
+            "excludes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "extra_excludes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "blob_threshold_mb": { "$ref": "#/$defs/u64" }
+          }
+        },
+        "promote": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["branch_template"],
+          "properties": {
+            "branch_template": { "type": "string" }
           }
         }
       }

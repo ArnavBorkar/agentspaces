@@ -222,6 +222,36 @@ fn config_docs_cover_effective_config_inspection() {
 }
 
 #[test]
+fn schema_docs_cover_config_result_contracts() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp config show --json",
+        "asp config validate --json",
+        "#/$defs/configShowReport",
+        "`configShowReport`",
+        "successful results always carry `valid: true`",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in ["configShowReport", "workspaceConfig"] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    assert!(
+        variants
+            .iter()
+            .any(|variant| variant["$ref"] == "#/$defs/configShowReport"),
+        "result schema anyOf missing configShowReport"
+    );
+}
+
+#[test]
 fn config_review_docs_cover_security_and_rollout_checks() {
     let docs = fs::read_to_string(repo_file("docs/config-review.md")).unwrap();
 
