@@ -916,6 +916,46 @@ fn discard_guards_unpromoted_work() {
     assert_eq!(registry.forks[0].status, ForkStatus::Discarded);
 }
 
+#[cfg(unix)]
+#[test]
+fn discard_rejects_then_forces_symlinked_active_fork_path() {
+    use std::os::unix::fs::symlink;
+
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("link-cleanup".into()), None).unwrap();
+
+    let outside = root.parent().unwrap().join("outside-active-fork");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("precious.txt"), "keep me\n").unwrap();
+    std::fs::remove_dir_all(&fork.path).unwrap();
+    symlink(&outside, &fork.path).unwrap();
+
+    let err = ws.discard("link-cleanup", false).unwrap_err();
+    assert_eq!(err.code, ErrorCode::StoreCorrupt, "{err}");
+    assert!(
+        outside.join("precious.txt").exists(),
+        "unforced discard must not inspect through the symlink"
+    );
+    assert!(
+        std::fs::symlink_metadata(&fork.path)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "refused cleanup should leave the suspicious entry for inspection"
+    );
+
+    ws.discard("link-cleanup", true).unwrap();
+    assert!(
+        outside.join("precious.txt").exists(),
+        "forced cleanup must remove the symlink entry, not its target"
+    );
+    assert!(std::fs::symlink_metadata(&fork.path).is_err());
+    let registry = ws.fork_registry().unwrap();
+    assert_eq!(registry.forks[0].status, ForkStatus::Discarded);
+}
+
 #[test]
 fn excludes_keep_derived_state_out_of_checkpoints() {
     let (_tmp, root) = project();
@@ -1229,6 +1269,44 @@ fn restore_rejects_unsafe_store_paths() {
     assert!(!root.parent().unwrap().join("escape.txt").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn restore_rejects_symlinked_big_file_parent() {
+    use std::os::unix::fs::symlink;
+
+    let (_tmp, root) = project();
+    let _ = Workspace::init(&root, None).unwrap();
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let ws = Workspace::open(&root).unwrap();
+    write_bytes(&root, "assets/model.bin", &vec![7u8; 2 * 1024 * 1024]);
+    let c1 = cp(&ws, "big").unwrap();
+
+    let outside = root.parent().unwrap().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir_all(root.join("assets")).unwrap();
+    symlink(&outside, root.join("assets")).unwrap();
+
+    let err = ws
+        .restore(&c1.seq.to_string(), &["assets/model.bin".into()], None)
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::StoreCorrupt, "{err}");
+    assert!(
+        !outside.join("model.bin").exists(),
+        "restore must not write through a symlinked parent"
+    );
+    assert!(
+        std::fs::symlink_metadata(root.join("assets"))
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "rejected restore should leave the suspicious entry for inspection"
+    );
+}
+
 #[test]
 fn undo_walks_back_through_history() {
     let (_tmp, root) = project();
@@ -1333,6 +1411,69 @@ fn doctor_cleans_pending_forks_only() {
     );
     let reg: ForkRegistry = serde_json::from_slice(&std::fs::read(&reg_path).unwrap()).unwrap();
     assert!(reg.forks.iter().all(|f| f.status != ForkStatus::Pending));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_pending_cleanup_does_not_follow_symlinked_fork_path() {
+    use asp_core::store::{ForkRegistry, ForkStatus};
+    use std::os::unix::fs::symlink;
+
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("pending-link".into()), None).unwrap();
+
+    let reg_path = root.join(".asp/forks.json");
+    let mut reg: ForkRegistry = serde_json::from_slice(&std::fs::read(&reg_path).unwrap()).unwrap();
+    reg.forks[0].status = ForkStatus::Pending;
+    std::fs::write(&reg_path, serde_json::to_vec(&reg).unwrap()).unwrap();
+
+    let outside = root.parent().unwrap().join("outside-fork-target");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("precious.txt"), "keep me\n").unwrap();
+    std::fs::remove_dir_all(&fork.path).unwrap();
+    symlink(&outside, &fork.path).unwrap();
+
+    let findings = ws.doctor(true, false).unwrap();
+    assert!(findings.iter().any(|f| f.fixed), "{findings:?}");
+    assert!(
+        outside.join("precious.txt").exists(),
+        "pending cleanup must remove the symlink entry, not its target"
+    );
+    assert!(
+        std::fs::symlink_metadata(&fork.path).is_err(),
+        "symlinked pending fork path should be removed"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_pending_cleanup_preserves_hardlinked_external_files() {
+    use asp_core::store::{ForkRegistry, ForkStatus};
+
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+    let fork = ws.fork(Some("pending-hardlink".into()), None).unwrap();
+
+    let reg_path = root.join(".asp/forks.json");
+    let mut reg: ForkRegistry = serde_json::from_slice(&std::fs::read(&reg_path).unwrap()).unwrap();
+    reg.forks[0].status = ForkStatus::Pending;
+    std::fs::write(&reg_path, serde_json::to_vec(&reg).unwrap()).unwrap();
+
+    let external = root.parent().unwrap().join("outside-hardlink.txt");
+    std::fs::write(&external, "keep me\n").unwrap();
+    std::fs::hard_link(&external, fork.path.join("linked.txt")).unwrap();
+
+    let findings = ws.doctor(true, false).unwrap();
+    assert!(findings.iter().any(|f| f.fixed), "{findings:?}");
+    assert!(!fork.path.exists(), "pending fork directory removed");
+    assert_eq!(
+        std::fs::read_to_string(&external).unwrap(),
+        "keep me\n",
+        "cleanup must not destroy external hardlink content"
+    );
 }
 
 #[cfg(target_os = "linux")]

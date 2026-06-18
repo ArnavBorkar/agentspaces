@@ -1311,6 +1311,21 @@ impl Workspace {
         }
     }
 
+    fn validate_manifest_restore_paths(
+        &self,
+        manifest: &Manifest,
+        paths: Option<&[String]>,
+    ) -> Result<()> {
+        for ptr in manifest
+            .pointers
+            .iter()
+            .filter(|ptr| paths.map(|paths| paths.contains(&ptr.path)).unwrap_or(true))
+        {
+            crate::store::safe_worktree_write_path(&self.layout.root, &ptr.path)?;
+        }
+        Ok(())
+    }
+
     fn checkpoint_changed_paths(&self, parent: Option<&str>, commit: &str) -> Result<Vec<String>> {
         match parent {
             Some(parent) => self.changed_paths_between(parent, commit),
@@ -1883,8 +1898,12 @@ impl Workspace {
             .shadow
             .rev_parse(HEAD_REF)?
             .expect("head exists after safety checkpoint");
+        let target_manifest = self.manifest_for(target_seq)?;
 
         let (files_written, files_deleted) = if paths.is_empty() {
+            if let Some(manifest) = target_manifest.as_ref() {
+                self.validate_manifest_restore_paths(manifest, None)?;
+            }
             // Full restore: delete files that exist now but not in the
             // target FIRST, then materialize the target. Order matters on
             // case-insensitive filesystems: materializing `L/a` while the
@@ -1930,13 +1949,13 @@ impl Workspace {
             // Materialize big files: replace restored pointer files with
             // their CAS content, and reset the big-file cache + index so the
             // next capture treats them correctly.
-            if let Some(manifest) = self.manifest_for(target_seq)? {
+            if let Some(manifest) = target_manifest.as_ref() {
                 let mut bf = BigFiles {
                     v: 1,
                     files: Default::default(),
                 };
                 for ptr in &manifest.pointers {
-                    let abs = crate::store::safe_rel_path(&self.layout.root, &ptr.path)?;
+                    let abs = crate::store::safe_worktree_write_path(&self.layout.root, &ptr.path)?;
                     blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
                     self.shadow
                         .run(&["update-index", "--force-remove", "--", &ptr.path])?;
@@ -1964,6 +1983,9 @@ impl Workspace {
             }
             (written, deleted)
         } else {
+            if let Some(manifest) = target_manifest.as_ref() {
+                self.validate_manifest_restore_paths(manifest, Some(paths))?;
+            }
             // Targeted restore through a temp index; no deletions.
             let tmp_dir = tempfile::tempdir_in(&self.layout.asp)?;
             let scoped = Shadow::new(
@@ -1978,11 +2000,11 @@ impl Workspace {
             }
             scoped.run(&args)?;
             // Materialize any requested big files from the CAS.
-            if let Some(manifest) = self.manifest_for(target_seq)? {
+            if let Some(manifest) = target_manifest.as_ref() {
                 let bf_path = blobs::bigfiles_path(&self.layout.asp);
                 let mut bf = blobs::load_bigfiles(&bf_path)?;
                 for ptr in manifest.pointers.iter().filter(|p| paths.contains(&p.path)) {
-                    let abs = crate::store::safe_rel_path(&self.layout.root, &ptr.path)?;
+                    let abs = crate::store::safe_worktree_write_path(&self.layout.root, &ptr.path)?;
                     blobs::restore_from_cas(&self.layout.blobs(), &ptr.blake3, &abs)?;
                     // mtime_ms: 0 marks the entry stale so the next capture
                     // re-stats it and recomputes the pointer — otherwise the
@@ -2224,7 +2246,7 @@ impl Workspace {
             Ok(m) => m,
             Err(e) => {
                 // Clean up best-effort and withdraw the pending record.
-                let _ = std::fs::remove_dir_all(&dst);
+                let _ = remove_fork_path(&dst);
                 registry
                     .forks
                     .retain(|f| !(f.name == name && f.status == ForkStatus::Pending));
@@ -2700,27 +2722,51 @@ impl Workspace {
                 .with_hint("run `asp forks` to list forks")
             })?;
 
+        let rec_path_meta = match std::fs::symlink_metadata(&rec.path) {
+            Ok(md) => Some(md),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => {
+                return Err(Error::new(
+                    ErrorCode::Io,
+                    format!("inspect fork path {}: {e}", rec.path.display()),
+                ));
+            }
+        };
+
         // Promoted forks need no guard — their work already landed as a branch.
-        if rec.status == ForkStatus::Active && rec.path.exists() && !force {
-            let fork_ws = Workspace::open_root(&rec.path)?;
-            let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
-            let base = fork_ws.checkpoint_refs()?.get(&rec.fork_point_seq).cloned();
-            if let Some(base) = base {
-                let (tree, _) = fork_ws.stage_tree()?;
-                if fork_ws.shadow.tree_of(&base)? != tree {
+        if rec.status == ForkStatus::Active && !force {
+            if let Some(md) = rec_path_meta.as_ref() {
+                if md.file_type().is_symlink() || !md.is_dir() {
                     return Err(Error::new(
-                        ErrorCode::ForkHasUnpromotedWork,
-                        format!("fork '{fork_name}' has changes that were never promoted"),
+                        ErrorCode::StoreCorrupt,
+                        format!(
+                            "fork '{}' path is not a real directory ({})",
+                            fork_name,
+                            rec.path.display()
+                        ),
                     )
                     .with_hint(format!(
-                        "promote it first (`asp promote {fork_name}`) or pass --force to delete the work"
+                        "inspect the path, then remove the registry entry with `asp discard {fork_name} --force`"
                     )));
+                }
+                let fork_ws = Workspace::open_root(&rec.path)?;
+                let _fork_lock = StoreLock::acquire_with_retry(&fork_ws.layout)?;
+                let base = fork_ws.checkpoint_refs()?.get(&rec.fork_point_seq).cloned();
+                if let Some(base) = base {
+                    let (tree, _) = fork_ws.stage_tree()?;
+                    if fork_ws.shadow.tree_of(&base)? != tree {
+                        return Err(Error::new(
+                            ErrorCode::ForkHasUnpromotedWork,
+                            format!("fork '{fork_name}' has changes that were never promoted"),
+                        )
+                        .with_hint(format!(
+                            "promote it first (`asp promote {fork_name}`) or pass --force to delete the work"
+                        )));
+                    }
                 }
             }
         }
-        if rec.path.exists() {
-            std::fs::remove_dir_all(&rec.path)?;
-        }
+        remove_fork_path(&rec.path)?;
         rec.status = ForkStatus::Discarded;
         atomic_write_json(&self.layout.forks_json(), &registry)?;
         let mut entry = Entry::new(Op::Discard);
@@ -2921,11 +2967,9 @@ impl Workspace {
                     );
                 }
                 ForkStatus::Pending => {
-                    let exists = rec.path.exists();
+                    let exists = std::fs::symlink_metadata(&rec.path).is_ok();
                     let fixed = if fix {
-                        if exists {
-                            std::fs::remove_dir_all(&rec.path)?;
-                        }
+                        remove_fork_path(&rec.path)?;
                         drop_pending.push(rec.name.clone());
                         registry_changed = true;
                         true
@@ -4342,6 +4386,25 @@ fn user_git_ref_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
             Error::new(ErrorCode::GitFailed, format!("failed to spawn git: {e}")).with_source(e)
         })?;
     Ok(output.status.success())
+}
+
+fn remove_fork_path(path: &Path) -> Result<()> {
+    let md = match std::fs::symlink_metadata(path) {
+        Ok(md) => md,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(Error::new(
+                ErrorCode::Io,
+                format!("inspect fork path {}: {e}", path.display()),
+            ));
+        }
+    };
+    if md.file_type().is_symlink() || md.is_file() {
+        std::fs::remove_file(path)?;
+    } else {
+        std::fs::remove_dir_all(path)?;
+    }
+    Ok(())
 }
 
 /// Stage the fork's whole tree (respecting the user's .gitignore) through a

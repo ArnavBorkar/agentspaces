@@ -129,6 +129,58 @@ pub fn safe_rel_path(root: &Path, rel: &str) -> Result<PathBuf> {
     Ok(root.join(p))
 }
 
+/// Validate a store-supplied path before materializing file contents into the
+/// worktree. This is stricter than `safe_rel_path`: existing parent components
+/// must be real directories, not symlinks that could redirect writes outside
+/// the workspace or into asp's own metadata.
+pub fn safe_worktree_write_path(root: &Path, rel: &str) -> Result<PathBuf> {
+    use std::path::Component;
+
+    let abs = safe_rel_path(root, rel)?;
+    let mut cur = root.to_path_buf();
+    let mut components = Path::new(rel).components().peekable();
+    let mut first = true;
+
+    while let Some(component) = components.next() {
+        let Component::Normal(name) = component else {
+            unreachable!("safe_rel_path rejects non-normal components");
+        };
+        if first && (name == ASP_DIR || name == ".git") {
+            return Err(unsafe_store_path(rel, "reserved workspace metadata path"));
+        }
+        first = false;
+
+        cur.push(name);
+        let is_leaf = components.peek().is_none();
+        match std::fs::symlink_metadata(&cur) {
+            Ok(md) if md.file_type().is_symlink() => {
+                return Err(unsafe_store_path(rel, "symlink component"));
+            }
+            Ok(md) if !is_leaf && md.is_dir() => {}
+            Ok(md) if is_leaf && md.is_file() => {}
+            Ok(_) if is_leaf => return Err(unsafe_store_path(rel, "non-file destination")),
+            Ok(_) => return Err(unsafe_store_path(rel, "non-directory parent")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+            Err(e) => {
+                return Err(Error::new(
+                    ErrorCode::Io,
+                    format!("inspect workspace path {}: {e}", cur.display()),
+                ));
+            }
+        }
+    }
+
+    Ok(abs)
+}
+
+fn unsafe_store_path(rel: &str, reason: &str) -> Error {
+    Error::new(
+        ErrorCode::StoreCorrupt,
+        format!("unsafe path in workspace store: {rel:?} ({reason})"),
+    )
+    .with_hint("the .asp store may be corrupt or tampered with; run `asp doctor`")
+}
+
 /// Walk up from `start` to find a workspace root (a dir containing `.asp`).
 pub fn find_root(start: &Path) -> Option<PathBuf> {
     let mut cur = Some(start);

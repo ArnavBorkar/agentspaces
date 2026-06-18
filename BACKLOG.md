@@ -265,7 +265,7 @@
 
 - **S21.1 Threat coverage**
   - [x] T21.1.1 Expand SECURITY.md with threat model diagrams and non-goals.
-  - [ ] T21.1.2 Add symlink and hardlink attack regression tests around store paths and fork cleanup.
+  - [x] T21.1.2 Add symlink and hardlink attack regression tests around store paths and fork cleanup.
   - [ ] T21.1.3 Add fuzzing harnesses for config, journal, MCP params, and hook payload parsing.
 - **S21.2 Secret safety**
   - [ ] T21.2.1 Add `asp secrets scan` for common accidental checkpoint inclusions.

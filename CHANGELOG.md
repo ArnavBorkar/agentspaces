@@ -111,6 +111,10 @@
 
 ### Fixed
 
+- Restore now rejects big-file materialization through symlinked worktree
+  parents or reserved metadata paths before checkout writes pointer files.
+- Fork cleanup now removes symlinked registry paths without following them,
+  with regression coverage for symlink and hardlink attack cases.
 - Checkpoint staging preserves case-only path renames on case-insensitive
   filesystems by removing stale index spellings before adding the real path.
 - The fork kill-9 torture sweep is less timing-fragile on very fast APFS
