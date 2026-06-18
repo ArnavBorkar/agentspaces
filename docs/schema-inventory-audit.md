@@ -33,8 +33,10 @@ payloads:
 - `asp doctor --json` (`doctorFindings`) and
   `asp doctor --json --runbook` (`doctorRunbookReport`)
 - raw SARIF exports for `asp preflight --sarif` and `asp secrets scan --sarif`
-- `asp drill recovery --json` (`drillRecoveryReport`)
-- `asp drill fork --json` (`drillForkReport`)
+- `asp drill recovery --json` (`drillRecoveryReport`) with shared
+  `drillReportMetadata`
+- `asp drill fork --json` (`drillForkReport`) with shared
+  `drillReportMetadata`
 
 ## Follow-Up Inventory
 

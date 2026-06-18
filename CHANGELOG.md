@@ -46,6 +46,9 @@
   the current workspace.
 - `asp drill fork` creates, compares, and discards a disposable fork while
   reporting promote readiness without creating a user git branch.
+- Drill JSON reports now include shared audit metadata (`report_id`,
+  `generated_at`, `workspace_id`, command, schema version, and asp version) for
+  incident dashboards and evidence retention systems.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

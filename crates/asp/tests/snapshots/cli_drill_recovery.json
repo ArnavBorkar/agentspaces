@@ -3,6 +3,17 @@
   "result": {
     "kind": "recovery",
     "status": "passed",
+    "metadata": {
+      "schema_version": 1,
+      "report_id": "<drill-report-id>",
+      "generated_at": "<timestamp>",
+      "asp_version": "<asp-version>",
+      "command": "asp drill recovery",
+      "workspace_id": "<workspace-id>",
+      "workspace_root": "<workspace-root>",
+      "drill": "recovery",
+      "status": "passed"
+    },
     "workspace_root": "<workspace-root>",
     "checkpoint": {
       "seq": 1,

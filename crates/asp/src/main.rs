@@ -918,10 +918,26 @@ struct DiffHtmlOutputResult {
     bytes: u64,
 }
 
+const DRILL_REPORT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, serde::Serialize)]
+struct DrillReportMetadata {
+    schema_version: u32,
+    report_id: String,
+    generated_at: String,
+    asp_version: &'static str,
+    command: &'static str,
+    workspace_id: String,
+    workspace_root: PathBuf,
+    drill: &'static str,
+    status: &'static str,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct DrillRecoveryReport {
     kind: &'static str,
     status: &'static str,
+    metadata: DrillReportMetadata,
     workspace_root: PathBuf,
     checkpoint: DrillCheckpoint,
     recovered_tree: PathBuf,
@@ -942,6 +958,7 @@ struct DrillCheckpoint {
 struct DrillForkReport {
     kind: &'static str,
     status: &'static str,
+    metadata: DrillReportMetadata,
     workspace_root: PathBuf,
     fork: DrillForkInfo,
     compare: DrillForkCompare,
@@ -2381,6 +2398,26 @@ fn op_name(op: &Op) -> &'static str {
     }
 }
 
+fn drill_report_metadata(
+    ws: &Workspace,
+    drill: &'static str,
+    command: &'static str,
+    status: &'static str,
+) -> DrillReportMetadata {
+    let prefix = format!("asp-drill-{drill}-report");
+    DrillReportMetadata {
+        schema_version: DRILL_REPORT_SCHEMA_VERSION,
+        report_id: unique_drill_name(&prefix),
+        generated_at: asp_core::now_rfc3339(),
+        asp_version: asp_core::version(),
+        command,
+        workspace_id: ws.meta.id.clone(),
+        workspace_root: ws.root().to_path_buf(),
+        drill,
+        status,
+    }
+}
+
 fn drill_recovery(ws: &Workspace, args: &DrillRecoveryArgs) -> Result<DrillRecoveryReport, Error> {
     let checkpoint_spec = match args.checkpoint.as_deref() {
         Some(spec) => spec.to_string(),
@@ -2461,6 +2498,7 @@ fn drill_recovery(ws: &Workspace, args: &DrillRecoveryArgs) -> Result<DrillRecov
     Ok(DrillRecoveryReport {
         kind: "recovery",
         status: "passed",
+        metadata: drill_report_metadata(ws, "recovery", "asp drill recovery", "passed"),
         workspace_root: ws.root().to_path_buf(),
         checkpoint: DrillCheckpoint { seq, commit },
         recovered_tree,
@@ -2530,6 +2568,7 @@ fn drill_fork(ws: &Workspace) -> Result<DrillForkReport, Error> {
     Ok(DrillForkReport {
         kind: "fork",
         status: "passed",
+        metadata: drill_report_metadata(ws, "fork", "asp drill fork", "passed"),
         workspace_root: ws.root().to_path_buf(),
         fork: DrillForkInfo {
             name: info.name,

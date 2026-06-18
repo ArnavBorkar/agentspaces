@@ -45,12 +45,18 @@ archive evidence:
 asp --json drill recovery > asp-recovery-drill.json
 ```
 
+Every JSON drill report includes `metadata` with `schema_version`, a unique
+`report_id`, UTC `generated_at`, `asp_version`, `command`, `workspace_id`,
+`workspace_root`, `drill`, and `status`. Audit systems should index those
+fields before reading drill-specific sections.
+
 The JSON result includes:
 
 | Field | Meaning |
 | --- | --- |
 | `kind` | Always `recovery` for this drill. |
 | `status` | `passed` when the stock-git restore completed. |
+| `metadata` | Shared audit metadata for report indexing and retention. |
 | `workspace_root` | Workspace that owns the `.asp/shadow.git` store. |
 | `checkpoint.seq` / `checkpoint.commit` | The exact checkpoint restored. |
 | `recovered_tree` | Temp directory containing restored files. |
@@ -120,11 +126,15 @@ Use JSON output for audit evidence:
 asp --json drill fork > asp-fork-drill.json
 ```
 
+The shared `metadata` block has the same fields as the recovery drill report,
+with `drill: "fork"` and `command: "asp drill fork"`.
+
 The JSON result includes:
 
 | Field | Meaning |
 | --- | --- |
 | `kind` | Always `fork` for this drill. |
+| `metadata` | Shared audit metadata for report indexing and retention. |
 | `fork.name` / `fork.path` | The temporary fork that was created. |
 | `fork.method` | Clone method used on this filesystem. |
 | `compare.seen` | Whether fork comparison observed the temporary fork. |

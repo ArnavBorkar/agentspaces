@@ -616,12 +616,48 @@
         "destructive": { "type": "boolean" }
       }
     },
+    "drillReportMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "report_id",
+        "generated_at",
+        "asp_version",
+        "command",
+        "workspace_id",
+        "workspace_root",
+        "drill",
+        "status"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "report_id": { "type": "string" },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "asp_version": { "type": "string" },
+        "command": { "type": "string" },
+        "workspace_id": { "type": "string" },
+        "workspace_root": { "type": "string" },
+        "drill": {
+          "type": "string",
+          "enum": ["recovery", "fork"]
+        },
+        "status": { "const": "passed" }
+      }
+    },
     "drillRecoveryReport": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "kind",
         "status",
+        "metadata",
         "workspace_root",
         "checkpoint",
         "recovered_tree",
@@ -634,6 +670,7 @@
       "properties": {
         "kind": { "const": "recovery" },
         "status": { "const": "passed" },
+        "metadata": { "$ref": "#/$defs/drillReportMetadata" },
         "workspace_root": { "type": "string" },
         "checkpoint": { "$ref": "#/$defs/drillCheckpoint" },
         "recovered_tree": { "type": "string" },
@@ -665,6 +702,7 @@
       "required": [
         "kind",
         "status",
+        "metadata",
         "workspace_root",
         "fork",
         "compare",
@@ -676,6 +714,7 @@
       "properties": {
         "kind": { "const": "fork" },
         "status": { "const": "passed" },
+        "metadata": { "$ref": "#/$defs/drillReportMetadata" },
         "workspace_root": { "type": "string" },
         "fork": { "$ref": "#/$defs/drillForkInfo" },
         "compare": { "$ref": "#/$defs/drillForkCompare" },

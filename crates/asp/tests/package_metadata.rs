@@ -1441,6 +1441,8 @@ fn schema_docs_cover_recovery_drill_contract() {
     for needle in [
         "asp drill recovery --json",
         "#/$defs/drillRecoveryReport",
+        "`metadata.report_id`",
+        "`metadata.workspace_id`",
         "`stock_git_commands`",
         "`current_workspace_untouched: true`",
         "Failures use the standard error envelope",
@@ -1471,7 +1473,11 @@ fn schema_docs_cover_recovery_drill_contract() {
     let schema: serde_json::Value =
         serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
     let defs = schema["$defs"].as_object().expect("schema defs object");
-    for def in ["drillRecoveryReport", "drillCheckpoint"] {
+    for def in [
+        "drillRecoveryReport",
+        "drillReportMetadata",
+        "drillCheckpoint",
+    ] {
         assert!(defs.contains_key(def), "result schema missing {def}");
     }
     let variants = schema["anyOf"].as_array().expect("schema anyOf array");
@@ -1489,6 +1495,8 @@ fn schema_docs_cover_fork_drill_contract() {
     for needle in [
         "asp drill fork --json",
         "#/$defs/drillForkReport",
+        "`metadata.report_id`",
+        "`metadata.workspace_id`",
         "`cleanup.path_removed`",
         "`promote.branch_preview`",
         "`promote.ready`",
@@ -1517,6 +1525,7 @@ fn schema_docs_cover_fork_drill_contract() {
     let defs = schema["$defs"].as_object().expect("schema defs object");
     for def in [
         "drillForkReport",
+        "drillReportMetadata",
         "drillForkInfo",
         "drillForkCompare",
         "drillForkCleanup",

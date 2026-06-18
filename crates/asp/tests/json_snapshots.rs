@@ -261,6 +261,7 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         }
                     }
                     "workspace_id" => *child = json!("<workspace-id>"),
+                    "report_id" => *child = json!("<drill-report-id>"),
                     "asp_version" | "serverVersion" => *child = json!("<asp-version>"),
                     "version" if child.as_str() == Some(env!("CARGO_PKG_VERSION")) => {
                         *child = json!("<asp-version>");
