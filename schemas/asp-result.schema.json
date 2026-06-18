@@ -6,6 +6,7 @@
   "anyOf": [
     { "$ref": "#/$defs/benchSelfReport" },
     { "$ref": "#/$defs/checkpointInfo" },
+    { "$ref": "#/$defs/completionResult" },
     { "$ref": "#/$defs/configShowReport" },
     { "$ref": "#/$defs/diagnosticBundle" },
     { "$ref": "#/$defs/diagnosticsOutputResult" },
@@ -19,10 +20,12 @@
     { "$ref": "#/$defs/forkInfos" },
     { "$ref": "#/$defs/initResult" },
     { "$ref": "#/$defs/journalEntries" },
+    { "$ref": "#/$defs/manpageResult" },
     { "$ref": "#/$defs/noChanges" },
     { "$ref": "#/$defs/policyValidateReport" },
     { "$ref": "#/$defs/preflightReport" },
     { "$ref": "#/$defs/promoteReport" },
+    { "$ref": "#/$defs/quickstartReport" },
     { "$ref": "#/$defs/raceLaneResults" },
     { "$ref": "#/$defs/retentionPlan" },
     { "$ref": "#/$defs/restoreReport" },
@@ -117,6 +120,15 @@
         "files_changed": { "$ref": "#/$defs/u64" },
         "duration_ms": { "$ref": "#/$defs/u64" },
         "message": { "type": "string" }
+      }
+    },
+    "completionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shell", "completion"],
+      "properties": {
+        "shell": { "type": "string" },
+        "completion": { "type": "string" }
       }
     },
     "configShowReport": {
@@ -699,6 +711,15 @@
         "detail": true
       }
     },
+    "manpageResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "manpage"],
+      "properties": {
+        "name": { "type": "string" },
+        "manpage": { "type": "string" }
+      }
+    },
     "noChanges": {
       "type": "object",
       "additionalProperties": false,
@@ -928,6 +949,46 @@
         "command": { "type": "string" },
         "fallback_command": { "type": "string" },
         "message": { "type": "string" }
+      }
+    },
+    "quickstartReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory", "workspace_root", "initialized", "steps", "docs"],
+      "properties": {
+        "directory": { "type": "string" },
+        "workspace_root": { "$ref": "#/$defs/nullableString" },
+        "initialized": { "type": "boolean" },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/quickstartStep" }
+        },
+        "docs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/quickstartDoc" }
+        }
+      }
+    },
+    "quickstartStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "commands", "purpose"],
+      "properties": {
+        "title": { "type": "string" },
+        "commands": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "purpose": { "type": "string" }
+      }
+    },
+    "quickstartDoc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "path"],
+      "properties": {
+        "title": { "type": "string" },
+        "path": { "type": "string" }
       }
     },
     "raceLaneResults": {

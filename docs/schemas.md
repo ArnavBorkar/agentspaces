@@ -48,10 +48,13 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp init --json` | `#/$defs/initResult` |
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
+| `asp quickstart --json` | `#/$defs/quickstartReport` |
 | `asp config show --json` | `#/$defs/configShowReport` |
 | `asp config validate --json` | `#/$defs/configShowReport` |
 | `asp bench self --json` | `#/$defs/benchSelfReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
+| `asp completions <shell> --json` | `#/$defs/completionResult` |
+| `asp manpage --json` | `#/$defs/manpageResult` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
 | `asp preflight --json` | `#/$defs/preflightReport` |

@@ -10,6 +10,9 @@ The Result Map now covers the core workspace, policy, config, readiness,
 security, evidence, sync, review, race, diagnostics, and setup-Claude payloads:
 
 - `asp config show --json` and `asp config validate --json`
+- `asp quickstart --json`
+- `asp completions <shell> --json`
+- `asp manpage --json`
 - `asp preflight --json`
 - `asp evidence collect --json`
 - `asp evidence collect --json --output file.json`
@@ -22,9 +25,6 @@ schema definitions, snapshots, or all three:
 
 | Surface | Current state | Needed follow-up |
 | --- | --- | --- |
-| `asp quickstart --json` | Tested in CLI coverage but missing `quickstartReport` in the shared result schema. | Add schema definition, Result Map row, and snapshot. |
-| `asp completions <shell> --json` | Tested in CLI coverage but missing `completionResult` in the shared result schema. | Add schema definition, Result Map row, and snapshot. |
-| `asp manpage --json` | Tested in CLI coverage but missing `manpageResult` in the shared result schema. | Add schema definition, Result Map row, and snapshot. |
 | `asp setup codex --json` | Returns `setupReport`, but the Result Map only lists `asp setup claude --json`. | Add Result Map rows for Codex and OpenCode setup variants. |
 | `asp setup opencode --json` | Returns `setupReport`, but the Result Map only lists `asp setup claude --json`. | Add Result Map rows for Codex and OpenCode setup variants. |
 | `asp diff --json --patch` and `asp diff --json --stat` | `diffTextReport` exists in the shared result schema, but the Result Map omits these rows. | Add explicit Result Map rows and snapshot coverage for text diff modes. |

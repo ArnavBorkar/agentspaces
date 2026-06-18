@@ -260,11 +260,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "## Covered Surfaces",
         "## Follow-Up Inventory",
         "asp quickstart --json",
-        "quickstartReport",
         "asp completions <shell> --json",
-        "completionResult",
         "asp manpage --json",
-        "manpageResult",
         "asp setup codex --json",
         "asp setup opencode --json",
         "diffTextReport",
@@ -282,6 +279,44 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
 }
 
 #[test]
+fn schema_docs_cover_discovery_result_contracts() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp quickstart --json",
+        "#/$defs/quickstartReport",
+        "asp completions <shell> --json",
+        "#/$defs/completionResult",
+        "asp manpage --json",
+        "#/$defs/manpageResult",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in [
+        "quickstartReport",
+        "quickstartStep",
+        "quickstartDoc",
+        "completionResult",
+        "manpageResult",
+    ] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    for def in ["quickstartReport", "completionResult", "manpageResult"] {
+        let reference = format!("#/$defs/{def}");
+        assert!(
+            variants.iter().any(|variant| variant["$ref"] == reference),
+            "result schema anyOf missing {reference}"
+        );
+    }
+}
+
+#[test]
 fn known_cli_json_surfaces_are_mapped_or_audited() {
     let schemas = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
     let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
@@ -290,10 +325,13 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp init --json",
         "asp status --json",
         "asp stats --json",
+        "asp quickstart --json",
         "asp config show --json",
         "asp config validate --json",
         "asp bench self --json",
         "asp schema --json",
+        "asp completions <shell> --json",
+        "asp manpage --json",
         "asp audit --json",
         "asp policy validate --json",
         "asp preflight --json",
@@ -328,9 +366,6 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
     }
 
     let audited_followups = [
-        "asp quickstart --json",
-        "asp completions <shell> --json",
-        "asp manpage --json",
         "asp setup codex --json",
         "asp setup opencode --json",
         "asp diff --json --patch",

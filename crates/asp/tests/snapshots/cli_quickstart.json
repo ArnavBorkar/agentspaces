@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "result": {
+    "directory": "<workspace-root>",
+    "docs": [
+      {
+        "path": "docs/quickstart.md",
+        "title": "Quickstart guide"
+      },
+      {
+        "path": "docs/cheatsheet.md",
+        "title": "Command cheat sheet"
+      },
+      {
+        "path": "docs/evaluation.md",
+        "title": "30-minute evaluation guide"
+      }
+    ],
+    "initialized": true,
+    "steps": [
+      {
+        "commands": [
+          "asp status"
+        ],
+        "purpose": "Shows dirty files, the latest checkpoint, and active forks.",
+        "title": "Check the workspace"
+      },
+      {
+        "commands": [
+          "asp checkpoint -m \"baseline\""
+        ],
+        "purpose": "Records the current tree so later agent changes are easy to compare or undo.",
+        "title": "Capture a baseline"
+      },
+      {
+        "commands": [
+          "asp setup codex",
+          "asp setup opencode",
+          "asp setup claude"
+        ],
+        "purpose": "Run the one command for the harness you use so checkpoints and MCP tools are available.",
+        "title": "Wire your agent client"
+      },
+      {
+        "commands": [
+          "asp race -n 3 -- <agent command>"
+        ],
+        "purpose": "Runs competing attempts side by side without risking the main workspace.",
+        "title": "Try work in disposable forks"
+      },
+      {
+        "commands": [
+          "asp forks",
+          "asp diff --fork <name>",
+          "asp promote <name>"
+        ],
+        "purpose": "Compares candidates, inspects changes, and promotes the winner as an ordinary git branch.",
+        "title": "Review and land the winner"
+      },
+      {
+        "commands": [
+          "asp undo",
+          "asp doctor --explain"
+        ],
+        "purpose": "Steps back from bad changes or explains the next repair action when the store needs attention.",
+        "title": "Recover or diagnose"
+      }
+    ],
+    "workspace_root": "<workspace-root>"
+  }
+}

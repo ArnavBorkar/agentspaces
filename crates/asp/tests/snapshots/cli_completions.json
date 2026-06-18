@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "result": {
+    "completion": "<completion-script>",
+    "shell": "zsh"
+  }
+}

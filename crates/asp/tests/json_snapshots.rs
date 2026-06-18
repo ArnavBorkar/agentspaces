@@ -59,6 +59,9 @@ fn snapshot(name: &str, actual: Value) {
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_config_show" => include_str!("snapshots/cli_config_show.json"),
         "cli_config_validate" => include_str!("snapshots/cli_config_validate.json"),
+        "cli_quickstart" => include_str!("snapshots/cli_quickstart.json"),
+        "cli_completions" => include_str!("snapshots/cli_completions.json"),
+        "cli_manpage" => include_str!("snapshots/cli_manpage.json"),
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
@@ -165,7 +168,8 @@ fn normalize_value(value: &mut Value, root: &Path) {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 match key.as_str() {
-                    "root" | "path" | "log_file" | "settings_file" => {
+                    "root" | "path" | "log_file" | "settings_file" | "directory"
+                    | "workspace_root" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_path(s, root));
                         }
@@ -331,6 +335,28 @@ fn cli_config_shapes_match_snapshots() {
         "config validate should return the same successful payload as config show"
     );
     snapshot("cli_config_validate", config_validate);
+}
+
+#[test]
+fn cli_discovery_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    let quickstart = normalize(ok_json(&root, &["quickstart"]), &root);
+    snapshot("cli_quickstart", quickstart);
+
+    let mut completions = ok_json(&root, &["completions", "zsh"]);
+    let completion = completions["result"]["completion"].as_str().unwrap();
+    assert!(completion.contains("#compdef asp"), "{completion}");
+    completions["result"]["completion"] = json!("<completion-script>");
+    snapshot("cli_completions", completions);
+
+    let mut manpage = ok_json(&root, &["manpage"]);
+    let manpage_text = manpage["result"]["manpage"].as_str().unwrap();
+    assert!(manpage_text.contains(".TH"), "{manpage_text}");
+    assert!(manpage_text.contains("asp"), "{manpage_text}");
+    manpage["result"]["manpage"] = json!("<manpage>");
+    snapshot("cli_manpage", manpage);
 }
 
 #[test]
