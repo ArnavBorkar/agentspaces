@@ -393,7 +393,7 @@
 - **S31.1 Readiness command**
   - [x] T31.1.1 Add `asp preflight` with human and JSON output for config, policy, doctor, and secrets checks.
   - [x] T31.1.2 Add GitHub Actions and GitLab CI examples for preflight gates.
-  - [ ] T31.1.3 Add preflight docs for agent harness launch checks before long-running work.
+  - [x] T31.1.3 Add preflight docs for agent harness launch checks before long-running work.
 - **S31.2 Failure triage**
   - [ ] T31.2.1 Add preflight-to-runbook links for each failing check.
   - [ ] T31.2.2 Add machine-readable preflight check IDs for stable CI annotations.

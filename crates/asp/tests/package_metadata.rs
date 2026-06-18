@@ -298,3 +298,26 @@ fn ci_docs_cover_preflight_examples() {
         assert!(docs.contains(needle), "CI docs missing {needle}");
     }
 }
+
+#[test]
+fn agent_preflight_docs_cover_harness_launch_checks() {
+    let docs = fs::read_to_string(repo_file("docs/agent-preflight.md")).unwrap();
+
+    for needle in [
+        "asp preflight",
+        "asp checkpoint -m \"before agent run\"",
+        "asp setup codex",
+        "asp setup opencode",
+        "asp setup claude",
+        "asp race -n 3",
+        "asp doctor --runbook",
+        "asp secrets scan",
+        "asp undo",
+        "timeout",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "agent preflight docs missing {needle}"
+        );
+    }
+}
