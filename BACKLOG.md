@@ -497,7 +497,7 @@ the project.
   - [ ] T37.1.2 Add a GCS remote adapter with conditional-write tests.
   - [ ] T37.1.3 Add an Azure Blob remote adapter with conditional-write tests.
   - [ ] T37.1.4 Add integration-test fixtures that run against local emulators where possible.
-  - [ ] T37.1.5 Document credential scopes and least-privilege bucket policies.
+  - [x] T37.1.5 Document credential scopes and least-privilege bucket policies.
 - **S37.2 Sync security and conflict UX**
   - [ ] T37.2.1 Add client-side encryption design for remote blobs and refs.
   - [ ] T37.2.2 Add `asp sync status` showing local/remote divergence without fetching objects.

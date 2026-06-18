@@ -226,6 +226,41 @@ fn command_cheat_sheet_covers_daily_workflows() {
 }
 
 #[test]
+fn sync_credential_docs_cover_least_privilege_storage_scopes() {
+    let docs = fs::read_to_string(repo_file("docs/sync-credentials.md")).unwrap();
+
+    for needle in [
+        "asp-sync/v1/workspaces/<workspace-id>/",
+        "no deletes",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "storage.objects.create",
+        "storage.objects.update",
+        "sp=rlcw",
+        "Storage Blob Data Contributor includes delete",
+        "prove delete fails for a synced object",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "sync credential docs missing {needle}"
+        );
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/sync-credentials.md"),
+        "README should link sync credential docs"
+    );
+
+    let sync = fs::read_to_string(repo_file("docs/sync.md")).unwrap();
+    assert!(
+        sync.contains("sync credential scopes"),
+        "sync docs should link credential scopes"
+    );
+}
+
+#[test]
 fn contributor_checklists_cover_schema_snapshot_updates() {
     let development = fs::read_to_string(repo_file("docs/development.md")).unwrap();
     for needle in [
