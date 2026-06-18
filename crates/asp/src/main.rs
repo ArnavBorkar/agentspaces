@@ -78,6 +78,11 @@ enum Cmd {
         #[command(subcommand)]
         command: PolicyCmd,
     },
+    /// Find likely secrets before they enter checkpoint history.
+    Secrets {
+        #[command(subcommand)]
+        command: SecretsCmd,
+    },
     /// Plan non-destructive checkpoint retention from local policy.
     Retention {
         #[command(subcommand)]
@@ -253,6 +258,22 @@ enum BenchCmd {
 }
 
 #[derive(Subcommand)]
+enum SecretsCmd {
+    /// Scan checkpoint-scoped workspace files for common secret patterns.
+    Scan(SecretsScanArgs),
+}
+
+#[derive(Args)]
+struct SecretsScanArgs {
+    /// Scan files that match asp's derived-state excludes too.
+    #[arg(long)]
+    include_excluded: bool,
+    /// Maximum bytes to inspect per file.
+    #[arg(long, default_value_t = 1_048_576)]
+    max_bytes: u64,
+}
+
+#[derive(Subcommand)]
 enum PolicyCmd {
     /// Validate `.asp/policy.toml` and print the resolved policy.
     Validate,
@@ -373,6 +394,23 @@ struct PolicyValidateReport {
     path: PathBuf,
     valid: bool,
     policy: asp_core::policy::Policy,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SecretsScanReport {
+    root: PathBuf,
+    files_scanned: u64,
+    files_skipped: u64,
+    bytes_scanned: u64,
+    findings: Vec<SecretFinding>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SecretFinding {
+    path: String,
+    line: u64,
+    kind: String,
+    redacted: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -627,6 +665,21 @@ fn run(cli: Cli) -> Result<(), Error> {
                     println!("  {}", ui::dim("no local policy rules are set"));
                 } else {
                     println!("  active rules: {rules}");
+                }
+                Ok(())
+            }
+        },
+        Cmd::Secrets { command } => match command {
+            SecretsCmd::Scan(args) => {
+                let ws = open(&cli.dir)?;
+                let report = secrets_scan(&ws, &args)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_secrets_scan(&report);
+                }
+                if !report.findings.is_empty() {
+                    std::process::exit(1);
                 }
                 Ok(())
             }
@@ -1352,6 +1405,269 @@ fn op_name(op: &Op) -> &'static str {
         Op::Promote => "promote",
         Op::Discard => "discard",
     }
+}
+
+fn secrets_scan(ws: &Workspace, args: &SecretsScanArgs) -> Result<SecretsScanReport, Error> {
+    let mut report = SecretsScanReport {
+        root: ws.root().to_path_buf(),
+        files_scanned: 0,
+        files_skipped: 0,
+        bytes_scanned: 0,
+        findings: Vec::new(),
+    };
+    let excludes = ws.config.shadow_excludes();
+    scan_secrets_dir(
+        ws.root(),
+        ws.root(),
+        &excludes,
+        args.include_excluded,
+        args.max_bytes,
+        &mut report,
+    )?;
+    Ok(report)
+}
+
+fn scan_secrets_dir(
+    root: &Path,
+    dir: &Path,
+    excludes: &[String],
+    include_excluded: bool,
+    max_bytes: u64,
+    report: &mut SecretsScanReport,
+) -> Result<(), Error> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let rel = match path.strip_prefix(root) {
+            Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+            Err(_) => continue,
+        };
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() || should_skip_secret_path(&rel, excludes, include_excluded) {
+            if file_type.is_file() {
+                report.files_skipped += 1;
+            }
+            continue;
+        }
+        if file_type.is_dir() {
+            scan_secrets_dir(root, &path, excludes, include_excluded, max_bytes, report)?;
+        } else if file_type.is_file() {
+            scan_secret_file(root, &path, max_bytes, report)?;
+        }
+    }
+    Ok(())
+}
+
+fn should_skip_secret_path(rel: &str, excludes: &[String], include_excluded: bool) -> bool {
+    let first = rel.split('/').next().unwrap_or("");
+    if first == ".asp" || first == ".git" {
+        return true;
+    }
+    if include_excluded {
+        return false;
+    }
+    excludes
+        .iter()
+        .any(|pattern| secret_exclude_matches(rel, pattern))
+}
+
+fn secret_exclude_matches(rel: &str, pattern: &str) -> bool {
+    let pattern = pattern.trim_start_matches('/').trim_end_matches('/');
+    if pattern.is_empty() {
+        return false;
+    }
+    if rel == pattern || rel.starts_with(&format!("{pattern}/")) {
+        return true;
+    }
+    if pattern.contains('*') {
+        return false;
+    }
+    rel.split('/').any(|component| component == pattern)
+}
+
+fn scan_secret_file(
+    root: &Path,
+    path: &Path,
+    max_bytes: u64,
+    report: &mut SecretsScanReport,
+) -> Result<(), Error> {
+    let md = std::fs::metadata(path)?;
+    if md.len() > max_bytes {
+        report.files_skipped += 1;
+        return Ok(());
+    }
+    let bytes = std::fs::read(path)?;
+    if bytes.contains(&0) {
+        report.files_skipped += 1;
+        return Ok(());
+    }
+    report.files_scanned += 1;
+    report.bytes_scanned += bytes.len() as u64;
+
+    let text = String::from_utf8_lossy(&bytes);
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    for (idx, line) in text.lines().enumerate() {
+        if let Some((kind, redacted)) = detect_secret_line(line) {
+            report.findings.push(SecretFinding {
+                path: rel.clone(),
+                line: idx as u64 + 1,
+                kind: kind.to_string(),
+                redacted,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn detect_secret_line(line: &str) -> Option<(&'static str, String)> {
+    if line.contains("-----BEGIN ") && line.contains(" PRIVATE KEY-----") {
+        return Some((
+            "private_key",
+            "-----BEGIN [redacted] PRIVATE KEY-----".to_string(),
+        ));
+    }
+    for prefix in ["sk-", "sk-proj-"] {
+        if let Some((start, end)) = find_prefixed_token(line, prefix, 20) {
+            return Some(("openai_key", redact_span(line, start, end)));
+        }
+    }
+    for prefix in ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"] {
+        if let Some((start, end)) = find_prefixed_token(line, prefix, 20) {
+            return Some(("github_token", redact_span(line, start, end)));
+        }
+    }
+    if let Some((start, end)) = find_aws_access_key(line) {
+        return Some(("aws_access_key_id", redact_span(line, start, end)));
+    }
+    if let Some(redacted) = redact_generic_assignment(line) {
+        return Some(("secret_assignment", redacted));
+    }
+    None
+}
+
+fn find_prefixed_token(line: &str, prefix: &str, min_tail: usize) -> Option<(usize, usize)> {
+    let start = line.find(prefix)?;
+    let mut end = start + prefix.len();
+    let bytes = line.as_bytes();
+    while end < bytes.len() && is_token_byte(bytes[end]) {
+        end += 1;
+    }
+    (end - start >= prefix.len() + min_tail).then_some((start, end))
+}
+
+fn find_aws_access_key(line: &str) -> Option<(usize, usize)> {
+    let bytes = line.as_bytes();
+    for start in 0..bytes.len().saturating_sub(19) {
+        let end = start + 20;
+        let candidate = &bytes[start..end];
+        if (candidate.starts_with(b"AKIA") || candidate.starts_with(b"ASIA"))
+            && candidate
+                .iter()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+        {
+            return Some((start, end));
+        }
+    }
+    None
+}
+
+fn redact_generic_assignment(line: &str) -> Option<String> {
+    let lower = line.to_ascii_lowercase();
+    let keys = [
+        "api_key",
+        "apikey",
+        "access_key",
+        "secret",
+        "token",
+        "password",
+        "passwd",
+    ];
+    for key in keys {
+        let Some(key_pos) = lower.find(key) else {
+            continue;
+        };
+        let search_from = key_pos + key.len();
+        let rest = &line[search_from..];
+        let sep_rel = rest.find(['=', ':'])?;
+        let sep = search_from + sep_rel;
+        let value = line[sep + 1..]
+            .trim()
+            .trim_matches(|c| c == '"' || c == '\'' || c == '`');
+        if value.len() < 8 || looks_placeholder_secret(value) {
+            continue;
+        }
+        return Some(format!(
+            "{}{} ***",
+            line[..sep].trim_end(),
+            &line[sep..=sep]
+        ));
+    }
+    None
+}
+
+fn looks_placeholder_secret(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    lower.contains("example")
+        || lower.contains("placeholder")
+        || lower.contains("changeme")
+        || lower.contains('<')
+        || lower.contains("...")
+}
+
+fn is_token_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+}
+
+fn redact_span(line: &str, start: usize, end: usize) -> String {
+    let mut redacted = String::new();
+    redacted.push_str(line[..start].trim_start());
+    redacted.push_str("[redacted]");
+    redacted.push_str(line[end..].trim_end());
+    truncate_redacted_line(&redacted)
+}
+
+fn truncate_redacted_line(line: &str) -> String {
+    const LIMIT: usize = 180;
+    let mut chars = line.chars();
+    let truncated: String = chars.by_ref().take(LIMIT).collect();
+    if chars.next().is_none() {
+        line.to_string()
+    } else {
+        format!("{truncated}...")
+    }
+}
+
+fn print_secrets_scan(report: &SecretsScanReport) {
+    if report.findings.is_empty() {
+        println!(
+            "{} no likely secrets found ({} files scanned, {} skipped)",
+            ui::green("✓"),
+            report.files_scanned,
+            report.files_skipped
+        );
+        return;
+    }
+    println!(
+        "{} {} likely secret(s) found ({} files scanned, {} skipped)",
+        ui::yellow("!"),
+        report.findings.len(),
+        report.files_scanned,
+        report.files_skipped
+    );
+    for finding in &report.findings {
+        println!(
+            "{}:{} [{}] {}",
+            finding.path, finding.line, finding.kind, finding.redacted
+        );
+    }
+    println!(
+        "\n{} remove the secret, rotate it if real, then checkpoint again",
+        ui::cyan("next:")
+    );
 }
 
 fn audit_entries(ws: &Workspace, args: &AuditArgs) -> Result<Vec<Entry>, Error> {

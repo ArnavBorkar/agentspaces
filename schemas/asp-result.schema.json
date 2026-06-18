@@ -24,6 +24,7 @@
     { "$ref": "#/$defs/restoreReport" },
     { "$ref": "#/$defs/reviewReport" },
     { "$ref": "#/$defs/schemaReport" },
+    { "$ref": "#/$defs/secretScanReport" },
     { "$ref": "#/$defs/setupReport" },
     { "$ref": "#/$defs/statusReport" },
     { "$ref": "#/$defs/statsReport" },
@@ -584,6 +585,32 @@
         "path": { "type": "string" },
         "valid": { "const": true },
         "policy": { "$ref": "#/$defs/workspacePolicy" }
+      }
+    },
+    "secretScanReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "files_scanned", "files_skipped", "bytes_scanned", "findings"],
+      "properties": {
+        "root": { "type": "string" },
+        "files_scanned": { "$ref": "#/$defs/u64" },
+        "files_skipped": { "$ref": "#/$defs/u64" },
+        "bytes_scanned": { "$ref": "#/$defs/u64" },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/secretFinding" }
+        }
+      }
+    },
+    "secretFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "kind", "redacted"],
+      "properties": {
+        "path": { "type": "string" },
+        "line": { "$ref": "#/$defs/u64" },
+        "kind": { "type": "string" },
+        "redacted": { "type": "string" }
       }
     },
     "workspacePolicy": {

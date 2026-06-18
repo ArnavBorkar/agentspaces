@@ -112,6 +112,10 @@
   params, and Claude hook payload parsing in the normal test suite.
 - `docs/fuzzing.md` documents parser fuzzing coverage and longer local
   proptest campaigns.
+- `asp secrets scan` checks checkpoint-scoped files for common secret patterns,
+  redacts findings, supports JSON output, and exits nonzero when findings are
+  present.
+- `docs/secrets.md` documents secret scanning scope, redaction, and CI usage.
 
 ### Fixed
 

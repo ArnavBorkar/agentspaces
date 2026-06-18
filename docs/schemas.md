@@ -52,6 +52,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
+| `asp secrets scan --json` | `#/$defs/secretScanReport` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
 | `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
 | `asp sync fetch --json --remote <dir>` | `#/$defs/syncFetchReport` |

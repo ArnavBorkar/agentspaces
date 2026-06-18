@@ -339,6 +339,54 @@ fn policy_validate_reports_invalid_policy() {
 }
 
 #[test]
+fn secrets_scan_reports_redacted_findings() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+
+    let ignored_secret = "OPENAI_API_KEY=sk-ignored12345678901234567890\n";
+    std::fs::create_dir_all(root.join("target")).unwrap();
+    std::fs::write(root.join("target/secret.txt"), ignored_secret).unwrap();
+    let clean = ok(&root, &["secrets", "scan"]);
+    assert!(clean.contains("no likely secrets found"), "{clean}");
+
+    let secret = "sk-live123456789012345678901234567890";
+    std::fs::write(
+        root.join("src/config.py"),
+        format!("OPENAI_API_KEY={secret}\n"),
+    )
+    .unwrap();
+
+    let human = asp(&root, &["secrets", "scan"]);
+    assert!(!human.status.success(), "scanner should fail on findings");
+    let stdout = String::from_utf8_lossy(&human.stdout);
+    assert!(stdout.contains("src/config.py:1 [openai_key]"), "{stdout}");
+    assert!(stdout.contains("[redacted]"), "{stdout}");
+    assert!(
+        !stdout.contains(secret),
+        "scanner leaked the secret: {stdout}"
+    );
+    assert!(
+        !stdout.contains("sk-ignored"),
+        "excluded files should be skipped"
+    );
+
+    let json = asp(&root, &["--json", "secrets", "scan"]);
+    assert!(
+        !json.status.success(),
+        "JSON scanner should fail on findings"
+    );
+    let body: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(body["ok"], true);
+    let findings = body["result"]["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{body}");
+    assert_eq!(findings[0]["kind"], "openai_key");
+    assert!(
+        !serde_json::to_string(&body).unwrap().contains(secret),
+        "JSON scanner leaked the secret: {body}"
+    );
+}
+
+#[test]
 fn invalid_policy_blocks_destructive_commands_before_mutation() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);
