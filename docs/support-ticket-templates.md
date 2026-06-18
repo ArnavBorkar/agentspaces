@@ -26,6 +26,13 @@ redacted local evidence.
 - asp version:
 - git version:
 - OS and filesystem:
+- Windows host mode: native Windows / WSL2 / CI runner / not Windows
+- Windows filesystem layout: WSL2 Linux filesystem / `/mnt/c` DrvFS / native
+  NTFS / native ReFS / SMB or network share / cloud-synced folder / not Windows
+- filesystem probe attached: `asp bench self --json` / filesystem probe output / none
+- Developer Mode or symlink privilege: enabled / disabled / unknown / not Windows
+- symlink or reparse point involved: file symlink / directory symlink /
+  junction / mount point / none / unknown
 - workspace type: parent workspace / fork / CI checkout
 - install method:
 
@@ -82,6 +89,12 @@ It can include richer context, but every escalation should still be deliberate.
 - workspace currently openable with `asp status`: yes / no
 - `asp doctor --deep` result:
 - recovery attempted:
+- Windows storage context: native NTFS / native ReFS / WSL2 Linux filesystem /
+  `/mnt/c` DrvFS / SMB or network share / cloud-synced folder / not Windows
+- Windows Developer Mode or symlink privilege: enabled / disabled / unknown /
+  not Windows
+- reparse point exposure: file symlink / directory symlink / junction / mount
+  point / none / unknown
 
 ## Evidence Bundle
 
@@ -177,6 +190,11 @@ before opening the packet.
 - branch or pull request:
 - workflow and run URL:
 - runner OS:
+- runner filesystem or storage class:
+- Windows Developer Mode or symlink privilege: enabled / disabled / unknown /
+  not Windows
+- Windows filesystem layout: native NTFS / native ReFS / WSL2 Linux filesystem /
+  network share / cloud-synced folder / not Windows
 - asp version:
 - failing job:
 

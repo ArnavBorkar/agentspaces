@@ -35,6 +35,8 @@
   regression, and Windows docs spell out the fail-closed reparse-point boundary.
 - `docs/windows-filesystems.md` documents Windows-hosted storage layouts for
   WSL2, NTFS, ReFS, network shares, and cloud-synced folders.
+- `docs/support-ticket-templates.md` now captures Windows filesystem layout,
+  Developer Mode or symlink privilege state, and reparse-point exposure.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

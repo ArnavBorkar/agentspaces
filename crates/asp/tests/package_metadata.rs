@@ -1298,6 +1298,14 @@ fn support_ticket_templates_cover_evidence_handoff() {
         "asp-secrets.sarif",
         "retention expectation",
         "Do not ask for source archives",
+        "Windows host mode",
+        "Windows filesystem layout",
+        "Developer Mode or symlink privilege",
+        "symlink or reparse point involved",
+        "Windows storage context",
+        "runner filesystem or storage class",
+        "`/mnt/c` DrvFS",
+        "native ReFS",
     ] {
         assert!(
             docs.contains(needle),
