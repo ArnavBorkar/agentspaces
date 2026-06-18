@@ -204,6 +204,9 @@ code, update the schemas in the same PR. Additive fields should be documented as
 schema updates. Removing or renaming fields is a breaking automation change and
 needs a changelog entry plus a compatibility note.
 
+The current audit of shipped `--json` surfaces and known Result Map follow-ups
+lives in [docs/schema-inventory-audit.md](schema-inventory-audit.md).
+
 Changelog classification rules live in
 [CHANGELOG.md](../CHANGELOG.md#automation-contract-rules). Every release that
 changes these surfaces needs an **Automation contract** note.

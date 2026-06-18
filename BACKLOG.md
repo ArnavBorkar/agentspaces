@@ -438,8 +438,12 @@
   - [x] T34.1.2 Add snapshot coverage for config show and validate JSON payloads.
   - [x] T34.1.3 Add config result examples to policy/config review docs.
 - **S34.2 Contract inventory guard**
-  - [ ] T34.2.1 Audit shipped `--json` command surfaces for missing result-map entries.
+  - [x] T34.2.1 Audit shipped `--json` command surfaces for missing result-map entries.
   - [ ] T34.2.2 Add a CI test that known CLI JSON commands stay mapped in `docs/schemas.md`.
+- **S34.3 Remaining shipped surfaces**
+  - [ ] T34.3.1 Add schemas and snapshots for `asp quickstart`, `asp completions`, and `asp manpage` JSON results.
+  - [ ] T34.3.2 Add Result Map rows for setup Codex/OpenCode and diff patch/stat/html variants.
+  - [ ] T34.3.3 Add schema/docs/snapshots for `asp doctor --json --runbook`.
 
 ---
 

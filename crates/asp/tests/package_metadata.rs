@@ -230,6 +230,7 @@ fn schema_docs_cover_config_result_contracts() {
         "#/$defs/configShowReport",
         "`configShowReport`",
         "successful results always carry `valid: true`",
+        "schema-inventory-audit.md",
     ] {
         assert!(docs.contains(needle), "schema docs missing {needle}");
     }
@@ -249,6 +250,35 @@ fn schema_docs_cover_config_result_contracts() {
             .any(|variant| variant["$ref"] == "#/$defs/configShowReport"),
         "result schema anyOf missing configShowReport"
     );
+}
+
+#[test]
+fn schema_inventory_audit_tracks_known_result_map_gaps() {
+    let docs = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
+
+    for needle in [
+        "## Covered Surfaces",
+        "## Follow-Up Inventory",
+        "asp quickstart --json",
+        "quickstartReport",
+        "asp completions <shell> --json",
+        "completionResult",
+        "asp manpage --json",
+        "manpageResult",
+        "asp setup codex --json",
+        "asp setup opencode --json",
+        "diffTextReport",
+        "diffHtmlOutputResult",
+        "asp doctor --json --runbook",
+        "doctorRunbookReport",
+        "## Audit Rule",
+        "the Result Map points at an existing shared schema",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "schema inventory audit missing {needle}"
+        );
+    }
 }
 
 #[test]
