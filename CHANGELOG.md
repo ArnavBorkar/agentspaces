@@ -61,6 +61,8 @@
   payload for automation clients.
 - JSON snapshot coverage now guards `asp preflight --json`,
   `asp evidence collect --json`, and evidence output-file confirmation payloads.
+- `docs/schemas.md` now documents raw JSONL, CSV, and SARIF export contracts,
+  including SARIF 2.1.0 compatibility expectations and stable rule IDs.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

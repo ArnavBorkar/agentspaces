@@ -422,7 +422,7 @@
 - **S33.1 CI readiness schemas**
   - [x] T33.1.1 Add JSON Schema definitions for `asp preflight --json` and evidence packet outputs.
   - [x] T33.1.2 Add snapshot coverage for preflight and evidence JSON payloads.
-  - [ ] T33.1.3 Add schema docs for raw SARIF outputs and version compatibility expectations.
+  - [x] T33.1.3 Add schema docs for raw SARIF outputs and version compatibility expectations.
 - **S33.2 Contract validation**
   - [ ] T33.2.1 Add tests that schema docs mention every command introduced after EPIC 30.
   - [ ] T33.2.2 Add a contributor checklist item for schema updates when adding CLI output fields.

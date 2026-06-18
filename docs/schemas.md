@@ -76,12 +76,6 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
 | `asp diagnostics --json --output file.json` | `#/$defs/diagnosticsOutputResult` |
 
-`asp audit --format jsonl` is a raw export format: each line is one
-`#/$defs/journalEntry` object without the CLI envelope. `asp audit --format csv`
-emits fixed columns documented in [docs/audit.md](audit.md).
-`asp preflight --sarif` and `asp secrets scan --sarif` are also raw export
-formats: they emit SARIF 2.1.0 so CI systems can upload findings to security
-dashboards without wrapping the document in the CLI envelope.
 `asp evidence collect --json` emits the evidence packet directly; when
 `--output file.json` is also used, the JSON result is a write confirmation
 containing `path`, `redacted`, and the same packet under `packet`.
@@ -94,6 +88,26 @@ metadata.
 links for failed readiness gates. `asp evidence collect --json` summarizes
 preflight results, includes the installed schema inventory, and sanitizes recent
 audit events by omitting free-form `message` and `detail` fields.
+
+## Raw Export Formats
+
+Some commands produce raw artifacts for tools that expect a standard format
+instead of an `asp --json` envelope:
+
+| CLI command | Raw format contract | Compatibility notes |
+| --- | --- | --- |
+| `asp audit --format jsonl` | Newline-delimited `#/$defs/journalEntry` objects. | New journal fields are additive; clients should ignore unknown `detail` fields. |
+| `asp audit --format csv` | Fixed CSV columns documented in [docs/audit.md](audit.md). | Adding columns is additive; removing or renaming columns is breaking. |
+| `asp preflight --sarif` | SARIF 2.1.0 with failed readiness checks as results. | `ruleId` values are stable preflight check IDs such as `preflight.secrets`; secret locations stay redacted. |
+| `asp secrets scan --sarif` | SARIF 2.1.0 with redacted secret findings as results. | `ruleId` values use stable `secrets.<kind>` names; locations are workspace-relative file and line references. |
+
+SARIF outputs intentionally reference the SARIF 2.1.0 standard instead of
+vendoring a local schema. For v1, `version` stays `"2.1.0"` and clients should
+treat new SARIF rules, results, properties, help text, or extra locations as
+additive. Changing a SARIF `ruleId`, removing required redaction, changing
+location semantics, or switching to a different SARIF version is a breaking
+automation-contract change and needs the same changelog and compatibility notes
+as a breaking CLI JSON schema change.
 
 `asp bench self --json` can run outside an initialized workspace. It creates a
 short-lived probe directory under the selected `-C` path, reports the observed

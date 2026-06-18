@@ -383,6 +383,14 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "preflight.doctor",
         "preflight.secrets",
         "omitting free-form `message` and `detail` fields",
+        "## Raw Export Formats",
+        "asp preflight --sarif",
+        "asp secrets scan --sarif",
+        "SARIF 2.1.0",
+        "`ruleId` values are stable preflight check IDs",
+        "`ruleId` values use stable `secrets.<kind>` names",
+        "Changing a SARIF `ruleId`",
+        "switching to a different SARIF version is a breaking",
     ] {
         assert!(docs.contains(needle), "schema docs missing {needle}");
     }
