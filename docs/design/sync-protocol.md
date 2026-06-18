@@ -226,6 +226,7 @@ The JSON conflict shape should include:
 ```json
 {
   "kind": "checkpoint_ref",
+  "ref_name": "refs/asp/checkpoints/42",
   "seq": 42,
   "local": "<local-target-or-null>",
   "remote": "<remote-target-or-null>",

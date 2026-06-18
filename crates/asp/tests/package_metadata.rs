@@ -715,9 +715,22 @@ fn schema_docs_cover_sync_result_contracts() {
     let schema: serde_json::Value =
         serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
     let defs = schema["$defs"].as_object().expect("schema defs object");
-    for def in ["syncStatusReport", "syncPushReport", "syncFetchReport"] {
+    for def in [
+        "syncStatusReport",
+        "syncPushReport",
+        "syncFetchReport",
+        "syncRefConflict",
+    ] {
         assert!(defs.contains_key(def), "result schema missing {def}");
     }
+    assert!(
+        defs["syncRefConflict"]["required"]
+            .as_array()
+            .expect("sync conflict required array")
+            .iter()
+            .any(|field| field.as_str() == Some("ref_name")),
+        "syncRefConflict should require exact ref_name"
+    );
 
     let variants = schema["anyOf"].as_array().expect("schema anyOf array");
     for def in ["syncStatusReport", "syncPushReport", "syncFetchReport"] {
@@ -726,6 +739,10 @@ fn schema_docs_cover_sync_result_contracts() {
             variants.iter().any(|variant| variant["$ref"] == reference),
             "result schema anyOf missing {reference}"
         );
+    }
+
+    for needle in ["`ref_name`", "refs/asp/checkpoints/1"] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
     }
 }
 

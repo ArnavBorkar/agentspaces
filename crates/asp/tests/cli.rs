@@ -1189,7 +1189,18 @@ fn sync_push_uploads_checkpoints_and_blobs_to_local_remote() {
     let err: serde_json::Value =
         serde_json::from_str(&String::from_utf8_lossy(&conflict.stdout)).unwrap();
     assert_eq!(err["error"]["code"], "sync_conflict");
-    assert!(err["error"]["hint"].as_str().unwrap().contains("fetch"));
+    assert!(err["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("refs/asp/head"));
+    assert!(err["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("0123456789012345678901234567890123456789"));
+    assert!(err["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("sync status"));
 }
 
 #[test]
@@ -1260,6 +1271,21 @@ fn sync_fetch_reports_conflicts_without_overwriting_local_refs() {
     )
     .unwrap();
 
+    let status = ok_json(
+        &root,
+        &["sync", "status", "--remote", remote.to_str().unwrap()],
+    );
+    let status_conflict = &status["result"]["conflicts"][0];
+    assert_eq!(status["result"]["checkpoint_refs_conflicted"], 1);
+    assert_eq!(status_conflict["kind"], "checkpoint_ref");
+    assert_eq!(status_conflict["ref_name"], "refs/asp/checkpoints/1");
+    assert_eq!(status_conflict["seq"], 1);
+    assert_eq!(status_conflict["local"], commit);
+    assert_eq!(
+        status_conflict["remote"],
+        "0123456789012345678901234567890123456789"
+    );
+
     let fetched = ok_json(
         &root,
         &["sync", "fetch", "--remote", remote.to_str().unwrap()],
@@ -1269,6 +1295,7 @@ fn sync_fetch_reports_conflicts_without_overwriting_local_refs() {
     assert_eq!(fetched["result"]["git_objects_downloaded"], 0);
     let conflict = &fetched["result"]["conflicts"][0];
     assert_eq!(conflict["kind"], "checkpoint_ref");
+    assert_eq!(conflict["ref_name"], "refs/asp/checkpoints/1");
     assert_eq!(conflict["seq"], 1);
     assert_eq!(conflict["local"], commit);
     assert_eq!(

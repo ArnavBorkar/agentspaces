@@ -40,7 +40,9 @@ Objects and CAS blobs are immutable: if a remote key already exists with
 different bytes, sync stops with a corrective error. Checkpoint refs are
 append-only: an existing checkpoint sequence cannot be overwritten with another
 target. The remote head ref is mutable and uses conditional writes so concurrent
-pushes do not silently clobber newer state.
+pushes do not silently clobber newer state. When refs conflict, reports and
+errors name the exact asp ref, for example `refs/asp/checkpoints/1` or
+`refs/asp/head`, plus the local and remote targets that need review.
 
 Before uploading a CAS blob, `asp` re-hashes it and refuses to sync if the local
 bytes do not match the BLAKE3 content address. Run:
@@ -57,8 +59,8 @@ if sync reports a corrupt or missing local object.
 refs, and head refs without downloading git objects or CAS blobs. Use it before
 `push` or `fetch` in automation to see whether a remote is missing, matching,
 ahead, behind, or diverged. The report names matching, local-only, remote-only,
-and conflicted ref counts so operators can decide whether a normal sync is safe
-or manual reconciliation is needed.
+and conflicted ref counts, and each conflict includes `ref_name`, so operators
+can decide whether a normal sync is safe or manual reconciliation is needed.
 
 ## JSON Output
 

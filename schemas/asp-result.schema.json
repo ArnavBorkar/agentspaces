@@ -1644,12 +1644,13 @@
     "syncRefConflict": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "seq", "local", "remote", "hint"],
+      "required": ["kind", "ref_name", "seq", "local", "remote", "hint"],
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["checkpoint_ref", "meta_ref"]
+          "enum": ["checkpoint_ref", "meta_ref", "head_ref"]
         },
+        "ref_name": { "type": "string" },
         "seq": { "$ref": "#/$defs/u64" },
         "local": { "$ref": "#/$defs/nullableString" },
         "remote": { "$ref": "#/$defs/nullableString" },

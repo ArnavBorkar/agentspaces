@@ -779,6 +779,7 @@ struct SyncStatusReport {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 struct SyncStatusRefConflict {
     kind: String,
+    ref_name: String,
     seq: u64,
     local: Option<String>,
     remote: Option<String>,
@@ -2530,6 +2531,7 @@ fn sync_status_summarize_refs(
                 summary.conflicted += 1;
                 conflicts.push(SyncStatusRefConflict {
                     kind: kind.to_string(),
+                    ref_name: sync_status_conflict_ref_name(kind, *seq),
                     seq: *seq,
                     local: Some(local.clone()),
                     remote: Some(remote.target.clone()),
@@ -2545,6 +2547,15 @@ fn sync_status_summarize_refs(
         }
     }
     summary
+}
+
+fn sync_status_conflict_ref_name(kind: &str, seq: u64) -> String {
+    match kind {
+        "checkpoint_ref" => format!("refs/asp/checkpoints/{seq}"),
+        "meta_ref" => format!("refs/asp/meta/{seq}"),
+        "head_ref" => "refs/asp/head".to_string(),
+        _ => format!("{kind}/{seq}"),
+    }
 }
 
 fn sync_status_head_relation(

@@ -425,6 +425,7 @@ pub struct SyncStatusReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SyncRefConflict {
     pub kind: String,
+    pub ref_name: String,
     pub seq: u64,
     pub local: Option<String>,
     pub remote: Option<String>,
@@ -3459,11 +3460,15 @@ fn put_append_only_ref(
                 report.refs_present += 1;
                 Ok(())
             } else {
+                let ref_name = sync_conflict_ref_name_for_key(key, expected.0);
                 Err(Error::new(
                     ErrorCode::SyncConflict,
-                    format!("remote ref {key} already exists with a different target"),
+                    format!(
+                        "remote ref {ref_name} already exists with target {}; local target is {}",
+                        actual.1, expected.1
+                    ),
                 )
-                .with_hint("fetch the latest remote state, review conflicts, and retry"))
+                .with_hint("run `asp sync status --remote <dir>` to inspect exact conflicting refs, then fetch or choose a new checkpoint"))
             }
         }
         None => match remote.put_if_match(key, bytes, None)? {
@@ -3499,11 +3504,11 @@ fn put_head_ref(
                 return Err(Error::new(
                     ErrorCode::SyncConflict,
                     format!(
-                        "remote head is at checkpoint #{}; local head is checkpoint #{local_seq}",
-                        actual.0
+                        "remote ref {HEAD_REF} is at checkpoint #{} ({}) and would not be overwritten by local checkpoint #{local_seq} ({})",
+                        actual.0, actual.1, expected.1
                     ),
                 )
-                .with_hint("fetch the latest remote state, review conflicts, and retry"));
+                .with_hint("run `asp sync status --remote <dir>` to inspect exact conflicting refs, then fetch or choose a new checkpoint"));
             }
 
             match remote.put_if_match(key, bytes, Some(&existing.version))? {
@@ -3628,6 +3633,7 @@ fn summarize_sync_refs(
                 summary.conflicted += 1;
                 conflicts.push(SyncRefConflict {
                     kind: kind.to_string(),
+                    ref_name: sync_conflict_ref_name(kind, *seq),
                     seq: *seq,
                     local: Some(local.clone()),
                     remote: Some(remote.target.clone()),
@@ -3658,6 +3664,27 @@ fn sync_head_relation(local: Option<&SyncRef>, remote: Option<&SyncRef>) -> Stri
     .to_string()
 }
 
+fn sync_conflict_ref_name(kind: &str, seq: u64) -> String {
+    match kind {
+        "checkpoint_ref" => format!("{CHECKPOINT_REF_PREFIX}{seq}"),
+        "meta_ref" => format!("{META_REF_PREFIX}{seq}"),
+        "head_ref" => HEAD_REF.to_string(),
+        _ => format!("{kind}/{seq}"),
+    }
+}
+
+fn sync_conflict_ref_name_for_key(key: &str, seq: u64) -> String {
+    if key.ends_with("/refs/head.json") {
+        HEAD_REF.to_string()
+    } else if key.contains("/refs/checkpoints/") {
+        format!("{CHECKPOINT_REF_PREFIX}{seq}")
+    } else if key.contains("/refs/meta/") {
+        format!("{META_REF_PREFIX}{seq}")
+    } else {
+        key.to_string()
+    }
+}
+
 fn plan_ref_imports(
     kind: &str,
     remote_refs: &BTreeMap<u64, SyncRef>,
@@ -3670,6 +3697,7 @@ fn plan_ref_imports(
             Some(local) if local == &remote_ref.target => report.refs_present += 1,
             Some(local) => report.conflicts.push(SyncRefConflict {
                 kind: kind.to_string(),
+                ref_name: sync_conflict_ref_name(kind, *seq),
                 seq: *seq,
                 local: Some(local.clone()),
                 remote: Some(remote_ref.target.clone()),
