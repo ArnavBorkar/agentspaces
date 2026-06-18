@@ -86,6 +86,9 @@
   Result Map row, and JSON snapshot coverage.
 - `asp evidence manifest` writes a SHA-256 manifest for collected evidence
   packets, with JSON output and schema coverage for support handoffs.
+- `asp evidence verify` validates packet artifact name, byte length, and
+  SHA-256 digest against a manifest, returning structured JSON and nonzero
+  status on mismatch.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

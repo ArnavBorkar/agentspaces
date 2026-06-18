@@ -273,6 +273,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "doctorRunbookReport",
         "asp evidence manifest --packet file.json --output manifest.json --json",
         "evidenceManifestOutputResult",
+        "asp evidence verify --packet file.json --manifest manifest.json --json",
+        "evidenceVerifyReport",
         "_None currently._",
         "## Audit Rule",
         "the Result Map points at an existing shared schema",
@@ -444,6 +446,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp evidence collect --json",
         "asp evidence collect --json --output file.json",
         "asp evidence manifest --packet file.json --output manifest.json --json",
+        "asp evidence verify --packet file.json --manifest manifest.json --json",
         "asp retention plan --json",
         "asp sync push --json --remote <dir>",
         "asp sync fetch --json --remote <dir>",
@@ -663,8 +666,10 @@ fn evidence_docs_cover_redacted_local_packets() {
         "## Signed Manifest",
         "asp-evidence.manifest.json",
         "asp evidence manifest",
+        "asp evidence verify",
         "sha256",
         "created_by: \"asp evidence manifest\"",
+        "exits nonzero",
         "cosign sign-blob",
         "cosign verify-blob",
         "minisign",
@@ -691,6 +696,8 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "#/$defs/evidenceOutputResult",
         "asp evidence manifest --packet file.json --output manifest.json --json",
         "#/$defs/evidenceManifestOutputResult",
+        "asp evidence verify --packet file.json --manifest manifest.json --json",
+        "#/$defs/evidenceVerifyReport",
         "preflight.config",
         "preflight.policy",
         "preflight.doctor",
@@ -720,6 +727,7 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "evidenceOutputResult",
         "evidenceManifest",
         "evidenceManifestOutputResult",
+        "evidenceVerifyReport",
         "evidencePreflightReport",
         "evidenceAuditEvent",
     ] {
@@ -732,6 +740,7 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "evidenceReport",
         "evidenceOutputResult",
         "evidenceManifestOutputResult",
+        "evidenceVerifyReport",
     ] {
         let reference = format!("#/$defs/{def}");
         assert!(
@@ -755,6 +764,10 @@ fn schema_docs_cover_post_epic_30_machine_readable_outputs() {
         (
             "asp evidence manifest --packet file.json --output manifest.json --json",
             "#/$defs/evidenceManifestOutputResult",
+        ),
+        (
+            "asp evidence verify --packet file.json --manifest manifest.json --json",
+            "#/$defs/evidenceVerifyReport",
         ),
     ];
     for (command, schema) in enveloped_outputs {

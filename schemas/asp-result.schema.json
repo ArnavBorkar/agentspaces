@@ -19,6 +19,7 @@
     { "$ref": "#/$defs/evidenceManifestOutputResult" },
     { "$ref": "#/$defs/evidenceOutputResult" },
     { "$ref": "#/$defs/evidenceReport" },
+    { "$ref": "#/$defs/evidenceVerifyReport" },
     { "$ref": "#/$defs/forkCompareRows" },
     { "$ref": "#/$defs/forkInfos" },
     { "$ref": "#/$defs/initResult" },
@@ -580,6 +581,40 @@
         },
         "created_at": { "$ref": "#/$defs/dateTime" },
         "created_by": { "const": "asp evidence manifest" }
+      }
+    },
+    "evidenceVerifyReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet",
+        "manifest_file",
+        "expected_artifact",
+        "actual_artifact",
+        "expected_bytes",
+        "actual_bytes",
+        "expected_sha256",
+        "actual_sha256",
+        "artifact_matches",
+        "valid"
+      ],
+      "properties": {
+        "packet": { "type": "string" },
+        "manifest_file": { "type": "string" },
+        "expected_artifact": { "type": "string" },
+        "actual_artifact": { "type": "string" },
+        "expected_bytes": { "$ref": "#/$defs/u64" },
+        "actual_bytes": { "$ref": "#/$defs/u64" },
+        "expected_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "actual_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifact_matches": { "type": "boolean" },
+        "valid": { "type": "boolean" }
       }
     },
     "evidenceReport": {

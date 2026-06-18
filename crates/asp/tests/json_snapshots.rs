@@ -72,6 +72,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
         "cli_evidence_manifest" => include_str!("snapshots/cli_evidence_manifest.json"),
+        "cli_evidence_verify" => include_str!("snapshots/cli_evidence_verify.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
         "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
@@ -175,10 +176,12 @@ fn normalize_value(value: &mut Value, root: &Path) {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 match key.as_str() {
-                    "root" | "path" | "log_file" | "settings_file" | "config_file"
-                    | "directory" | "workspace_root" => {
+                    "root" | "path" | "packet" | "manifest_file" | "log_file" | "settings_file"
+                    | "config_file" | "directory" | "workspace_root" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_path(s, root));
+                        } else {
+                            normalize_value(child, root);
                         }
                     }
                     "mcp_file" => {
@@ -512,6 +515,34 @@ fn cli_preflight_and_evidence_shapes_match_snapshots() {
     evidence_manifest["result"]["manifest"]["bytes"] = json!(0);
     evidence_manifest["result"]["manifest"]["sha256"] = json!("<sha256>");
     snapshot("cli_evidence_manifest", evidence_manifest);
+
+    let mut evidence_verify = normalize(
+        ok_json(
+            &root,
+            &[
+                "evidence",
+                "verify",
+                "--packet",
+                evidence_path.to_str().unwrap(),
+                "--manifest",
+                manifest_path.to_str().unwrap(),
+            ],
+        ),
+        &root,
+    );
+    assert_eq!(evidence_verify["result"]["valid"], true);
+    assert_eq!(evidence_verify["result"]["artifact_matches"], true);
+    for key in ["expected_bytes", "actual_bytes"] {
+        assert!(evidence_verify["result"][key].as_u64().unwrap() > 0);
+        evidence_verify["result"][key] = json!(0);
+    }
+    for key in ["expected_sha256", "actual_sha256"] {
+        let sha256 = evidence_verify["result"][key].as_str().unwrap();
+        assert_eq!(sha256.len(), 64);
+        assert!(sha256.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        evidence_verify["result"][key] = json!("<sha256>");
+    }
+    snapshot("cli_evidence_verify", evidence_verify);
 }
 
 struct McpClient {

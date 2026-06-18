@@ -39,11 +39,16 @@ asp evidence collect --output asp-evidence.json
 asp evidence manifest \
   --packet asp-evidence.json \
   --output asp-evidence.manifest.json
+asp evidence verify \
+  --packet asp-evidence.json \
+  --manifest asp-evidence.manifest.json
 ```
 
 The manifest records the packet file name, byte length, SHA-256 digest,
 creation time, and `created_by: "asp evidence manifest"`. It does not include
-the full local path to the packet.
+the full local path to the packet. Verification recomputes the packet digest
+and exits nonzero when the artifact name, byte length, or SHA-256 digest does
+not match.
 
 Sign with Sigstore when the environment already uses keyless signing:
 

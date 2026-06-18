@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "result": {
+    "actual_artifact": "asp-evidence.json",
+    "actual_bytes": 0,
+    "actual_sha256": "<sha256>",
+    "artifact_matches": true,
+    "expected_artifact": "asp-evidence.json",
+    "expected_bytes": 0,
+    "expected_sha256": "<sha256>",
+    "manifest_file": "<workspace-root>/asp-evidence.manifest.json",
+    "packet": "<workspace-root>/asp-evidence.json",
+    "valid": true
+  }
+}

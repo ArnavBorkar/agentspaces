@@ -18,6 +18,8 @@ security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 - `asp evidence collect --json --output file.json`
 - `asp evidence manifest --packet file.json --output manifest.json --json`
   (`evidenceManifestOutputResult`)
+- `asp evidence verify --packet file.json --manifest manifest.json --json`
+  (`evidenceVerifyReport`)
 - `asp setup claude --json` (`setupReport`), `asp setup codex --json`
   (`codexSetupReport`), and `asp setup opencode --json`
   (`opencodeSetupReport`)

@@ -439,6 +439,51 @@ fn full_cli_loop() {
     let manifest_file: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest_report).unwrap()).unwrap();
     assert_eq!(manifest_file, manifest["result"]["manifest"]);
+    let verify = ok_json(
+        &root,
+        &[
+            "evidence",
+            "verify",
+            "--packet",
+            evidence_report.to_str().unwrap(),
+            "--manifest",
+            manifest_report.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(verify["result"]["valid"], true);
+    assert_eq!(verify["result"]["artifact_matches"], true);
+    assert_eq!(
+        verify["result"]["expected_sha256"],
+        manifest["result"]["manifest"]["sha256"]
+    );
+    assert_eq!(verify["result"]["actual_sha256"], expected_sha256);
+    std::fs::write(&evidence_report, format!("{evidence_report_json}\n")).unwrap();
+    let failed_verify = asp(
+        &root,
+        &[
+            "--json",
+            "evidence",
+            "verify",
+            "--packet",
+            evidence_report.to_str().unwrap(),
+            "--manifest",
+            manifest_report.to_str().unwrap(),
+        ],
+    );
+    assert!(!failed_verify.status.success());
+    let failed_verify: serde_json::Value =
+        serde_json::from_slice(&failed_verify.stdout).expect("failed verify json");
+    assert_eq!(failed_verify["ok"], true);
+    assert_eq!(failed_verify["result"]["valid"], false);
+    assert_eq!(failed_verify["result"]["artifact_matches"], true);
+    assert_eq!(
+        failed_verify["result"]["expected_bytes"],
+        evidence_report_json.len() as u64
+    );
+    assert_eq!(
+        failed_verify["result"]["actual_bytes"],
+        evidence_report_json.len() as u64 + 1
+    );
 
     // no-op checkpoint exits 0
     let noop = ok_json(&root, &["checkpoint"]);

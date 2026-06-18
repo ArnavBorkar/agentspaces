@@ -453,8 +453,8 @@
 
 - **S35.1 Evidence manifests**
   - [x] T35.1.1 Add `asp evidence manifest` to create SHA-256 manifests for collected evidence packets.
-  - [ ] T35.1.2 Add `asp evidence verify` to validate packet bytes against a manifest before sharing or review.
-  - [ ] T35.1.3 Add JSON schema and snapshot coverage for manifest verification results.
+  - [x] T35.1.2 Add `asp evidence verify` to validate packet bytes against a manifest before sharing or review.
+  - [x] T35.1.3 Add JSON schema and snapshot coverage for manifest verification results.
 - **S35.2 Support handoff workflows**
   - [ ] T35.2.1 Add support-ticket templates that reference redaction, manifest, and signature expectations.
   - [ ] T35.2.2 Add CI examples that upload evidence packet, manifest, and SARIF artifacts together.

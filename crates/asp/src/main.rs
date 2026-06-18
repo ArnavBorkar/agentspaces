@@ -304,6 +304,8 @@ enum EvidenceCmd {
     Collect(EvidenceCollectArgs),
     /// Create a SHA-256 manifest for an evidence packet.
     Manifest(EvidenceManifestArgs),
+    /// Verify an evidence packet against a manifest.
+    Verify(EvidenceVerifyArgs),
 }
 
 #[derive(Args)]
@@ -330,6 +332,16 @@ struct EvidenceManifestArgs {
     /// Write the manifest to this JSON file.
     #[arg(short, long, value_name = "FILE")]
     output: PathBuf,
+}
+
+#[derive(Args)]
+struct EvidenceVerifyArgs {
+    /// Evidence packet JSON file to verify.
+    #[arg(long, value_name = "FILE")]
+    packet: PathBuf,
+    /// Evidence manifest JSON file created by `asp evidence manifest`.
+    #[arg(long, value_name = "FILE")]
+    manifest: PathBuf,
 }
 
 #[derive(Args)]
@@ -534,19 +546,33 @@ struct EvidenceAuditEvent {
     files_changed: Option<u64>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct EvidenceManifest {
     artifact: String,
     bytes: u64,
     sha256: String,
     created_at: String,
-    created_by: &'static str,
+    created_by: String,
 }
 
 #[derive(Debug, serde::Serialize)]
 struct EvidenceManifestOutputResult {
     path: PathBuf,
     manifest: EvidenceManifest,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceVerifyReport {
+    packet: PathBuf,
+    manifest_file: PathBuf,
+    expected_artifact: String,
+    actual_artifact: String,
+    expected_bytes: u64,
+    actual_bytes: u64,
+    expected_sha256: String,
+    actual_sha256: String,
+    artifact_matches: bool,
+    valid: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1876,6 +1902,38 @@ fn run(cli: Cli) -> Result<(), Error> {
                 }
                 Ok(())
             }
+            EvidenceCmd::Verify(args) => {
+                let ws = open(&cli.dir)?;
+                let packet = resolve_output_path(ws.root(), args.packet);
+                let manifest_file = resolve_output_path(ws.root(), args.manifest);
+                let report = evidence_verify(&packet, &manifest_file)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else if report.valid {
+                    println!("{} evidence packet matches manifest", ui::green("✓"));
+                    println!("  artifact: {}", ui::bold(&report.actual_artifact));
+                    println!("  sha256: {}", ui::cyan(&report.actual_sha256));
+                } else {
+                    println!("{} evidence packet does not match manifest", ui::red("x"));
+                    println!(
+                        "  artifact: expected {}, actual {}",
+                        ui::bold(&report.expected_artifact),
+                        ui::bold(&report.actual_artifact)
+                    );
+                    println!(
+                        "  bytes: expected {}, actual {}",
+                        report.expected_bytes, report.actual_bytes
+                    );
+                    println!(
+                        "  sha256: expected {}, actual {}",
+                        report.expected_sha256, report.actual_sha256
+                    );
+                }
+                if !report.valid {
+                    std::process::exit(1);
+                }
+                Ok(())
+            }
         },
     }
 }
@@ -2361,19 +2419,67 @@ fn evidence_manifest(packet: &Path) -> Result<EvidenceManifest, Error> {
         .with_hint("pass a JSON file created by `asp evidence collect --output <file>`"));
     }
 
-    let artifact = packet
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| packet.display().to_string());
-
     Ok(EvidenceManifest {
-        artifact,
+        artifact: evidence_packet_artifact(packet),
         bytes: metadata.len(),
         sha256: sha256_file(packet)?,
         created_at: asp_core::now_rfc3339(),
-        created_by: "asp evidence manifest",
+        created_by: "asp evidence manifest".to_string(),
     })
+}
+
+fn evidence_verify(packet: &Path, manifest_file: &Path) -> Result<EvidenceVerifyReport, Error> {
+    let manifest_bytes = std::fs::read(manifest_file)
+        .map_err(|e| evidence_manifest_io_error(manifest_file, "read evidence manifest", e))?;
+    let manifest: EvidenceManifest = serde_json::from_slice(&manifest_bytes).map_err(|e| {
+        Error::new(
+            ErrorCode::Io,
+            format!(
+                "cannot parse evidence manifest {}: {e}",
+                manifest_file.display()
+            ),
+        )
+        .with_hint("pass a JSON manifest created by `asp evidence manifest --output <file>`")
+        .with_source(e)
+    })?;
+
+    let metadata = std::fs::metadata(packet)
+        .map_err(|e| evidence_packet_io_error(packet, "read evidence packet metadata", e))?;
+    if !metadata.is_file() {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("evidence packet is not a file: {}", packet.display()),
+        )
+        .with_hint("pass a JSON file created by `asp evidence collect --output <file>`"));
+    }
+
+    let actual_artifact = evidence_packet_artifact(packet);
+    let actual_bytes = metadata.len();
+    let actual_sha256 = sha256_file(packet)?;
+    let artifact_matches = manifest.artifact == actual_artifact;
+    let valid =
+        artifact_matches && manifest.bytes == actual_bytes && manifest.sha256 == actual_sha256;
+
+    Ok(EvidenceVerifyReport {
+        packet: packet.to_path_buf(),
+        manifest_file: manifest_file.to_path_buf(),
+        expected_artifact: manifest.artifact,
+        actual_artifact,
+        expected_bytes: manifest.bytes,
+        actual_bytes,
+        expected_sha256: manifest.sha256,
+        actual_sha256,
+        artifact_matches,
+        valid,
+    })
+}
+
+fn evidence_packet_artifact(packet: &Path) -> String {
+    packet
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| packet.display().to_string())
 }
 
 fn sha256_file(path: &Path) -> Result<String, Error> {
@@ -2399,6 +2505,15 @@ fn evidence_packet_io_error(path: &Path, action: &str, source: std::io::Error) -
         format!("cannot {action} {}: {source}", path.display()),
     )
     .with_hint("pass a JSON file created by `asp evidence collect --output <file>`")
+    .with_source(source)
+}
+
+fn evidence_manifest_io_error(path: &Path, action: &str, source: std::io::Error) -> Error {
+    Error::new(
+        ErrorCode::Io,
+        format!("cannot {action} {}: {source}", path.display()),
+    )
+    .with_hint("pass a JSON manifest created by `asp evidence manifest --output <file>`")
     .with_source(source)
 }
 
