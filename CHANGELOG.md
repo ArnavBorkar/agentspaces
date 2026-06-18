@@ -113,6 +113,8 @@
   affected commands, and enforcement timing in human and JSON output.
 - `docs/policy-packs.md` adds copyable organization policy bundles for
   regulated, startup, and OSS maintainer rollout workflows.
+- `docs/ci.md` adds read-only GitHub Actions and GitLab examples that fail on
+  unsafe `asp config diff` drift against a reviewed baseline.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

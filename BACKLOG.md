@@ -483,7 +483,7 @@ repeatable defaults, reviewable policy, and minimal per-repo hand editing.
   - [x] T36.2.1 Add `asp config diff --against <file>` for reviewing local config drift.
   - [x] T36.2.2 Add `asp policy explain` to show why each rule exists and which commands it affects.
   - [x] T36.2.3 Add org policy bundle examples for regulated, startup, and OSS maintainer workflows.
-  - [ ] T36.2.4 Add CI examples that fail on unsafe config drift without mutating workspaces.
+  - [x] T36.2.4 Add CI examples that fail on unsafe config drift without mutating workspaces.
   - [ ] T36.2.5 Add docs for phased rollout, rollback, and owner handoff.
 
 ## EPIC 37 — User-owned remote sync backends

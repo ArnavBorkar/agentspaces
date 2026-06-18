@@ -54,6 +54,114 @@ jobs:
           path: asp-preflight.json
 ```
 
+## Config Drift Gate
+
+Use this pattern when a platform team has a reviewed baseline config and wants CI
+to fail on unsafe drift without mutating the workspace. Store the baseline in
+the repo, for example `.ci/asp/config.baseline.toml`.
+
+```yaml
+name: asp config drift
+
+on:
+  pull_request:
+
+jobs:
+  asp-config-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install asp
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Compare asp config to baseline
+        run: |
+          asp config validate
+          asp --json config diff \
+            --against .ci/asp/config.baseline.toml \
+            > asp-config-diff.json
+          python3 - <<'PY'
+          import json
+          import sys
+
+          unsafe_fields = {
+              "capture.excludes",
+              "capture.extra_excludes",
+              "capture.blob_threshold_mb",
+              "promote.branch_template",
+              "shadow_excludes",
+              "blob_threshold_bytes",
+          }
+          with open("asp-config-diff.json", encoding="utf-8") as handle:
+              report = json.load(handle)["result"]
+
+          unsafe = [
+              change for change in report["changes"]
+              if change["field"] in unsafe_fields
+          ]
+          for change in unsafe:
+              print(
+                  "::error title=asp config drift::"
+                  f"{change['field']} differs from .ci/asp/config.baseline.toml"
+              )
+          sys.exit(1 if unsafe else 0)
+          PY
+      - name: Upload asp config drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asp-config-diff-${{ github.sha }}
+          if-no-files-found: warn
+          path: asp-config-diff.json
+```
+
+For GitLab:
+
+```yaml
+asp_config_drift:
+  image: debian:bookworm-slim
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ca-certificates curl git python3
+    - curl -fsSL https://raw.githubusercontent.com/ArnavBorkar/agentspaces/main/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+  script:
+    - asp config validate
+    - asp --json config diff --against .ci/asp/config.baseline.toml > asp-config-diff.json
+    - |
+      python3 - <<'PY'
+      import json
+      import sys
+
+      unsafe_fields = {
+          "capture.excludes",
+          "capture.extra_excludes",
+          "capture.blob_threshold_mb",
+          "promote.branch_template",
+          "shadow_excludes",
+          "blob_threshold_bytes",
+      }
+      with open("asp-config-diff.json", encoding="utf-8") as handle:
+          report = json.load(handle)["result"]
+      unsafe = [change for change in report["changes"] if change["field"] in unsafe_fields]
+      if unsafe:
+          for change in unsafe:
+              print(f"asp config drift: {change['field']} differs from baseline")
+          sys.exit(1)
+      PY
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - asp-config-diff.json
+```
+
+Both examples are read-only: `asp config validate` and `asp config diff` parse
+configuration and write only the requested CI artifact. They do not run
+`asp checkpoint`, `asp doctor --fix`, `asp restore`, `asp promote`, or
+`asp discard`.
+
 ## Direct Secret Scan SARIF
 
 ```yaml
