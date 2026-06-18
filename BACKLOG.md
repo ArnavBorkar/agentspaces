@@ -164,7 +164,7 @@
   - [x] T12.1.3 Add an end-to-end Codex setup smoke test using a temporary HOME.
 - **S12.2 Other harnesses**
   - [x] T12.2.1 Add `asp setup opencode` with idempotent install/remove behavior.
-  - [ ] T12.2.2 Add generic MCP client instructions and schema examples for unsupported harnesses.
+  - [x] T12.2.2 Add generic MCP client instructions and schema examples for unsupported harnesses.
 
 ## EPIC 13 — MCP maturity
 

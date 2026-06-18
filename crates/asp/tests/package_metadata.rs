@@ -77,3 +77,30 @@ fn homebrew_formula_has_valid_ruby_syntax() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn generic_mcp_docs_include_supported_client_shapes() {
+    let docs = fs::read_to_string(repo_file("docs/mcp-clients.md")).unwrap();
+
+    assert!(
+        docs.contains("\"mcpServers\""),
+        "generic JSON shape missing"
+    );
+    assert!(
+        docs.contains("\"command\": \"asp\""),
+        "stdio command missing"
+    );
+    assert!(docs.contains("\"args\": [\"mcp\"]"), "stdio args missing");
+    assert!(
+        docs.contains("[mcp_servers.agentspaces]"),
+        "Codex TOML shape missing"
+    );
+    assert!(
+        docs.contains("\"type\": \"local\""),
+        "OpenCode shape missing"
+    );
+    assert!(
+        docs.contains("workspace_checkpoint"),
+        "tool smoke-check guidance missing"
+    );
+}

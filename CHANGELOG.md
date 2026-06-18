@@ -134,6 +134,8 @@
   install and removal.
 - `asp setup opencode` registers the `asp mcp` server in OpenCode
   `opencode.json` with idempotent install/remove behavior.
+- `docs/mcp-clients.md` documents generic MCP client JSON/TOML setup shapes
+  and safety guidance for unsupported harnesses.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.
