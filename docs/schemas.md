@@ -52,7 +52,10 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp audit --json` | `#/$defs/journalEntries` |
 | `asp policy validate --json` | `#/$defs/policyValidateReport` |
+| `asp preflight --json` | `#/$defs/preflightReport` |
 | `asp secrets scan --json` | `#/$defs/secretScanReport` |
+| `asp evidence collect --json` | `#/$defs/evidenceReport` |
+| `asp evidence collect --json --output file.json` | `#/$defs/evidenceOutputResult` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
 | `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
 | `asp sync fetch --json --remote <dir>` | `#/$defs/syncFetchReport` |
@@ -79,9 +82,18 @@ emits fixed columns documented in [docs/audit.md](audit.md).
 `asp preflight --sarif` and `asp secrets scan --sarif` are also raw export
 formats: they emit SARIF 2.1.0 so CI systems can upload findings to security
 dashboards without wrapping the document in the CLI envelope.
+`asp evidence collect --json` emits the evidence packet directly; when
+`--output file.json` is also used, the JSON result is a write confirmation
+containing `path`, `redacted`, and the same packet under `packet`.
 Checkpoint journal entries may include `detail.paths` with workspace-relative
 changed paths; clients should treat unknown `detail` fields as operation-specific
 metadata.
+
+`asp preflight --json` returns stable `checks[].id` values (`preflight.config`,
+`preflight.policy`, `preflight.doctor`, and `preflight.secrets`) plus runbook
+links for failed readiness gates. `asp evidence collect --json` summarizes
+preflight results, includes the installed schema inventory, and sanitizes recent
+audit events by omitting free-form `message` and `detail` fields.
 
 `asp bench self --json` can run outside an initialized workspace. It creates a
 short-lived probe directory under the selected `-C` path, reports the observed

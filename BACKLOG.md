@@ -415,6 +415,20 @@
 
 ---
 
+## EPIC 33 — Automation schema completeness and compatibility
+
+**Done when:** every new machine-readable CLI surface has a documented JSON schema, snapshot coverage, and compatibility notes for additive versus breaking changes.
+
+- **S33.1 CI readiness schemas**
+  - [x] T33.1.1 Add JSON Schema definitions for `asp preflight --json` and evidence packet outputs.
+  - [ ] T33.1.2 Add snapshot coverage for preflight and evidence JSON payloads.
+  - [ ] T33.1.3 Add schema docs for raw SARIF outputs and version compatibility expectations.
+- **S33.2 Contract validation**
+  - [ ] T33.2.1 Add tests that schema docs mention every command introduced after EPIC 30.
+  - [ ] T33.2.2 Add a contributor checklist item for schema updates when adding CLI output fields.
+
+---
+
 ## Decision log (newest first)
 
 - 2026-06-11 · Doctor never deletes directories it can't prove asp created — fork() registers Pending intent entries before cloning; cleanup is registry-driven, heuristics are info-only. (From review: rm -rf of `cp -r proj proj@backup` was possible.)

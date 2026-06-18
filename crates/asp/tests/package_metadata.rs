@@ -369,6 +369,51 @@ fn evidence_docs_cover_redacted_local_packets() {
 }
 
 #[test]
+fn schema_docs_cover_preflight_and_evidence_contracts() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp preflight --json",
+        "#/$defs/preflightReport",
+        "asp evidence collect --json",
+        "#/$defs/evidenceReport",
+        "asp evidence collect --json --output file.json",
+        "#/$defs/evidenceOutputResult",
+        "preflight.config",
+        "preflight.policy",
+        "preflight.doctor",
+        "preflight.secrets",
+        "omitting free-form `message` and `detail` fields",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in [
+        "preflightReport",
+        "preflightCheck",
+        "preflightCheckId",
+        "evidenceReport",
+        "evidenceOutputResult",
+        "evidencePreflightReport",
+        "evidenceAuditEvent",
+    ] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    for def in ["preflightReport", "evidenceReport", "evidenceOutputResult"] {
+        let reference = format!("#/$defs/{def}");
+        assert!(
+            variants.iter().any(|variant| variant["$ref"] == reference),
+            "result schema anyOf missing {reference}"
+        );
+    }
+}
+
+#[test]
 fn agent_preflight_docs_cover_harness_launch_checks() {
     let docs = fs::read_to_string(repo_file("docs/agent-preflight.md")).unwrap();
 

@@ -56,6 +56,9 @@
   and escalating evidence packets without over-collecting local data.
 - `docs/evidence.md` documents signed evidence manifests with SHA-256 packet
   digests and Sigstore or minisign verification commands.
+- `schemas/asp-result.schema.json` now documents `asp preflight --json`,
+  `asp evidence collect --json`, and the evidence output-file confirmation
+  payload for automation clients.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

@@ -12,12 +12,15 @@
     { "$ref": "#/$defs/diffReport" },
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
+    { "$ref": "#/$defs/evidenceOutputResult" },
+    { "$ref": "#/$defs/evidenceReport" },
     { "$ref": "#/$defs/forkCompareRows" },
     { "$ref": "#/$defs/forkInfos" },
     { "$ref": "#/$defs/initResult" },
     { "$ref": "#/$defs/journalEntries" },
     { "$ref": "#/$defs/noChanges" },
     { "$ref": "#/$defs/policyValidateReport" },
+    { "$ref": "#/$defs/preflightReport" },
     { "$ref": "#/$defs/promoteReport" },
     { "$ref": "#/$defs/raceLaneResults" },
     { "$ref": "#/$defs/retentionPlan" },
@@ -442,6 +445,109 @@
         "destructive": { "type": "boolean" }
       }
     },
+    "evidenceOutputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "redacted", "packet"],
+      "properties": {
+        "path": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "packet": { "$ref": "#/$defs/evidenceReport" }
+      }
+    },
+    "evidenceReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated_at",
+        "asp_version",
+        "redaction",
+        "diagnostics",
+        "preflight",
+        "schema",
+        "recent_audit_events"
+      ],
+      "properties": {
+        "generated_at": { "$ref": "#/$defs/dateTime" },
+        "asp_version": { "type": "string" },
+        "redaction": { "$ref": "#/$defs/evidenceRedaction" },
+        "diagnostics": { "$ref": "#/$defs/diagnosticBundle" },
+        "preflight": { "$ref": "#/$defs/evidencePreflightReport" },
+        "schema": { "$ref": "#/$defs/schemaReport" },
+        "recent_audit_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceAuditEvent" }
+        }
+      }
+    },
+    "evidenceRedaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paths_redacted",
+        "secrets_redacted",
+        "audit_messages_included",
+        "audit_details_included"
+      ],
+      "properties": {
+        "paths_redacted": { "type": "boolean" },
+        "secrets_redacted": { "type": "boolean" },
+        "audit_messages_included": { "type": "boolean" },
+        "audit_details_included": { "type": "boolean" }
+      }
+    },
+    "evidencePreflightReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "checks", "doctor_findings", "secret_findings"],
+      "properties": {
+        "ready": { "type": "boolean" },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidencePreflightCheck" }
+        },
+        "doctor_findings": { "$ref": "#/$defs/u64" },
+        "secret_findings": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "evidencePreflightCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "ok", "summary", "runbook", "hint"],
+      "properties": {
+        "id": { "$ref": "#/$defs/preflightCheckId" },
+        "name": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "summary": { "type": "string" },
+        "runbook": { "type": "string" },
+        "hint": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "evidenceAuditEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "ts",
+        "seq",
+        "source",
+        "duration_ms",
+        "files_changed"
+      ],
+      "properties": {
+        "op": { "$ref": "#/$defs/op" },
+        "ts": { "$ref": "#/$defs/dateTime" },
+        "seq": { "$ref": "#/$defs/nullableU64" },
+        "source": {
+          "anyOf": [
+            { "$ref": "#/$defs/source" },
+            { "type": "null" }
+          ]
+        },
+        "duration_ms": { "$ref": "#/$defs/nullableU64" },
+        "files_changed": { "$ref": "#/$defs/nullableU64" }
+      }
+    },
     "forkCompareRows": {
       "type": "array",
       "items": { "$ref": "#/$defs/forkCompareRow" }
@@ -585,6 +691,43 @@
         "path": { "type": "string" },
         "valid": { "const": true },
         "policy": { "$ref": "#/$defs/workspacePolicy" }
+      }
+    },
+    "preflightReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "ready",
+        "checks",
+        "doctor_findings",
+        "secret_findings"
+      ],
+      "properties": {
+        "root": { "type": "string" },
+        "ready": { "type": "boolean" },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/preflightCheck" }
+        },
+        "doctor_findings": { "$ref": "#/$defs/doctorFindings" },
+        "secret_findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/secretFinding" }
+        }
+      }
+    },
+    "preflightCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "ok", "summary", "runbook"],
+      "properties": {
+        "id": { "$ref": "#/$defs/preflightCheckId" },
+        "name": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "summary": { "type": "string" },
+        "runbook": { "type": "string" },
+        "hint": { "type": "string" }
       }
     },
     "secretScanReport": {
@@ -1121,6 +1264,15 @@
     "forkStatus": {
       "type": "string",
       "enum": ["pending", "active", "promoted", "discarded"]
+    },
+    "preflightCheckId": {
+      "type": "string",
+      "enum": [
+        "preflight.config",
+        "preflight.policy",
+        "preflight.doctor",
+        "preflight.secrets"
+      ]
     },
     "op": {
       "type": "string",
