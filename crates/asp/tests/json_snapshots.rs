@@ -57,6 +57,8 @@ fn snapshot(name: &str, actual: Value) {
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
+        "cli_config_show" => include_str!("snapshots/cli_config_show.json"),
+        "cli_config_validate" => include_str!("snapshots/cli_config_validate.json"),
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
@@ -307,6 +309,28 @@ fn cli_json_shapes_match_snapshots() {
     let mut error: Value = serde_json::from_slice(&out.stdout).expect("error json");
     error["error"]["message"] = json!("<message>");
     snapshot("cli_error", error);
+}
+
+#[test]
+fn cli_config_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nextra_excludes = [\"coverage/\"]\nblob_threshold_mb = 10\n\n[promote]\nbranch_template = \"review/{workspace}/{fork}\"\n",
+    )
+    .unwrap();
+
+    let config_show = normalize(ok_json(&root, &["config", "show"]), &root);
+    snapshot("cli_config_show", config_show.clone());
+
+    let config_validate = normalize(ok_json(&root, &["config", "validate"]), &root);
+    assert_eq!(
+        config_validate, config_show,
+        "config validate should return the same successful payload as config show"
+    );
+    snapshot("cli_config_validate", config_validate);
 }
 
 #[test]

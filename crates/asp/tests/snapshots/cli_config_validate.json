@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "result": {
+    "blob_threshold_bytes": 10485760,
+    "config": {
+      "capture": {
+        "blob_threshold_mb": 10,
+        "excludes": [
+          "node_modules/",
+          "target/",
+          ".venv/",
+          "venv/",
+          "__pycache__/",
+          "build/",
+          "dist/",
+          ".next/",
+          ".cache/"
+        ],
+        "extra_excludes": [
+          "coverage/"
+        ]
+      },
+      "promote": {
+        "branch_template": "review/{workspace}/{fork}"
+      }
+    },
+    "exists": true,
+    "path": "<workspace-root>/.asp/config.toml",
+    "root": "<workspace-root>",
+    "shadow_excludes": [
+      "/.asp/",
+      "node_modules/",
+      "target/",
+      ".venv/",
+      "venv/",
+      "__pycache__/",
+      "build/",
+      "dist/",
+      ".next/",
+      ".cache/",
+      "coverage/"
+    ],
+    "valid": true
+  }
+}

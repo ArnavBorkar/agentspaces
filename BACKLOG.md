@@ -435,7 +435,7 @@
 
 - **S34.1 Config JSON contracts**
   - [x] T34.1.1 Add result schema/docs for `asp config show --json` and `asp config validate --json`.
-  - [ ] T34.1.2 Add snapshot coverage for config show and validate JSON payloads.
+  - [x] T34.1.2 Add snapshot coverage for config show and validate JSON payloads.
   - [ ] T34.1.3 Add config result examples to policy/config review docs.
 - **S34.2 Contract inventory guard**
   - [ ] T34.2.1 Audit shipped `--json` command surfaces for missing result-map entries.

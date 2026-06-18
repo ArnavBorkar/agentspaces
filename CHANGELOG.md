@@ -69,6 +69,8 @@
   snapshots when serialized CLI or MCP output changes.
 - `schemas/asp-result.schema.json` and `docs/schemas.md` now document
   `asp config show --json` and `asp config validate --json` result payloads.
+- JSON snapshot coverage now guards `asp config show --json` and
+  `asp config validate --json` payloads with non-default config values.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,
