@@ -80,6 +80,8 @@
 - `schemas/asp-result.schema.json`, `docs/schemas.md`, and JSON snapshots now
   cover `asp quickstart --json`, `asp completions <shell> --json`, and
   `asp manpage --json`.
+- The Result Map and JSON snapshots now cover Codex/OpenCode setup payloads and
+  diff patch, stat, and HTML output variants.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

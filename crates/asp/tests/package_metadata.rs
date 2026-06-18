@@ -264,6 +264,9 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "asp manpage --json",
         "asp setup codex --json",
         "asp setup opencode --json",
+        "asp diff --json --patch",
+        "asp diff --json --stat",
+        "asp diff --json --html --output review.html",
         "diffTextReport",
         "diffHtmlOutputResult",
         "asp doctor --json --runbook",
@@ -317,6 +320,61 @@ fn schema_docs_cover_discovery_result_contracts() {
 }
 
 #[test]
+fn schema_docs_cover_setup_and_diff_variant_contracts() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp setup codex --json",
+        "#/$defs/codexSetupReport",
+        "asp setup opencode --json",
+        "#/$defs/opencodeSetupReport",
+        "asp diff --json --patch",
+        "asp diff --json --stat",
+        "#/$defs/diffTextReport",
+        "asp diff --json --html --output review.html",
+        "#/$defs/diffHtmlOutputResult",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
+    assert!(
+        !audit.contains("Returns `setupReport`, but the Result Map only lists"),
+        "setup variants should no longer be tracked as Result Map gaps"
+    );
+    assert!(
+        !audit.contains("the Result Map omits"),
+        "diff variants should no longer be tracked as Result Map gaps"
+    );
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in [
+        "codexSetupReport",
+        "opencodeSetupReport",
+        "diffTextReport",
+        "diffHtmlOutputResult",
+    ] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    for def in [
+        "codexSetupReport",
+        "opencodeSetupReport",
+        "diffTextReport",
+        "diffHtmlOutputResult",
+    ] {
+        let reference = format!("#/$defs/{def}");
+        assert!(
+            variants.iter().any(|variant| variant["$ref"] == reference),
+            "result schema anyOf missing {reference}"
+        );
+    }
+}
+
+#[test]
 fn known_cli_json_surfaces_are_mapped_or_audited() {
     let schemas = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
     let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
@@ -349,11 +407,16 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp forks --json",
         "asp review --json",
         "asp diff --json",
+        "asp diff --json --patch",
+        "asp diff --json --stat",
+        "asp diff --json --html --output review.html",
         "asp promote --json",
         "asp discard --json",
         "asp race --json",
         "asp race compare --json",
         "asp setup claude --json",
+        "asp setup codex --json",
+        "asp setup opencode --json",
         "asp doctor --json",
         "asp diagnostics --json",
         "asp diagnostics --json --output file.json",
@@ -365,14 +428,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         );
     }
 
-    let audited_followups = [
-        "asp setup codex --json",
-        "asp setup opencode --json",
-        "asp diff --json --patch",
-        "asp diff --json --stat",
-        "asp diff --json --html --output review.html",
-        "asp doctor --json --runbook",
-    ];
+    let audited_followups = ["asp doctor --json --runbook"];
     for command in audited_followups {
         assert!(
             audit.contains(command),

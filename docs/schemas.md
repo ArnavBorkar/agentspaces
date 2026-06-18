@@ -72,11 +72,16 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp forks --json` | `#/$defs/forkCompareRows` |
 | `asp review --json` | `#/$defs/reviewReport` |
 | `asp diff --json` | `#/$defs/diffReport` |
+| `asp diff --json --patch` | `#/$defs/diffTextReport` |
+| `asp diff --json --stat` | `#/$defs/diffTextReport` |
+| `asp diff --json --html --output review.html` | `#/$defs/diffHtmlOutputResult` |
 | `asp promote --json` | `#/$defs/promoteReport` |
 | `asp discard --json` | `#/$defs/discardResult` |
 | `asp race --json` | `#/$defs/raceLaneResults` |
 | `asp race compare --json` | `#/$defs/raceLaneResults` |
 | `asp setup claude --json` | `#/$defs/setupReport` |
+| `asp setup codex --json` | `#/$defs/codexSetupReport` |
+| `asp setup opencode --json` | `#/$defs/opencodeSetupReport` |
 | `asp doctor --json` | `#/$defs/doctorFindings` |
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
 | `asp diagnostics --json --output file.json` | `#/$defs/diagnosticsOutputResult` |

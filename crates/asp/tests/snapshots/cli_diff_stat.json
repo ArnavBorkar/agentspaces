@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "result": {
+    "from": "#1",
+    "mode": "stat",
+    "summary": {
+      "by_change_type": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "modified"
+        }
+      ],
+      "by_language": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "Python"
+        }
+      ],
+      "by_path": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "src/"
+        }
+      ],
+      "deletions": 1,
+      "files": 1,
+      "insertions": 1
+    },
+    "text": "<text>",
+    "to": "#2"
+  }
+}

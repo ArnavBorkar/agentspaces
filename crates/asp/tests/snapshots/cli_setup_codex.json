@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "result": {
+    "config_file": "<workspace-root>/.codex/config.toml",
+    "mcp_registered": true,
+    "removed": false,
+    "user_scope": false
+  }
+}

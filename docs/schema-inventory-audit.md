@@ -7,7 +7,7 @@ This audit compares shipped `asp --json` command surfaces against
 ## Covered Surfaces
 
 The Result Map now covers the core workspace, policy, config, readiness,
-security, evidence, sync, review, race, diagnostics, and setup-Claude payloads:
+security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 
 - `asp config show --json` and `asp config validate --json`
 - `asp quickstart --json`
@@ -16,6 +16,12 @@ security, evidence, sync, review, race, diagnostics, and setup-Claude payloads:
 - `asp preflight --json`
 - `asp evidence collect --json`
 - `asp evidence collect --json --output file.json`
+- `asp setup claude --json` (`setupReport`), `asp setup codex --json`
+  (`codexSetupReport`), and `asp setup opencode --json`
+  (`opencodeSetupReport`)
+- `asp diff --json` (`diffReport`), `asp diff --json --patch`, and
+  `asp diff --json --stat` (`diffTextReport`), plus
+  `asp diff --json --html --output review.html` (`diffHtmlOutputResult`)
 - raw SARIF exports for `asp preflight --sarif` and `asp secrets scan --sarif`
 
 ## Follow-Up Inventory
@@ -25,10 +31,6 @@ schema definitions, snapshots, or all three:
 
 | Surface | Current state | Needed follow-up |
 | --- | --- | --- |
-| `asp setup codex --json` | Returns `setupReport`, but the Result Map only lists `asp setup claude --json`. | Add Result Map rows for Codex and OpenCode setup variants. |
-| `asp setup opencode --json` | Returns `setupReport`, but the Result Map only lists `asp setup claude --json`. | Add Result Map rows for Codex and OpenCode setup variants. |
-| `asp diff --json --patch` and `asp diff --json --stat` | `diffTextReport` exists in the shared result schema, but the Result Map omits these rows. | Add explicit Result Map rows and snapshot coverage for text diff modes. |
-| `asp diff --json --html --output review.html` | `diffHtmlOutputResult` exists in the shared result schema, but the Result Map omits this row. | Add an explicit Result Map row and snapshot coverage for HTML export confirmation. |
 | `asp doctor --json --runbook` | Tested in CLI/docs coverage but missing `doctorRunbookReport` in the shared result schema. | Add schema definition, Result Map row, and snapshot. |
 
 ## Audit Rule

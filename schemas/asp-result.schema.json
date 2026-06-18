@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/checkpointInfo" },
     { "$ref": "#/$defs/completionResult" },
     { "$ref": "#/$defs/configShowReport" },
+    { "$ref": "#/$defs/codexSetupReport" },
     { "$ref": "#/$defs/diagnosticBundle" },
     { "$ref": "#/$defs/diagnosticsOutputResult" },
     { "$ref": "#/$defs/diffHtmlOutputResult" },
@@ -22,6 +23,7 @@
     { "$ref": "#/$defs/journalEntries" },
     { "$ref": "#/$defs/manpageResult" },
     { "$ref": "#/$defs/noChanges" },
+    { "$ref": "#/$defs/opencodeSetupReport" },
     { "$ref": "#/$defs/policyValidateReport" },
     { "$ref": "#/$defs/preflightReport" },
     { "$ref": "#/$defs/promoteReport" },
@@ -129,6 +131,17 @@
       "properties": {
         "shell": { "type": "string" },
         "completion": { "type": "string" }
+      }
+    },
+    "codexSetupReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_file", "user_scope", "mcp_registered", "removed"],
+      "properties": {
+        "config_file": { "type": "string" },
+        "user_scope": { "type": "boolean" },
+        "mcp_registered": { "type": "boolean" },
+        "removed": { "type": "boolean" }
       }
     },
     "configShowReport": {
@@ -728,6 +741,17 @@
         "no_changes": { "const": true },
         "message": { "type": "string" },
         "note": { "type": "string" }
+      }
+    },
+    "opencodeSetupReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_file", "user_scope", "mcp_registered", "removed"],
+      "properties": {
+        "config_file": { "type": "string" },
+        "user_scope": { "type": "boolean" },
+        "mcp_registered": { "type": "boolean" },
+        "removed": { "type": "boolean" }
       }
     },
     "policyValidateReport": {

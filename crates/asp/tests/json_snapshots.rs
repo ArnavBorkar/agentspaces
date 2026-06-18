@@ -62,6 +62,11 @@ fn snapshot(name: &str, actual: Value) {
         "cli_quickstart" => include_str!("snapshots/cli_quickstart.json"),
         "cli_completions" => include_str!("snapshots/cli_completions.json"),
         "cli_manpage" => include_str!("snapshots/cli_manpage.json"),
+        "cli_setup_codex" => include_str!("snapshots/cli_setup_codex.json"),
+        "cli_setup_opencode" => include_str!("snapshots/cli_setup_opencode.json"),
+        "cli_diff_patch" => include_str!("snapshots/cli_diff_patch.json"),
+        "cli_diff_stat" => include_str!("snapshots/cli_diff_stat.json"),
+        "cli_diff_html" => include_str!("snapshots/cli_diff_html.json"),
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
@@ -168,8 +173,8 @@ fn normalize_value(value: &mut Value, root: &Path) {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 match key.as_str() {
-                    "root" | "path" | "log_file" | "settings_file" | "directory"
-                    | "workspace_root" => {
+                    "root" | "path" | "log_file" | "settings_file" | "config_file"
+                    | "directory" | "workspace_root" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_path(s, root));
                         }
@@ -357,6 +362,56 @@ fn cli_discovery_shapes_match_snapshots() {
     assert!(manpage_text.contains("asp"), "{manpage_text}");
     manpage["result"]["manpage"] = json!("<manpage>");
     snapshot("cli_manpage", manpage);
+}
+
+#[test]
+fn cli_setup_variant_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    let setup_codex = normalize(ok_json(&root, &["setup", "codex"]), &root);
+    assert!(root.join(".codex/config.toml").exists());
+    snapshot("cli_setup_codex", setup_codex);
+
+    let setup_opencode = normalize(ok_json(&root, &["setup", "opencode"]), &root);
+    assert!(root.join("opencode.json").exists());
+    snapshot("cli_setup_opencode", setup_opencode);
+}
+
+#[test]
+fn cli_diff_variant_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+    std::fs::write(root.join("src/app.py"), "print('v2')\n").unwrap();
+    ok_json(&root, &["checkpoint", "-m", "v2"]);
+
+    let patch = ok_json(&root, &["diff", "--patch", "1", "2"]);
+    assert_eq!(patch["result"]["mode"], "patch");
+    assert!(patch["result"]["text"]
+        .as_str()
+        .unwrap()
+        .contains("src/app.py"));
+    snapshot("cli_diff_patch", normalize(patch, &root));
+
+    let stat = ok_json(&root, &["diff", "--stat", "1", "2"]);
+    assert_eq!(stat["result"]["mode"], "stat");
+    assert!(stat["result"]["text"]
+        .as_str()
+        .unwrap()
+        .contains("src/app.py"));
+    snapshot("cli_diff_stat", normalize(stat, &root));
+
+    let html = ok_json(
+        &root,
+        &["diff", "--html", "--output", "review.html", "1", "2"],
+    );
+    let html_path = root.join("review.html");
+    assert!(html_path.exists());
+    assert!(std::fs::read_to_string(&html_path)
+        .unwrap()
+        .contains("agentspaces diff review"));
+    snapshot("cli_diff_html", normalize(html, &root));
 }
 
 #[test]

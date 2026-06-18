@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "result": {
+    "bytes": 1430,
+    "from": "#1",
+    "path": "<workspace-root>/review.html",
+    "summary": {
+      "by_change_type": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "modified"
+        }
+      ],
+      "by_language": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "Python"
+        }
+      ],
+      "by_path": [
+        {
+          "deletions": 1,
+          "files": 1,
+          "insertions": 1,
+          "name": "src/"
+        }
+      ],
+      "deletions": 1,
+      "files": 1,
+      "insertions": 1
+    },
+    "to": "#2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "result": {
+    "config_file": "<workspace-root>/opencode.json",
+    "mcp_registered": true,
+    "removed": false,
+    "user_scope": false
+  }
+}
