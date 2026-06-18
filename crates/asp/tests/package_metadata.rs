@@ -351,6 +351,12 @@ fn evidence_docs_cover_redacted_local_packets() {
         "--include-paths",
         "--deep",
         "does not upload anything",
+        "## Review Checklist",
+        "redaction.paths_redacted",
+        "audit_details_included",
+        "preflight.ready",
+        "recent_audit_events",
+        "private support channel",
     ] {
         assert!(docs.contains(needle), "evidence docs missing {needle}");
     }

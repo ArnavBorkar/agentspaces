@@ -411,7 +411,7 @@
 - **S32.2 Local evidence packets**
   - [x] T32.2.1 Add `asp evidence collect` to bundle redacted diagnostics, preflight, schema, and recent audit events.
   - [ ] T32.2.2 Add a signed local manifest for evidence bundles using existing release-trust tooling.
-  - [ ] T32.2.3 Add an evidence review checklist for security and platform teams.
+  - [x] T32.2.3 Add an evidence review checklist for security and platform teams.
 
 ---
 
