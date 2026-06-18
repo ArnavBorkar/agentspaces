@@ -608,6 +608,19 @@ fn secrets_scan_reports_redacted_findings() {
     let clean = ok(&root, &["secrets", "scan"]);
     assert!(clean.contains("no likely secrets found"), "{clean}");
 
+    let conflict = asp(&root, &["--json", "secrets", "scan", "--sarif"]);
+    assert!(
+        !conflict.status.success(),
+        "--json and --sarif should conflict"
+    );
+    let conflict_json: serde_json::Value = serde_json::from_slice(&conflict.stdout).unwrap();
+    assert_eq!(conflict_json["ok"], false);
+    assert_eq!(conflict_json["error"]["code"], "nothing_to_do");
+    assert!(conflict_json["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("raw SARIF"));
+
     let secret = "sk-live123456789012345678901234567890";
     std::fs::write(
         root.join("src/config.py"),
@@ -642,6 +655,41 @@ fn secrets_scan_reports_redacted_findings() {
     assert!(
         !serde_json::to_string(&body).unwrap().contains(secret),
         "JSON scanner leaked the secret: {body}"
+    );
+
+    let sarif = asp(&root, &["secrets", "scan", "--sarif"]);
+    assert!(
+        !sarif.status.success(),
+        "SARIF scanner should fail on findings"
+    );
+    assert!(
+        !String::from_utf8_lossy(&sarif.stdout).contains(secret),
+        "SARIF scanner leaked the secret"
+    );
+    let sarif_body: serde_json::Value = serde_json::from_slice(&sarif.stdout).unwrap();
+    assert_eq!(sarif_body["version"], "2.1.0");
+    assert_eq!(
+        sarif_body["runs"][0]["tool"]["driver"]["name"],
+        "asp secrets scan"
+    );
+    assert!(sarif_body["runs"][0]["tool"]["driver"]["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|rule| rule["id"] == "secrets.openai_key"
+            && rule["helpUri"]
+                .as_str()
+                .unwrap()
+                .contains("docs/secrets.md")));
+    let result = &sarif_body["runs"][0]["results"][0];
+    assert_eq!(result["ruleId"], "secrets.openai_key");
+    assert_eq!(
+        result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        "src/config.py"
+    );
+    assert_eq!(
+        result["locations"][0]["physicalLocation"]["region"]["startLine"],
+        1
     );
 }
 

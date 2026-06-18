@@ -54,6 +54,18 @@ jobs:
           path: asp-preflight.json
 ```
 
+## Direct Secret Scan SARIF
+
+```yaml
+      - name: Run asp secrets scan SARIF
+        run: asp secrets scan --sarif > asp-secrets.sarif || true
+      - name: Upload asp secrets scan SARIF
+        if: always() && hashFiles('asp-secrets.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: asp-secrets.sarif
+```
+
 ## GitLab CI
 
 ```yaml
@@ -83,6 +95,8 @@ asp_preflight:
   annotations and dashboards; `name` is human display text.
 - Upload `asp preflight --sarif` when the platform can ingest SARIF 2.1.0, for
   example GitHub code scanning.
+- Use `asp secrets scan --sarif` for direct secret-scan uploads when a full
+  readiness gate is not needed.
 - Upload the JSON report when teams want persistent evidence for security or
   platform review.
 - If `asp preflight` fails, use `asp doctor --runbook` and `asp secrets scan`

@@ -299,6 +299,9 @@ struct SecretsScanArgs {
     /// Maximum bytes to inspect per file.
     #[arg(long, default_value_t = 1_048_576)]
     max_bytes: u64,
+    /// Emit raw SARIF 2.1.0 for CI security dashboards.
+    #[arg(long)]
+    sarif: bool,
 }
 
 #[derive(Subcommand)]
@@ -896,9 +899,20 @@ fn run(cli: Cli) -> Result<(), Error> {
         },
         Cmd::Secrets { command } => match command {
             SecretsCmd::Scan(args) => {
+                if args.sarif && json {
+                    return Err(Error::new(
+                        ErrorCode::NothingToDo,
+                        "`--sarif` cannot be combined with `--json`",
+                    )
+                    .with_hint(
+                        "run `asp secrets scan --sarif` for raw SARIF or `asp --json secrets scan` for the CLI JSON envelope",
+                    ));
+                }
                 let ws = open(&cli.dir)?;
                 let report = secrets_scan(&ws, &args)?;
-                if json {
+                if args.sarif {
+                    print_secrets_scan_sarif(&report)?;
+                } else if json {
                     ui::print_json(true, &report);
                 } else {
                     print_secrets_scan(&report);
@@ -1997,6 +2011,118 @@ fn print_secrets_scan(report: &SecretsScanReport) {
     );
 }
 
+fn print_secrets_scan_sarif(report: &SecretsScanReport) -> Result<(), Error> {
+    println!("{}", json_pretty(&secrets_scan_sarif(report))?);
+    Ok(())
+}
+
+fn secrets_scan_sarif(report: &SecretsScanReport) -> serde_json::Value {
+    let results: Vec<_> = report
+        .findings
+        .iter()
+        .map(|finding| {
+            let message = format!("{} candidate: {}", finding.kind, finding.redacted);
+            let location_message = message.clone();
+            serde_json::json!({
+                "ruleId": secret_sarif_rule_id(&finding.kind),
+                "level": "error",
+                "message": {
+                    "text": message
+                },
+                "locations": [
+                    sarif_location(&finding.path, Some(finding.line), Some(location_message))
+                ],
+                "properties": {
+                    "kind": finding.kind,
+                    "redacted": finding.redacted
+                }
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "asp secrets scan",
+                        "informationUri": "https://github.com/ArnavBorkar/agentspaces",
+                        "rules": secret_sarif_rules()
+                    }
+                },
+                "automationDetails": {
+                    "id": "asp/secrets-scan"
+                },
+                "invocations": [
+                    {
+                        "executionSuccessful": report.findings.is_empty(),
+                        "workingDirectory": {
+                            "uri": sarif_uri(report.root.as_path())
+                        }
+                    }
+                ],
+                "results": results,
+                "properties": {
+                    "filesScanned": report.files_scanned,
+                    "filesSkipped": report.files_skipped,
+                    "bytesScanned": report.bytes_scanned
+                }
+            }
+        ]
+    })
+}
+
+fn secret_sarif_rules() -> Vec<serde_json::Value> {
+    [
+        (
+            "private_key",
+            "Private key header",
+            "A private key header was found in a checkpoint-scoped file",
+        ),
+        (
+            "openai_key",
+            "OpenAI-style API key",
+            "An OpenAI-style API key was found in a checkpoint-scoped file",
+        ),
+        (
+            "github_token",
+            "GitHub token",
+            "A GitHub token was found in a checkpoint-scoped file",
+        ),
+        (
+            "aws_access_key_id",
+            "AWS access key id",
+            "An AWS access key id was found in a checkpoint-scoped file",
+        ),
+        (
+            "secret_assignment",
+            "Secret-like assignment",
+            "A secret-like assignment was found in a checkpoint-scoped file",
+        ),
+    ]
+    .into_iter()
+    .map(|(kind, name, description)| {
+        serde_json::json!({
+            "id": secret_sarif_rule_id(kind),
+            "name": name,
+            "shortDescription": {
+                "text": description
+            },
+            "helpUri": "https://github.com/ArnavBorkar/agentspaces/blob/main/docs/secrets.md",
+            "properties": {
+                "kind": kind
+            }
+        })
+    })
+    .collect()
+}
+
+fn secret_sarif_rule_id(kind: &str) -> String {
+    format!("secrets.{kind}")
+}
+
 fn audit_entries(ws: &Workspace, args: &AuditArgs) -> Result<Vec<Entry>, Error> {
     let mut entries = ws.journal().read()?.entries;
     entries.reverse();
@@ -2737,6 +2863,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
         &SecretsScanArgs {
             include_excluded: false,
             max_bytes: 1_048_576,
+            sarif: false,
         },
     )?;
     let secret_count = secrets.findings.len();

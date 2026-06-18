@@ -76,8 +76,8 @@ corrective next step or `null` for unexpected infrastructure failures.
 `asp audit --format jsonl` is a raw export format: each line is one
 `#/$defs/journalEntry` object without the CLI envelope. `asp audit --format csv`
 emits fixed columns documented in [docs/audit.md](audit.md).
-`asp preflight --sarif` is also a raw export format: it emits SARIF 2.1.0 for
-failed readiness checks so CI systems can upload findings to security
+`asp preflight --sarif` and `asp secrets scan --sarif` are also raw export
+formats: they emit SARIF 2.1.0 so CI systems can upload findings to security
 dashboards without wrapping the document in the CLI envelope.
 Checkpoint journal entries may include `detail.paths` with workspace-relative
 changed paths; clients should treat unknown `detail` fields as operation-specific

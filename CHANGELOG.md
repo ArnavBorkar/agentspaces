@@ -46,6 +46,8 @@
   `preflight.secrets` so CI annotations and dashboards can group failures.
 - `asp preflight --sarif` emits raw SARIF 2.1.0 for failed readiness checks,
   including redacted secret file and line locations for security dashboards.
+- `asp secrets scan --sarif` emits redacted secret findings as SARIF results
+  with stable `secrets.<kind>` rule IDs for direct code-scanning uploads.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

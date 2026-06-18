@@ -302,10 +302,28 @@ fn ci_docs_cover_preflight_examples() {
         "preflight.secrets",
         "github/codeql-action/upload-sarif@v3",
         "asp preflight --sarif",
+        "asp secrets scan --sarif",
         "do not run `asp doctor --fix`",
         "asp doctor --runbook",
     ] {
         assert!(docs.contains(needle), "CI docs missing {needle}");
+    }
+}
+
+#[test]
+fn secrets_docs_cover_sarif_output() {
+    let docs = fs::read_to_string(repo_file("docs/secrets.md")).unwrap();
+
+    for needle in [
+        "asp secrets scan",
+        "asp --json secrets scan",
+        "asp secrets scan --sarif",
+        "SARIF 2.1.0",
+        "secrets.<kind>",
+        "redacted",
+        "workspace-relative file and line",
+    ] {
+        assert!(docs.contains(needle), "secrets docs missing {needle}");
     }
 }
 
