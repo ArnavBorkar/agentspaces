@@ -130,6 +130,8 @@
   `.codex/config.toml` without overwriting existing user settings.
 - `docs/codex.md` now includes Codex hook guidance for opt-in shell and file
   checkpoints, with regression coverage for the checkpoint command shape.
+- Codex setup coverage now includes a temp-HOME smoke test for user-scoped
+  install and removal.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.

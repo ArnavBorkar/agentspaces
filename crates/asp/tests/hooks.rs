@@ -15,6 +15,17 @@ fn asp(dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("asp spawns")
 }
 
+fn asp_with_home(dir: &Path, home: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_asp"))
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("HOME", home)
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("asp spawns")
+}
+
 fn hook_event(dir: &Path, payload: &serde_json::Value) -> std::process::Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_asp"))
         .arg("hook-event")
@@ -199,6 +210,44 @@ fn codex_hook_checkpoint_command_records_hook_provenance() {
     assert_eq!(latest["source"], "hook");
     assert_eq!(latest["tool"], "Codex");
     assert_eq!(latest["message"], "codex: after tool");
+}
+
+#[test]
+fn setup_codex_user_scope_uses_temporary_home() {
+    let (tmp, root) = project();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+
+    let out = asp_with_home(&root, &home, &["setup", "codex", "--user"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let user_config = home.join(".codex/config.toml");
+    let config = std::fs::read_to_string(&user_config).unwrap();
+    assert!(config.contains("[mcp_servers.agentspaces]"));
+    assert!(config.contains("command = \"asp\""));
+    assert!(
+        root.join(".asp").exists(),
+        "setup still initializes workspace"
+    );
+    assert!(
+        !root.join(".codex/config.toml").exists(),
+        "--user should not write project Codex config"
+    );
+
+    let out = asp_with_home(&root, &home, &["setup", "codex", "--user", "--remove"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !user_config.exists(),
+        "remove deletes the empty user config it created"
+    );
 }
 
 #[test]
