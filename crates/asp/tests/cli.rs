@@ -352,6 +352,55 @@ fn full_cli_loop() {
         "{report_json}"
     );
 
+    let evidence = ok_json(&root, &["evidence", "collect", "--audit-limit", "5"]);
+    assert_eq!(evidence["ok"], true);
+    assert_eq!(evidence["result"]["redaction"]["paths_redacted"], true);
+    assert_eq!(
+        evidence["result"]["redaction"]["audit_details_included"],
+        false
+    );
+    assert_eq!(evidence["result"]["preflight"]["ready"], true);
+    assert!(evidence["result"]["preflight"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check["id"] == "preflight.config"));
+    assert!(evidence["result"]["schema"]["schemas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|schema| schema["name"] == "cli_json_envelope"));
+    assert!(!evidence["result"]["recent_audit_events"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    let evidence_text = serde_json::to_string(&evidence["result"]).unwrap();
+    assert!(
+        !evidence_text.contains(root.to_str().unwrap()),
+        "{evidence_text}"
+    );
+    assert!(
+        evidence["result"]["recent_audit_events"][0]
+            .get("message")
+            .is_none(),
+        "evidence audit events should omit free-form messages"
+    );
+    let evidence_report = root.parent().unwrap().join("evidence.json");
+    ok(
+        &root,
+        &[
+            "evidence",
+            "collect",
+            "--output",
+            evidence_report.to_str().unwrap(),
+        ],
+    );
+    let evidence_report_json = std::fs::read_to_string(&evidence_report).unwrap();
+    assert!(
+        !evidence_report_json.contains(root.to_str().unwrap()),
+        "{evidence_report_json}"
+    );
+
     // no-op checkpoint exits 0
     let noop = ok_json(&root, &["checkpoint"]);
     assert_eq!(noop["result"]["no_changes"], true);

@@ -228,6 +228,11 @@ enum Cmd {
         #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
+    /// Collect a redacted local evidence packet for security and support review.
+    Evidence {
+        #[command(subcommand)]
+        command: EvidenceCmd,
+    },
     /// Run the MCP stdio server (for agent harnesses like Claude Code).
     ///
     /// Register it with: claude mcp add agentspaces -- asp mcp
@@ -289,6 +294,28 @@ enum BenchCmd {
 enum SecretsCmd {
     /// Scan checkpoint-scoped workspace files for common secret patterns.
     Scan(SecretsScanArgs),
+}
+
+#[derive(Subcommand)]
+enum EvidenceCmd {
+    /// Collect diagnostics, preflight, schema, and recent audit evidence.
+    Collect(EvidenceCollectArgs),
+}
+
+#[derive(Args)]
+struct EvidenceCollectArgs {
+    /// Include full local paths in diagnostics. Secrets are still redacted.
+    #[arg(long)]
+    include_paths: bool,
+    /// Include deep CAS verification in the preflight doctor check.
+    #[arg(long)]
+    deep: bool,
+    /// Number of recent audit events to include without messages or detail payloads.
+    #[arg(long, default_value_t = 25)]
+    audit_limit: usize,
+    /// Write the evidence packet to this JSON file instead of stdout.
+    #[arg(short, long, value_name = "FILE")]
+    output: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -444,6 +471,53 @@ struct SchemaInfo {
     version: u32,
     kind: &'static str,
     path: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceReport {
+    generated_at: String,
+    asp_version: &'static str,
+    redaction: EvidenceRedaction,
+    diagnostics: asp_core::workspace::DiagnosticBundle,
+    preflight: EvidencePreflightReport,
+    schema: SchemaReport,
+    recent_audit_events: Vec<EvidenceAuditEvent>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceRedaction {
+    paths_redacted: bool,
+    secrets_redacted: bool,
+    audit_messages_included: bool,
+    audit_details_included: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidencePreflightReport {
+    ready: bool,
+    checks: Vec<EvidencePreflightCheck>,
+    doctor_findings: usize,
+    secret_findings: usize,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidencePreflightCheck {
+    id: &'static str,
+    name: &'static str,
+    ok: bool,
+    summary: String,
+    runbook: &'static str,
+    hint: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceAuditEvent {
+    op: Op,
+    ts: String,
+    seq: Option<u64>,
+    source: Option<Source>,
+    duration_ms: Option<u64>,
+    files_changed: Option<u64>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1716,6 +1790,45 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             Ok(())
         }
+        Cmd::Evidence { command } => match command {
+            EvidenceCmd::Collect(args) => {
+                let ws = open(&cli.dir)?;
+                let output = args.output.clone();
+                let report = evidence_collect_report(&cli.dir, &ws, &args)?;
+                if let Some(output) = output {
+                    let path = resolve_output_path(ws.root(), output);
+                    write_json_file(&path, &report)?;
+                    if json {
+                        ui::print_json(
+                            true,
+                            &serde_json::json!({
+                                "path": path,
+                                "redacted": report.redaction.paths_redacted,
+                                "packet": report,
+                            }),
+                        );
+                    } else {
+                        println!(
+                            "{} wrote {}evidence packet to {}",
+                            ui::green("✓"),
+                            if report.redaction.paths_redacted {
+                                "redacted "
+                            } else {
+                                ""
+                            },
+                            ui::bold(&path.display().to_string())
+                        );
+                    }
+                    return Ok(());
+                }
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    println!("{}", json_pretty(&report)?);
+                }
+                Ok(())
+            }
+        },
     }
 }
 
@@ -2137,6 +2250,77 @@ fn audit_entries(ws: &Workspace, args: &AuditArgs) -> Result<Vec<Entry>, Error> 
         }
     }
     Ok(filtered)
+}
+
+fn evidence_collect_report(
+    cli_dir: &Option<PathBuf>,
+    ws: &Workspace,
+    args: &EvidenceCollectArgs,
+) -> Result<EvidenceReport, Error> {
+    let diagnostics = ws.diagnostics(args.include_paths)?;
+    let preflight = preflight_report(cli_dir, args.deep)?;
+    let audit_args = AuditArgs {
+        session: None,
+        tool: None,
+        ops: Vec::new(),
+        paths: Vec::new(),
+        since: None,
+        until: None,
+        format: AuditFormat::Table,
+        limit: args.audit_limit,
+    };
+    let recent_audit_events = audit_entries(ws, &audit_args)?
+        .into_iter()
+        .map(|entry| EvidenceAuditEvent {
+            op: entry.op,
+            ts: entry.ts,
+            seq: entry.seq,
+            source: entry.source,
+            duration_ms: entry.duration_ms,
+            files_changed: entry.files_changed,
+        })
+        .collect();
+
+    Ok(EvidenceReport {
+        generated_at: asp_core::now_rfc3339(),
+        asp_version: asp_core::version(),
+        redaction: EvidenceRedaction {
+            paths_redacted: !args.include_paths,
+            secrets_redacted: true,
+            audit_messages_included: false,
+            audit_details_included: false,
+        },
+        diagnostics,
+        preflight: EvidencePreflightReport {
+            ready: preflight.ready,
+            checks: evidence_preflight_checks(preflight.checks, ws.root()),
+            doctor_findings: preflight.doctor_findings.len(),
+            secret_findings: preflight.secret_findings.len(),
+        },
+        schema: schema_report(),
+        recent_audit_events,
+    })
+}
+
+fn evidence_preflight_checks(
+    checks: Vec<PreflightCheck>,
+    root: &Path,
+) -> Vec<EvidencePreflightCheck> {
+    checks
+        .into_iter()
+        .map(|check| EvidencePreflightCheck {
+            id: check.id,
+            name: check.name,
+            ok: check.ok,
+            summary: redact_workspace_path_text(&check.summary, root),
+            runbook: check.runbook,
+            hint: check.hint,
+        })
+        .collect()
+}
+
+fn redact_workspace_path_text(text: &str, root: &Path) -> String {
+    text.replace(&root.to_string_lossy().to_string(), "<workspace-root>")
 }
 
 fn print_audit_table(entries: &[Entry]) -> Result<(), Error> {

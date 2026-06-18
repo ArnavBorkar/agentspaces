@@ -335,6 +335,28 @@ fn secrets_docs_cover_sarif_output() {
 }
 
 #[test]
+fn evidence_docs_cover_redacted_local_packets() {
+    let docs = fs::read_to_string(repo_file("docs/evidence.md")).unwrap();
+
+    for needle in [
+        "asp evidence collect",
+        "asp --json evidence collect",
+        "asp evidence collect --output asp-evidence.json",
+        "redacted diagnostics bundle",
+        "preflight readiness summary",
+        "schema inventory",
+        "recent audit event",
+        "message",
+        "detail",
+        "--include-paths",
+        "--deep",
+        "does not upload anything",
+    ] {
+        assert!(docs.contains(needle), "evidence docs missing {needle}");
+    }
+}
+
+#[test]
 fn agent_preflight_docs_cover_harness_launch_checks() {
     let docs = fs::read_to_string(repo_file("docs/agent-preflight.md")).unwrap();
 

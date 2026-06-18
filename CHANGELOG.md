@@ -50,6 +50,8 @@
   with stable `secrets.<kind>` rule IDs for direct code-scanning uploads.
 - `docs/ci.md` now includes GitLab Code Quality conversion and generic SARIF
   artifact examples for preflight and secret-scan outputs.
+- `asp evidence collect` builds a redacted local evidence packet with
+  diagnostics, preflight, schema inventory, and sanitized recent audit events.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

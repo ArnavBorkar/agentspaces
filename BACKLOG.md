@@ -409,7 +409,7 @@
   - [x] T32.1.2 Add `asp secrets scan --sarif` for direct secret-scan upload workflows.
   - [x] T32.1.3 Add GitLab Code Quality and generic SARIF artifact examples.
 - **S32.2 Local evidence packets**
-  - [ ] T32.2.1 Add `asp evidence collect` to bundle redacted diagnostics, preflight, schema, and recent audit events.
+  - [x] T32.2.1 Add `asp evidence collect` to bundle redacted diagnostics, preflight, schema, and recent audit events.
   - [ ] T32.2.2 Add a signed local manifest for evidence bundles using existing release-trust tooling.
   - [ ] T32.2.3 Add an evidence review checklist for security and platform teams.
 
