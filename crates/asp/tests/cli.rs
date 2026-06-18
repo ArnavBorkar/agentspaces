@@ -94,6 +94,22 @@ fn completions_emit_shell_scripts_and_json() {
 }
 
 #[test]
+fn manpage_emits_roff_and_json() {
+    let tmp = tempfile::tempdir().unwrap();
+    let roff = ok(tmp.path(), &["manpage"]);
+    assert!(roff.contains(".TH"), "{roff}");
+    assert!(roff.contains("asp"), "{roff}");
+    assert!(roff.contains("completions"), "{roff}");
+
+    let json = ok_json(tmp.path(), &["manpage"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["name"], "asp");
+    let manpage = json["result"]["manpage"].as_str().unwrap();
+    assert!(manpage.contains(".TH"), "{manpage}");
+    assert!(manpage.contains("manpage"), "{manpage}");
+}
+
+#[test]
 fn full_cli_loop() {
     let (_tmp, root) = project();
 

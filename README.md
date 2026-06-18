@@ -93,6 +93,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **OpenCode integration** — [docs/opencode.md](docs/opencode.md)
 - **Generic MCP clients** — [docs/mcp-clients.md](docs/mcp-clients.md)
 - **Shell completions** — [docs/shell-completions.md](docs/shell-completions.md)
+- **Manpage generation** — [docs/manpage.md](docs/manpage.md)
 - **Open-core boundary policy** — [docs/open-core-boundary.md](docs/open-core-boundary.md)
 - **Local engine governance** — [docs/local-engine-governance.md](docs/local-engine-governance.md)
 - **Future control plane constraints** — [docs/control-plane-constraints.md](docs/control-plane-constraints.md)

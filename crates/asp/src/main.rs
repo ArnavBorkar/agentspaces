@@ -78,6 +78,8 @@ enum Cmd {
         #[arg(value_enum)]
         shell: Shell,
     },
+    /// Generate a roff manpage for the asp CLI.
+    Manpage,
     /// Show filtered audit events from the local journal.
     Audit(AuditArgs),
     /// Inspect and validate local workspace policy.
@@ -676,6 +678,28 @@ fn run(cli: Cli) -> Result<(), Error> {
                 );
             } else {
                 print!("{completion}");
+            }
+            Ok(())
+        }
+        Cmd::Manpage => {
+            let cmd = Cli::command();
+            let mut buf = Vec::new();
+            clap_mangen::Man::new(cmd)
+                .render(&mut buf)
+                .map_err(|e| Error::new(ErrorCode::Io, format!("render manpage: {e}")))?;
+            let manpage = String::from_utf8(buf).map_err(|e| {
+                Error::new(ErrorCode::Io, format!("manpage output was not UTF-8: {e}"))
+            })?;
+            if json {
+                ui::print_json(
+                    true,
+                    &serde_json::json!({
+                        "name": "asp",
+                        "manpage": manpage,
+                    }),
+                );
+            } else {
+                print!("{manpage}");
             }
             Ok(())
         }

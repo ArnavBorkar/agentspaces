@@ -138,6 +138,8 @@
   and safety guidance for unsupported harnesses.
 - `asp completions <shell>` generates shell completion scripts, with JSON
   output and install docs.
+- `asp manpage` generates a roff manpage from the CLI definition, with JSON
+  output for automation.
 - `install.sh` now gives actionable hints for unsupported platforms, offline
   release lookup, failed downloads, checksum download failures, and checksum
   mismatches.
