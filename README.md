@@ -93,6 +93,7 @@ Public claims are mapped to tests, docs, and verification commands in [docs/clai
 - **OpenCode integration** — [docs/opencode.md](docs/opencode.md)
 - **Generic MCP clients** — [docs/mcp-clients.md](docs/mcp-clients.md)
 - **Quickstart** — [docs/quickstart.md](docs/quickstart.md)
+- **Preflight** — [docs/preflight.md](docs/preflight.md)
 - **Workspace config** — [docs/config.md](docs/config.md)
 - **Config review** — [docs/config-review.md](docs/config-review.md)
 - **Config templates** — [docs/config-templates.md](docs/config-templates.md)

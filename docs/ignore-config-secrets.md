@@ -54,6 +54,7 @@ For repositories that standardize asp, add a CI job that runs:
 
 ```bash
 asp config validate
+asp preflight --json
 asp policy validate --json
 asp secrets scan
 ```

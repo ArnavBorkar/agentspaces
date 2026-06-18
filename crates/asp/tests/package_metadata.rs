@@ -112,6 +112,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
     let expected = [
         "## Start safely",
         "asp quickstart",
+        "asp preflight",
         "asp init",
         "asp checkpoint -m \"baseline\"",
         "asp setup codex",
@@ -258,5 +259,24 @@ fn ignore_config_secrets_docs_cover_cross_file_ownership() {
             docs.contains(needle),
             "ignore/config/secrets docs missing {needle}"
         );
+    }
+}
+
+#[test]
+fn preflight_docs_cover_ci_readiness_gate() {
+    let docs = fs::read_to_string(repo_file("docs/preflight.md")).unwrap();
+
+    for needle in [
+        "asp preflight",
+        "asp --json preflight",
+        "asp preflight --deep",
+        ".asp/config.toml",
+        ".asp/policy.toml",
+        "asp doctor",
+        "asp secrets scan",
+        "exits nonzero",
+        "Do not pair it with `asp doctor --fix`",
+    ] {
+        assert!(docs.contains(needle), "preflight docs missing {needle}");
     }
 }

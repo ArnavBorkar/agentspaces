@@ -34,6 +34,8 @@
   for monorepos, media-heavy repos, and generated-code repos.
 - `docs/ignore-config-secrets.md` explains how teams should coordinate
   `.gitignore`, `.asp/config.toml`, `.asp/policy.toml`, and secrets scanning.
+- `asp preflight` adds a read-only CI readiness gate for config, policy,
+  doctor, and secrets checks with human and JSON output.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

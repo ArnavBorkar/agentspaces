@@ -67,6 +67,12 @@ enum Cmd {
     Stats,
     /// Print a safe first-five-minutes workflow for the current directory.
     Quickstart,
+    /// Run a read-only readiness gate for CI and team onboarding.
+    Preflight {
+        /// Include deep CAS verification in the doctor check.
+        #[arg(long)]
+        deep: bool,
+    },
     /// Inspect effective workspace configuration.
     Config {
         #[command(subcommand)]
@@ -468,6 +474,24 @@ struct ConfigShowReport {
 }
 
 #[derive(Debug, serde::Serialize)]
+struct PreflightReport {
+    root: PathBuf,
+    ready: bool,
+    checks: Vec<PreflightCheck>,
+    doctor_findings: Vec<Finding>,
+    secret_findings: Vec<SecretFinding>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PreflightCheck {
+    name: &'static str,
+    ok: bool,
+    summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hint: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
 struct DoctorRunbookReport {
     findings: Vec<DoctorFindingWithRunbook>,
     common_runbooks: Vec<DoctorRunbookLink>,
@@ -698,6 +722,18 @@ fn run(cli: Cli) -> Result<(), Error> {
                 ui::print_json(true, &report);
             } else {
                 print_quickstart(&report);
+            }
+            Ok(())
+        }
+        Cmd::Preflight { deep } => {
+            let report = preflight_report(&cli.dir, deep)?;
+            if json {
+                ui::print_json(true, &report);
+            } else {
+                print_preflight(&report);
+            }
+            if !report.ready {
+                std::process::exit(1);
             }
             Ok(())
         }
@@ -2669,6 +2705,119 @@ fn print_config_validate(report: &ConfigShowReport) {
             "defaults (config file missing)"
         }
     );
+}
+
+fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightReport, Error> {
+    let config = config_show_report(cli_dir)?;
+    let ws = open(cli_dir)?;
+    let policy_rules = policy_rule_count(&ws.policy);
+    let doctor_findings = ws.doctor(false, deep)?;
+    let doctor_blocking = doctor_findings
+        .iter()
+        .filter(|finding| finding.severity != Severity::Info)
+        .count();
+    let secrets = secrets_scan(
+        &ws,
+        &SecretsScanArgs {
+            include_excluded: false,
+            max_bytes: 1_048_576,
+        },
+    )?;
+    let secret_count = secrets.findings.len();
+
+    let checks = vec![
+        PreflightCheck {
+            name: "config",
+            ok: true,
+            summary: format!(
+                "{} ({})",
+                config.path.display(),
+                if config.exists {
+                    "present"
+                } else {
+                    "defaults in effect"
+                }
+            ),
+            hint: None,
+        },
+        PreflightCheck {
+            name: "policy",
+            ok: true,
+            summary: if policy_rules == 0 {
+                "valid; no local policy rules are set".to_string()
+            } else {
+                format!("valid; {policy_rules} active rule(s)")
+            },
+            hint: None,
+        },
+        PreflightCheck {
+            name: "doctor",
+            ok: doctor_blocking == 0,
+            summary: if doctor_findings.is_empty() {
+                "workspace is healthy".to_string()
+            } else {
+                format!(
+                    "{} finding(s), {} require attention",
+                    doctor_findings.len(),
+                    doctor_blocking
+                )
+            },
+            hint: (doctor_blocking > 0).then(|| {
+                if deep {
+                    "run `asp doctor --deep --runbook` for details".to_string()
+                } else {
+                    "run `asp doctor --runbook` for details".to_string()
+                }
+            }),
+        },
+        PreflightCheck {
+            name: "secrets",
+            ok: secret_count == 0,
+            summary: if secret_count == 0 {
+                format!(
+                    "{} file(s) scanned; no likely secrets found",
+                    secrets.files_scanned
+                )
+            } else {
+                format!("{secret_count} likely secret(s) found")
+            },
+            hint: (secret_count > 0).then(|| {
+                "run `asp secrets scan` and remove or protect the reported values".to_string()
+            }),
+        },
+    ];
+    let ready = checks.iter().all(|check| check.ok);
+
+    Ok(PreflightReport {
+        root: ws.root().to_path_buf(),
+        ready,
+        checks,
+        doctor_findings,
+        secret_findings: secrets.findings,
+    })
+}
+
+fn print_preflight(report: &PreflightReport) {
+    println!(
+        "{}",
+        ui::bold(&format!("preflight {}", report.root.display()))
+    );
+    for check in &report.checks {
+        let marker = if check.ok {
+            ui::green("✓")
+        } else {
+            ui::red("✗")
+        };
+        println!("{marker} {}: {}", check.name, check.summary);
+        if let Some(hint) = &check.hint {
+            println!("  hint: {hint}");
+        }
+    }
+    if report.ready {
+        println!("\n{}", ui::green("ready"));
+    } else {
+        println!("\n{}", ui::red("not ready"));
+    }
 }
 
 fn quickstart_report(directory: PathBuf) -> QuickstartReport {

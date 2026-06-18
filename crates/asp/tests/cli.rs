@@ -169,6 +169,47 @@ fn config_validate_reads_only_config_state() {
 }
 
 #[test]
+fn preflight_reports_readiness_and_blocks_secrets() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+
+    let human = ok(&root, &["preflight"]);
+    assert!(human.contains("preflight"), "{human}");
+    assert!(human.contains("config:"), "{human}");
+    assert!(human.contains("policy:"), "{human}");
+    assert!(human.contains("doctor:"), "{human}");
+    assert!(human.contains("secrets:"), "{human}");
+    assert!(human.contains("ready"), "{human}");
+
+    let json = ok_json(&root, &["preflight"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["ready"], true);
+    assert!(json["result"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|check| check["ok"] == true));
+
+    let secret = "sk-live123456789012345678901234567890";
+    std::fs::write(root.join("src/secret.txt"), format!("TOKEN={secret}\n")).unwrap();
+    let out = asp(&root, &["--json", "preflight"]);
+    assert!(!out.status.success(), "preflight should fail on secrets");
+    let failed: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(failed["ok"], true);
+    assert_eq!(failed["result"]["ready"], false);
+    assert_eq!(
+        failed["result"]["secret_findings"][0]["path"],
+        "src/secret.txt"
+    );
+    assert!(failed["result"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check["name"] == "secrets" && check["ok"] == false));
+}
+
+#[test]
 fn completions_emit_shell_scripts_and_json() {
     let tmp = tempfile::tempdir().unwrap();
     let bash = ok(tmp.path(), &["completions", "bash"]);
