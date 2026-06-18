@@ -15,6 +15,13 @@ asp init --template media-heavy
 The template is written to `.asp/config.toml`; review it like any other local
 policy input before using it across a team.
 
+Review a template without creating `.asp/`:
+
+```bash
+asp init --print-template monorepo
+asp --json init --print-template monorepo
+```
+
 ## Service Repository
 
 Use this for typical application or service repos that produce coverage and

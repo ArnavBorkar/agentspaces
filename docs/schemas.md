@@ -46,6 +46,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | CLI command | Result schema |
 | --- | --- |
 | `asp init --json` | `#/$defs/initResult` |
+| `asp init --print-template <name> --json` | `#/$defs/initTemplateResult` |
 | `asp status --json` | `#/$defs/statusReport` |
 | `asp stats --json` | `#/$defs/statsReport` |
 | `asp quickstart --json` | `#/$defs/quickstartReport` |
@@ -100,6 +101,8 @@ creation time, and creator command.
 returns expected versus actual artifact, byte, and SHA-256 values plus
 `artifact_matches` and `valid`; invalid verification exits nonzero after
 printing the report.
+`asp init --print-template <name> --json` returns the selected built-in config
+template as `name`, `summary`, and raw TOML text without creating `.asp/`.
 Checkpoint journal entries may include `detail.paths` with workspace-relative
 changed paths; clients should treat unknown `detail` fields as operation-specific
 metadata.

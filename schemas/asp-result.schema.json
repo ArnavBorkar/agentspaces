@@ -23,6 +23,7 @@
     { "$ref": "#/$defs/forkCompareRows" },
     { "$ref": "#/$defs/forkInfos" },
     { "$ref": "#/$defs/initResult" },
+    { "$ref": "#/$defs/initTemplateResult" },
     { "$ref": "#/$defs/journalEntries" },
     { "$ref": "#/$defs/manpageResult" },
     { "$ref": "#/$defs/noChanges" },
@@ -810,6 +811,19 @@
       "properties": {
         "root": { "type": "string" },
         "note": { "type": "string" }
+      }
+    },
+    "initTemplateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "summary", "toml"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["service", "monorepo", "generated-code", "media-heavy"]
+        },
+        "summary": { "type": "string" },
+        "toml": { "type": "string" }
       }
     },
     "journalEntries": {

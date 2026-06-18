@@ -60,11 +60,14 @@ enum Cmd {
     /// Adopt this directory as an asp workspace (never touches your files or .git).
     Init {
         /// Optional human label for the workspace.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "print_template")]
         label: Option<String>,
         /// Write a reviewed config template for a common repository shape.
-        #[arg(long, value_enum)]
+        #[arg(long, value_enum, conflicts_with = "print_template")]
         template: Option<InitTemplate>,
+        /// Print a built-in config template without initializing a workspace.
+        #[arg(long, value_enum, value_name = "NAME")]
+        print_template: Option<InitTemplate>,
     },
     /// Workspace summary: dirty files, last checkpoint, active forks.
     Status,
@@ -267,6 +270,13 @@ struct InitConfigTemplate {
     toml: &'static str,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct InitTemplateResult {
+    name: &'static str,
+    summary: &'static str,
+    toml: &'static str,
+}
+
 impl InitTemplate {
     fn config(self) -> InitConfigTemplate {
         match self {
@@ -338,6 +348,16 @@ blob_threshold_mb = 10
 branch_template = "media/{workspace}/{fork}"
 "#,
             },
+        }
+    }
+}
+
+impl From<InitConfigTemplate> for InitTemplateResult {
+    fn from(template: InitConfigTemplate) -> Self {
+        Self {
+            name: template.name,
+            summary: template.summary,
+            toml: template.toml,
         }
     }
 }
@@ -833,7 +853,21 @@ fn open(cli_dir: &Option<PathBuf>) -> Result<Workspace, Error> {
 fn run(cli: Cli) -> Result<(), Error> {
     let json = cli.json;
     match cli.command {
-        Cmd::Init { label, template } => {
+        Cmd::Init {
+            label,
+            template,
+            print_template,
+        } => {
+            if let Some(template) = print_template {
+                let template = template.config();
+                if json {
+                    ui::print_json(true, &InitTemplateResult::from(template));
+                } else {
+                    print!("{}", template.toml);
+                }
+                return Ok(());
+            }
+
             let selected_template = template.map(|template| template.config());
             let ws = Workspace::init(&cwd(&cli.dir)?, label)?;
             if let Some(template) = &selected_template {

@@ -101,6 +101,8 @@
   36-45, with tests guarding the roadmap and old clone-framing cleanup.
 - `asp init --template <name>` writes reviewed service, monorepo,
   generated-code, or media-heavy config templates during workspace setup.
+- `asp init --print-template <name>` prints built-in config templates without
+  creating `.asp/`, with JSON, schema, and snapshot coverage.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

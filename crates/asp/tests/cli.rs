@@ -164,6 +164,33 @@ fn init_template_writes_reviewed_config() {
 }
 
 #[test]
+fn init_print_template_is_read_only() {
+    let (_tmp, root) = project();
+    let human = ok(&root, &["init", "--print-template", "generated-code"]);
+    assert!(
+        human.contains("asp config template: generated-code"),
+        "{human}"
+    );
+    assert!(human.contains("generated/cache/"), "{human}");
+    assert!(
+        !root.join(".asp").exists(),
+        "printing a template must not initialize the workspace"
+    );
+
+    let json = ok_json(&root, &["init", "--print-template", "media-heavy"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["name"], "media-heavy");
+    assert!(json["result"]["summary"]
+        .as_str()
+        .unwrap()
+        .contains("media artifacts"));
+    assert!(json["result"]["toml"]
+        .as_str()
+        .unwrap()
+        .contains("renders/cache/"));
+}
+
+#[test]
 fn config_validate_reads_only_config_state() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

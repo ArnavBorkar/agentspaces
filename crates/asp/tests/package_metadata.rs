@@ -516,6 +516,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
 
     let mapped = [
         "asp init --json",
+        "asp init --print-template <name> --json",
         "asp status --json",
         "asp stats --json",
         "asp quickstart --json",
@@ -625,6 +626,8 @@ fn config_template_docs_cover_common_repository_shapes() {
         "asp init --template monorepo",
         "asp init --template generated-code",
         "asp init --template media-heavy",
+        "asp init --print-template monorepo",
+        "asp --json init --print-template monorepo",
         "## Service Repository",
         "## Monorepo",
         "## Media-Heavy Repository",
@@ -907,6 +910,10 @@ fn schema_docs_cover_post_epic_30_machine_readable_outputs() {
     let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
 
     let enveloped_outputs = [
+        (
+            "asp init --print-template <name> --json",
+            "#/$defs/initTemplateResult",
+        ),
         ("asp preflight --json", "#/$defs/preflightReport"),
         ("asp evidence collect --json", "#/$defs/evidenceReport"),
         (

@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "result": {
+    "name": "service",
+    "summary": "Default service repository with coverage and temp outputs excluded.",
+    "toml": "# asp config template: service\n\n[capture]\nextra_excludes = [\n  \"coverage/\",\n  \"tmp/\",\n]\nblob_threshold_mb = 50\n\n[promote]\nbranch_template = \"asp/{workspace}/{fork}\"\n"
+  }
+}

@@ -51,6 +51,7 @@ fn project() -> (tempfile::TempDir, PathBuf) {
 fn snapshot(name: &str, actual: Value) {
     let expected = match name {
         "cli_init" => include_str!("snapshots/cli_init.json"),
+        "cli_init_print_template" => include_str!("snapshots/cli_init_print_template.json"),
         "cli_checkpoint" => include_str!("snapshots/cli_checkpoint.json"),
         "cli_status" => include_str!("snapshots/cli_status.json"),
         "cli_stats" => include_str!("snapshots/cli_stats.json"),
@@ -261,6 +262,9 @@ fn cli_json_shapes_match_snapshots() {
 
     let bench_self = ok_json(&root, &["bench", "self"]);
     snapshot("cli_bench_self", normalize_bench_self(bench_self, &root));
+
+    let init_template = ok_json(&root, &["init", "--print-template", "service"]);
+    snapshot("cli_init_print_template", init_template);
 
     let init = ok_json(&root, &["init"]);
     snapshot("cli_init", normalize(init, &root));

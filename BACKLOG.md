@@ -476,7 +476,7 @@ repeatable defaults, reviewable policy, and minimal per-repo hand editing.
 - **S36.1 Repository bootstrap packs**
   - [x] T36.1.1 Add `asp init --template <name>` for common repository shapes.
   - [x] T36.1.2 Ship built-in templates for service, monorepo, generated-code, and media-heavy repos.
-  - [ ] T36.1.3 Add `asp init --print-template <name>` for review before writing config.
+  - [x] T36.1.3 Add `asp init --print-template <name>` for review before writing config.
   - [ ] T36.1.4 Add tests that templates never weaken default secret and derived-state exclusions.
   - [ ] T36.1.5 Document a rollout checklist for adding `asp` to 10+ repos safely.
 - **S36.2 Organization rollout controls**
