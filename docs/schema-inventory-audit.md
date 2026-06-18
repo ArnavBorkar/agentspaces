@@ -22,6 +22,8 @@ security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 - `asp diff --json` (`diffReport`), `asp diff --json --patch`, and
   `asp diff --json --stat` (`diffTextReport`), plus
   `asp diff --json --html --output review.html` (`diffHtmlOutputResult`)
+- `asp doctor --json` (`doctorFindings`) and
+  `asp doctor --json --runbook` (`doctorRunbookReport`)
 - raw SARIF exports for `asp preflight --sarif` and `asp secrets scan --sarif`
 
 ## Follow-Up Inventory
@@ -31,7 +33,7 @@ schema definitions, snapshots, or all three:
 
 | Surface | Current state | Needed follow-up |
 | --- | --- | --- |
-| `asp doctor --json --runbook` | Tested in CLI/docs coverage but missing `doctorRunbookReport` in the shared result schema. | Add schema definition, Result Map row, and snapshot. |
+| _None currently._ | All known shipped `--json` result shapes are mapped, schema-backed, or documented as raw standard formats. | Keep this audit updated with every new machine-readable surface. |
 
 ## Audit Rule
 

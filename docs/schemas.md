@@ -83,6 +83,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp setup codex --json` | `#/$defs/codexSetupReport` |
 | `asp setup opencode --json` | `#/$defs/opencodeSetupReport` |
 | `asp doctor --json` | `#/$defs/doctorFindings` |
+| `asp doctor --json --runbook` | `#/$defs/doctorRunbookReport` |
 | `asp diagnostics --json` | `#/$defs/diagnosticBundle` |
 | `asp diagnostics --json --output file.json` | `#/$defs/diagnosticsOutputResult` |
 
@@ -149,7 +150,9 @@ returns `diffHtmlOutputResult` after writing an offline HTML review artifact.
 include `repair_plan` with a stable `operation`, `description`, exact `command`,
 and conservative `destructive` flag, so automation can preview repairs before
 applying them. Human output stays compact by default; pass `asp doctor --explain`
-to print the same cause and next-action text.
+to print the same cause and next-action text. `asp doctor --json --runbook`
+wraps each finding with a `runbook` link and returns the shared
+`common_runbooks` catalog, including healthy-workspace runs with no findings.
 
 `asp promote --json` returns `promoteReport` with the created branch and
 retained-fork cleanup metadata: `fork_path`, `fork_retained: true`, and

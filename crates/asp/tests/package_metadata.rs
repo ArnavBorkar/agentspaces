@@ -271,6 +271,7 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "diffHtmlOutputResult",
         "asp doctor --json --runbook",
         "doctorRunbookReport",
+        "_None currently._",
         "## Audit Rule",
         "the Result Map points at an existing shared schema",
     ] {
@@ -375,6 +376,50 @@ fn schema_docs_cover_setup_and_diff_variant_contracts() {
 }
 
 #[test]
+fn schema_docs_cover_doctor_runbook_contract() {
+    let docs = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
+    for needle in [
+        "asp doctor --json --runbook",
+        "#/$defs/doctorRunbookReport",
+        "`common_runbooks` catalog",
+    ] {
+        assert!(docs.contains(needle), "schema docs missing {needle}");
+    }
+
+    let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
+    for stale_gap in [
+        "missing `doctorRunbookReport`",
+        "Add schema definition, Result Map row, and snapshot",
+    ] {
+        assert!(
+            !audit.contains(stale_gap),
+            "doctor runbook should no longer be tracked as a schema inventory gap"
+        );
+    }
+
+    let schema_text = fs::read_to_string(repo_file("schemas/asp-result.schema.json")).unwrap();
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
+    let defs = schema["$defs"].as_object().expect("schema defs object");
+    for def in [
+        "doctorFinding",
+        "doctorFindingWithRunbook",
+        "doctorRunbookLink",
+        "doctorRunbookReport",
+    ] {
+        assert!(defs.contains_key(def), "result schema missing {def}");
+    }
+
+    let variants = schema["anyOf"].as_array().expect("schema anyOf array");
+    assert!(
+        variants
+            .iter()
+            .any(|variant| variant["$ref"] == "#/$defs/doctorRunbookReport"),
+        "result schema anyOf missing doctorRunbookReport"
+    );
+}
+
+#[test]
 fn known_cli_json_surfaces_are_mapped_or_audited() {
     let schemas = fs::read_to_string(repo_file("docs/schemas.md")).unwrap();
     let audit = fs::read_to_string(repo_file("docs/schema-inventory-audit.md")).unwrap();
@@ -418,6 +463,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp setup codex --json",
         "asp setup opencode --json",
         "asp doctor --json",
+        "asp doctor --json --runbook",
         "asp diagnostics --json",
         "asp diagnostics --json --output file.json",
     ];
@@ -428,13 +474,10 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         );
     }
 
-    let audited_followups = ["asp doctor --json --runbook"];
-    for command in audited_followups {
-        assert!(
-            audit.contains(command),
-            "unmapped CLI JSON surface missing from schema inventory audit: {command}"
-        );
-    }
+    assert!(
+        audit.contains("| _None currently._ |"),
+        "schema inventory audit should state that no known CLI JSON surfaces are pending"
+    );
 }
 
 #[test]

@@ -67,6 +67,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_diff_patch" => include_str!("snapshots/cli_diff_patch.json"),
         "cli_diff_stat" => include_str!("snapshots/cli_diff_stat.json"),
         "cli_diff_html" => include_str!("snapshots/cli_diff_html.json"),
+        "cli_doctor_runbook" => include_str!("snapshots/cli_doctor_runbook.json"),
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
@@ -412,6 +413,39 @@ fn cli_diff_variant_shapes_match_snapshots() {
         .unwrap()
         .contains("agentspaces diff review"));
     snapshot("cli_diff_html", normalize(html, &root));
+}
+
+#[test]
+fn cli_doctor_runbook_shape_matches_snapshot() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+    let drift = Command::new("git")
+        .arg("--git-dir")
+        .arg(root.join(".asp/shadow.git"))
+        .args(["config", "core.compression", "9"])
+        .output()
+        .unwrap();
+    assert!(
+        drift.status.success(),
+        "git config failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&drift.stdout),
+        String::from_utf8_lossy(&drift.stderr)
+    );
+
+    let doctor_runbook = ok_json(&root, &["doctor", "--runbook"]);
+    let findings = doctor_runbook["result"]["findings"].as_array().unwrap();
+    assert!(findings.iter().any(|finding| {
+        finding["runbook"]["link"] == "docs/doctor-runbook.md#shadow-git-config-drift"
+            && finding["runbook"]["operations"][0] == "reset_shadow_git_config"
+    }));
+    assert!(doctor_runbook["result"]["common_runbooks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|runbook| runbook["link"] == "docs/doctor-runbook.md#general-doctor-triage"));
+    snapshot("cli_doctor_runbook", normalize(doctor_runbook, &root));
 }
 
 #[test]

@@ -1,0 +1,111 @@
+{
+  "ok": true,
+  "result": {
+    "common_runbooks": [
+      {
+        "link": "docs/doctor-runbook.md#shadow-git-config-drift",
+        "operations": [
+          "reset_shadow_git_config"
+        ],
+        "scenario": "Shadow git config drift"
+      },
+      {
+        "link": "docs/doctor-runbook.md#torn-journal-tail",
+        "operations": [
+          "truncate_torn_journal_tail"
+        ],
+        "scenario": "Torn journal tail"
+      },
+      {
+        "link": "docs/doctor-runbook.md#shadow-head-drift",
+        "operations": [
+          "repoint_shadow_head"
+        ],
+        "scenario": "Shadow HEAD drift"
+      },
+      {
+        "link": "docs/doctor-runbook.md#missing-active-fork-directory",
+        "operations": [
+          "mark_missing_fork_discarded"
+        ],
+        "scenario": "Missing active fork directory"
+      },
+      {
+        "link": "docs/doctor-runbook.md#torn-fork-clone",
+        "operations": [
+          "remove_pending_fork"
+        ],
+        "scenario": "Torn fork clone"
+      },
+      {
+        "link": "docs/doctor-runbook.md#missing-cas-blob-recreatable",
+        "operations": [
+          "recreate_missing_cas_blob"
+        ],
+        "scenario": "Missing CAS blob that can be recreated"
+      },
+      {
+        "link": "docs/doctor-runbook.md#journal-crc-mismatch",
+        "operations": [],
+        "scenario": "Journal CRC mismatch"
+      },
+      {
+        "link": "docs/doctor-runbook.md#missing-checkpoint-commit",
+        "operations": [],
+        "scenario": "Missing checkpoint commit"
+      },
+      {
+        "link": "docs/doctor-runbook.md#promoted-fork-cleanup",
+        "operations": [],
+        "scenario": "Promoted fork cleanup"
+      },
+      {
+        "link": "docs/doctor-runbook.md#unregistered-fork-looking-directory",
+        "operations": [],
+        "scenario": "Unregistered fork-looking directory"
+      },
+      {
+        "link": "docs/doctor-runbook.md#missing-cas-blob-and-working-file",
+        "operations": [],
+        "scenario": "Missing CAS blob and working file"
+      },
+      {
+        "link": "docs/doctor-runbook.md#corrupt-cas-blob",
+        "operations": [],
+        "scenario": "Corrupt CAS blob"
+      },
+      {
+        "link": "docs/doctor-runbook.md#runtime-prerequisite-failure",
+        "operations": [],
+        "scenario": "Runtime prerequisite failure"
+      },
+      {
+        "link": "docs/doctor-runbook.md#general-doctor-triage",
+        "operations": [],
+        "scenario": "General doctor triage"
+      }
+    ],
+    "findings": [
+      {
+        "cause": "The shadow git repository has drifted from asp's expected performance and safety settings.",
+        "fixed": false,
+        "message": "shadow git config core.compression is \"9\", expected \"0\"",
+        "next_action": "Run `asp doctor --fix` to restore the shadow git config values.",
+        "repair_plan": {
+          "command": "asp doctor --fix",
+          "description": "Reset the drifted shadow-git config key to asp's expected value.",
+          "destructive": false,
+          "operation": "reset_shadow_git_config"
+        },
+        "runbook": {
+          "link": "docs/doctor-runbook.md#shadow-git-config-drift",
+          "operations": [
+            "reset_shadow_git_config"
+          ],
+          "scenario": "Shadow git config drift"
+        },
+        "severity": "warning"
+      }
+    ]
+  }
+}

@@ -443,7 +443,7 @@
 - **S34.3 Remaining shipped surfaces**
   - [x] T34.3.1 Add schemas and snapshots for `asp quickstart`, `asp completions`, and `asp manpage` JSON results.
   - [x] T34.3.2 Add Result Map rows for setup Codex/OpenCode and diff patch/stat/html variants.
-  - [ ] T34.3.3 Add schema/docs/snapshots for `asp doctor --json --runbook`.
+  - [x] T34.3.3 Add schema/docs/snapshots for `asp doctor --json --runbook`.
 
 ---
 

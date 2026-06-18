@@ -82,6 +82,8 @@
   `asp manpage --json`.
 - The Result Map and JSON snapshots now cover Codex/OpenCode setup payloads and
   diff patch, stat, and HTML output variants.
+- `asp doctor --json --runbook` now has a documented shared result schema,
+  Result Map row, and JSON snapshot coverage.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

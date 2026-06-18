@@ -15,6 +15,7 @@
     { "$ref": "#/$defs/diffReport" },
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
+    { "$ref": "#/$defs/doctorRunbookReport" },
     { "$ref": "#/$defs/evidenceOutputResult" },
     { "$ref": "#/$defs/evidenceReport" },
     { "$ref": "#/$defs/forkCompareRows" },
@@ -471,17 +472,67 @@
     },
     "doctorFindings": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["severity", "message", "cause", "next_action", "fixed"],
-        "properties": {
-          "severity": { "$ref": "#/$defs/severity" },
-          "message": { "type": "string" },
-          "cause": { "type": "string" },
-          "next_action": { "type": "string" },
-          "repair_plan": { "$ref": "#/$defs/doctorRepairPlan" },
-          "fixed": { "type": "boolean" }
+      "items": { "$ref": "#/$defs/doctorFinding" }
+    },
+    "doctorFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "message", "cause", "next_action", "fixed"],
+      "properties": {
+        "severity": { "$ref": "#/$defs/severity" },
+        "message": { "type": "string" },
+        "cause": { "type": "string" },
+        "next_action": { "type": "string" },
+        "repair_plan": { "$ref": "#/$defs/doctorRepairPlan" },
+        "fixed": { "type": "boolean" }
+      }
+    },
+    "doctorRunbookReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findings", "common_runbooks"],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/doctorFindingWithRunbook" }
+        },
+        "common_runbooks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/doctorRunbookLink" }
+        }
+      }
+    },
+    "doctorFindingWithRunbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "message",
+        "cause",
+        "next_action",
+        "fixed",
+        "runbook"
+      ],
+      "properties": {
+        "severity": { "$ref": "#/$defs/severity" },
+        "message": { "type": "string" },
+        "cause": { "type": "string" },
+        "next_action": { "type": "string" },
+        "repair_plan": { "$ref": "#/$defs/doctorRepairPlan" },
+        "fixed": { "type": "boolean" },
+        "runbook": { "$ref": "#/$defs/doctorRunbookLink" }
+      }
+    },
+    "doctorRunbookLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario", "link", "operations"],
+      "properties": {
+        "scenario": { "type": "string" },
+        "link": { "type": "string" },
+        "operations": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },
