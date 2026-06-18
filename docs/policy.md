@@ -82,6 +82,21 @@ Protected path patterns are workspace-relative. `*` matches within one path
 segment; `**` matches across path segments. For example, `src/security/**`
 matches `src/security/auth.rs` and deeper files under that directory.
 
+## Config Pairing
+
+Promotion policy is easier to review with the effective config beside it:
+
+```bash
+asp --json config show > asp-config.json
+asp policy validate --json > asp-policy.json
+```
+
+Compare `asp-config.json.result.config.promote.branch_template` with
+`asp-policy.json.result.policy.promote.allowed_branch_prefixes`. For example,
+`"branch_template": "review/{workspace}/{fork}"` pairs with
+`"allowed_branch_prefixes": ["review/"]`; a template such as `asp/{fork}` would
+fail that policy before `asp promote` creates a branch.
+
 ## Examples
 
 Keep a small agent fan-out during an enterprise pilot:

@@ -71,6 +71,8 @@
   `asp config show --json` and `asp config validate --json` result payloads.
 - JSON snapshot coverage now guards `asp config show --json` and
   `asp config validate --json` payloads with non-default config values.
+- Config and policy review docs now include JSON artifact examples for
+  effective config review and promote branch-prefix checks.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

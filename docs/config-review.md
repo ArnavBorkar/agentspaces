@@ -20,6 +20,38 @@ asp doctor --runbook
 good first CI check. `asp config show` prints the effective defaults and
 project-specific overrides reviewers should compare against the proposed diff.
 
+## JSON Review Artifact
+
+`asp --json config show` returns `#/$defs/configShowReport` from
+[docs/schemas.md](schemas.md). Include it in config rollout PRs or CI artifacts
+when reviewers need to compare effective values instead of raw TOML diffs:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "valid": true,
+    "exists": true,
+    "config": {
+      "capture": {
+        "excludes": ["node_modules/", "target/"],
+        "extra_excludes": ["coverage/"],
+        "blob_threshold_mb": 10
+      },
+      "promote": {
+        "branch_template": "review/{workspace}/{fork}"
+      }
+    },
+    "shadow_excludes": ["/.asp/", "node_modules/", "target/", "coverage/"],
+    "blob_threshold_bytes": 10485760
+  }
+}
+```
+
+Use `config.capture` to review the intended TOML settings, `shadow_excludes` to
+review the effective checkpoint ignore list, and `blob_threshold_bytes` for
+automation that should not recalculate MiB conversions.
+
 ## What To Check
 
 | Area | Review question | Risk if wrong |

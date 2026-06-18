@@ -265,10 +265,33 @@ fn config_review_docs_cover_security_and_rollout_checks() {
         "capture.blob_threshold_mb",
         "promote.branch_template",
         "`.gitignore` alignment",
+        "## JSON Review Artifact",
+        "#/$defs/configShowReport",
+        "\"shadow_excludes\"",
+        "\"blob_threshold_bytes\"",
+        "\"branch_template\": \"review/{workspace}/{fork}\"",
         "Rollout Pattern",
         "Red Flags",
     ] {
         assert!(docs.contains(needle), "config review docs missing {needle}");
+    }
+}
+
+#[test]
+fn policy_docs_cover_config_pairing_for_promotion_rules() {
+    let docs = fs::read_to_string(repo_file("docs/policy.md")).unwrap();
+
+    for needle in [
+        "## Config Pairing",
+        "asp --json config show > asp-config.json",
+        "asp policy validate --json > asp-policy.json",
+        "asp-config.json.result.config.promote.branch_template",
+        "asp-policy.json.result.policy.promote.allowed_branch_prefixes",
+        "\"branch_template\": \"review/{workspace}/{fork}\"",
+        "\"allowed_branch_prefixes\": [\"review/\"]",
+        "fail that policy before `asp promote` creates a branch",
+    ] {
+        assert!(docs.contains(needle), "policy docs missing {needle}");
     }
 }
 
