@@ -502,7 +502,7 @@ the project.
   - [x] T37.2.1 Add client-side encryption design for remote blobs and refs.
   - [x] T37.2.2 Add `asp sync status` showing local/remote divergence without fetching objects.
   - [x] T37.2.3 Add conflict reports that name the exact refs that would be overwritten.
-  - [ ] T37.2.4 Add resumable sync for interrupted uploads and downloads.
+  - [x] T37.2.4 Add resumable sync for interrupted uploads and downloads.
   - [ ] T37.2.5 Add recovery docs for restoring a workspace from a remote-only backup.
 
 ## EPIC 38 — Native Windows support

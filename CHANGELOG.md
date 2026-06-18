@@ -24,6 +24,8 @@
   divergence without downloading remote git objects or CAS blobs.
 - Sync conflict rows and push errors now name the exact asp ref and local/remote
   targets that need reconciliation.
+- Sync push and fetch retries are now covered as resumable interruption paths:
+  reruns fill missing git objects and CAS blobs without reimporting refs.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

@@ -79,6 +79,27 @@ exists locally with another target, fetch reports a conflict and leaves local
 refs untouched. The local head moves only when the remote head is newer in
 checkpoint-sequence terms or when the local head is missing.
 
+## Interrupted Sync
+
+Sync is resumable by rerunning the same command with the same remote. Immutable
+git objects and CAS blobs are content-checked: matching bytes count as already
+present, missing bytes are uploaded or downloaded, and different bytes stop with
+a corrective error. Ref writes happen after object transfer and remain
+conditional, so an interrupted retry fills in missing objects without
+overwriting checkpoint, metadata, or head refs that changed meanwhile.
+
+Use this retry pattern after a killed process, disconnected network mount, or
+cloud-object-store timeout:
+
+```bash
+asp sync status --remote /path/to/asp-remote
+asp sync push --remote /path/to/asp-remote
+asp sync fetch --remote /path/to/asp-remote
+```
+
+`asp sync status` is safe to run first because it reads only workspace and ref
+metadata, not git object or CAS blob payloads.
+
 ## Current Limits
 
 The `asp` CLI sync commands support local filesystem remotes only. They are

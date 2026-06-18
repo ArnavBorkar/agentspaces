@@ -290,6 +290,23 @@ fn sync_emulator_docs_cover_local_backend_fixtures() {
 }
 
 #[test]
+fn sync_docs_cover_resumable_interruption_retries() {
+    let sync = fs::read_to_string(repo_file("docs/sync.md")).unwrap();
+
+    for needle in [
+        "## Interrupted Sync",
+        "resumable by rerunning the same command",
+        "matching",
+        "already\npresent",
+        "missing bytes are uploaded or downloaded",
+        "asp sync status --remote /path/to/asp-remote",
+        "not git object or CAS blob payloads",
+    ] {
+        assert!(sync.contains(needle), "sync docs missing {needle}");
+    }
+}
+
+#[test]
 fn sync_encryption_docs_cover_remote_object_protection_design() {
     let docs = fs::read_to_string(repo_file("docs/sync-encryption.md")).unwrap();
 

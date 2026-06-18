@@ -59,6 +59,60 @@ fn project() -> (tempfile::TempDir, PathBuf) {
     (tmp, root)
 }
 
+fn sorted_dir_paths(root: &Path) -> Vec<PathBuf> {
+    let mut paths = std::fs::read_dir(root)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths
+}
+
+fn first_loose_git_object(objects_dir: &Path) -> PathBuf {
+    for fanout in sorted_dir_paths(objects_dir) {
+        let name = fanout.file_name().unwrap().to_string_lossy();
+        if name.len() != 2 || !name.bytes().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        for object in sorted_dir_paths(&fanout) {
+            if object.is_file() {
+                return object;
+            }
+        }
+    }
+    panic!("no loose git object under {}", objects_dir.display());
+}
+
+fn loose_git_oid(path: &Path) -> String {
+    format!(
+        "{}{}",
+        path.parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy(),
+        path.file_name().unwrap().to_string_lossy()
+    )
+}
+
+fn first_regular_file(root: &Path) -> PathBuf {
+    fn find(root: &Path) -> Option<PathBuf> {
+        for path in sorted_dir_paths(root) {
+            if path.is_file() {
+                return Some(path);
+            }
+            if path.is_dir() {
+                if let Some(found) = find(&path) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    find(root).unwrap_or_else(|| panic!("no regular file under {}", root.display()))
+}
+
 #[test]
 fn bench_self_runs_outside_workspace() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1160,6 +1214,21 @@ fn sync_push_uploads_checkpoints_and_blobs_to_local_remote() {
     assert!(again["result"]["git_objects_present"].as_u64().unwrap() > 0);
     assert_eq!(again["result"]["cas_blobs_present"], 1);
 
+    let missing_remote_git = first_loose_git_object(&base.join("objects/git/sha1"));
+    let missing_remote_cas = first_regular_file(&base.join("objects/blobs/blake3"));
+    std::fs::remove_file(&missing_remote_git).unwrap();
+    std::fs::remove_file(&missing_remote_cas).unwrap();
+    let resumed = ok_json(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+    assert!(resumed["result"]["git_objects_uploaded"].as_u64().unwrap() > 0);
+    assert!(resumed["result"]["git_objects_present"].as_u64().unwrap() > 0);
+    assert_eq!(resumed["result"]["cas_blobs_uploaded"], 1);
+    assert_eq!(resumed["result"]["cas_blobs_present"], 0);
+    assert!(missing_remote_git.is_file());
+    assert!(missing_remote_cas.is_file());
+
     let head = base.join("refs/head.json");
     std::fs::write(
         &head,
@@ -1241,6 +1310,49 @@ fn sync_fetch_restores_missing_local_refs_and_objects() {
     assert_eq!(fetched["result"]["conflicts"], serde_json::json!([]));
     shadow_git(&root, &["cat-file", "-e", &commit]);
     ok(&root, &["status"]);
+}
+
+#[test]
+fn sync_fetch_resumes_missing_objects_without_reimporting_refs() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = 1\n",
+    )
+    .unwrap();
+    let big: Vec<u8> = (0..(2 * 1024 * 1024)).map(|i| (i % 251) as u8).collect();
+    std::fs::write(root.join("asset.bin"), &big).unwrap();
+    ok(&root, &["checkpoint", "-m", "with big"]);
+    let remote = root.parent().unwrap().join("sync-remote");
+    ok(
+        &root,
+        &["sync", "push", "--remote", remote.to_str().unwrap()],
+    );
+
+    let missing_git = first_loose_git_object(&root.join(".asp/shadow.git/objects"));
+    let missing_oid = loose_git_oid(&missing_git);
+    let missing_cas = first_regular_file(&root.join(".asp/blobs"));
+    std::fs::remove_file(&missing_git).unwrap();
+    std::fs::remove_file(&missing_cas).unwrap();
+
+    let fetched = ok_json(
+        &root,
+        &["sync", "fetch", "--remote", remote.to_str().unwrap()],
+    );
+    assert_eq!(fetched["result"]["refs_imported"], 0);
+    assert!(fetched["result"]["refs_present"].as_u64().unwrap() > 0);
+    assert!(
+        fetched["result"]["git_objects_downloaded"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(fetched["result"]["git_objects_present"].as_u64().unwrap() > 0);
+    assert_eq!(fetched["result"]["cas_blobs_downloaded"], 1);
+    assert_eq!(fetched["result"]["cas_blobs_present"], 0);
+    shadow_git(&root, &["cat-file", "-e", &missing_oid]);
+    assert!(missing_cas.is_file());
 }
 
 #[test]
