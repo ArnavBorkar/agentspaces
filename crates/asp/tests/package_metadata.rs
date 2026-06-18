@@ -461,6 +461,50 @@ fn windows_docs_cover_portable_checkpoint_path_guards() {
 }
 
 #[test]
+fn windows_filesystem_docs_cover_enterprise_layout_choices() {
+    let docs = fs::read_to_string(repo_file("docs/windows-filesystems.md")).unwrap();
+
+    for needle in [
+        "## Capability Matrix",
+        "WSL2 Linux filesystem",
+        "`/mnt/c`",
+        "Native NTFS",
+        "Native ReFS",
+        "`block_clone`",
+        "SMB or other network shares",
+        "OneDrive, Dropbox, Google Drive",
+        "Cloud-Synced Folders",
+        "Probe Checklist",
+        "symlink support",
+        "filesystem detection",
+        "sync remote recovery",
+    ] {
+        assert!(
+            docs.contains(needle),
+            "windows filesystem docs missing {needle}"
+        );
+    }
+
+    let readme = fs::read_to_string(repo_file("README.md")).unwrap();
+    assert!(
+        readme.contains("docs/windows-filesystems.md"),
+        "README should link Windows filesystem docs"
+    );
+
+    let windows = fs::read_to_string(repo_file("docs/windows.md")).unwrap();
+    assert!(
+        windows.contains("Windows filesystem capabilities"),
+        "Windows status should link filesystem capability docs"
+    );
+
+    let filesystems = fs::read_to_string(repo_file("docs/filesystems.md")).unwrap();
+    assert!(
+        filesystems.contains("windows-filesystems.md"),
+        "filesystem docs should link Windows capability docs"
+    );
+}
+
+#[test]
 fn config_docs_cover_effective_config_inspection() {
     let docs = fs::read_to_string(repo_file("docs/config.md")).unwrap();
 

@@ -14,7 +14,8 @@ platform and the filesystem under the workspace root:
 
 Native Windows is currently disabled. The planned behavior is ReFS block clone
 where proven and NTFS byte-copy fallback; see the
-[Windows block clone spike](design/windows-block-clone-spike.md).
+[Windows block clone spike](design/windows-block-clone-spike.md) and
+[Windows filesystem capabilities](windows-filesystems.md).
 
 The source of truth is the JSON output from a probe fork:
 

@@ -33,6 +33,8 @@
   components before those paths enter store metadata.
 - Checkpoint/restore symlink preservation is now covered by an engine
   regression, and Windows docs spell out the fail-closed reparse-point boundary.
+- `docs/windows-filesystems.md` documents Windows-hosted storage layouts for
+  WSL2, NTFS, ReFS, network shares, and cloud-synced folders.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

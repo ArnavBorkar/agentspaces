@@ -42,3 +42,5 @@ unless Microsoft documents and CI proves a safe local clone path.
 The broader native support gate is documented in
 [docs/design/windows-support-plan.md](design/windows-support-plan.md), covering
 symlinks, permissions, paths, Git for Windows, diagnostics, and release tests.
+For storage-layout guidance across WSL2, NTFS, ReFS, network shares, and synced
+folders, see [Windows filesystem capabilities](windows-filesystems.md).
