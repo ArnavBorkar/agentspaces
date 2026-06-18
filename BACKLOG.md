@@ -378,7 +378,7 @@
 
 - **S30.1 Config inspection**
   - [x] T30.1.1 Add `asp config show` with human and JSON output for effective settings.
-  - [ ] T30.1.2 Add `asp config validate` as a non-mutating CI-friendly check that does not require other workspace reads.
+  - [x] T30.1.2 Add `asp config validate` as a non-mutating CI-friendly check that does not require other workspace reads.
   - [ ] T30.1.3 Add config review guidance for security and platform teams.
 - **S30.2 Safe rollout templates**
   - [ ] T30.2.1 Add example config templates for monorepos, media-heavy repos, and generated-code repos.

@@ -61,6 +61,7 @@ asp discard race-3 --force
 asp audit --path src/lib.rs
 asp audit --format jsonl
 asp config show
+asp config validate --json
 asp policy validate --json
 asp retention plan
 asp secrets scan

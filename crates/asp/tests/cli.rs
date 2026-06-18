@@ -140,6 +140,35 @@ fn config_show_reports_effective_workspace_settings() {
 }
 
 #[test]
+fn config_validate_reads_only_config_state() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    std::fs::write(root.join(".asp/journal.jsonl"), "not-json\n").unwrap();
+
+    let json = ok_json(&root, &["config", "validate"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["valid"], true);
+    assert_eq!(json["result"]["exists"], true);
+    assert!(ok(&root, &["config", "validate"]).contains("config valid"));
+
+    std::fs::write(
+        root.join(".asp/config.toml"),
+        "[capture]\nblob_threshold_mb = \"large\"\n",
+    )
+    .unwrap();
+    let out = asp(&root, &["--json", "config", "validate"]);
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["ok"], false);
+    assert_eq!(err["error"]["code"], "store_corrupt");
+    assert!(err["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("restore defaults"));
+}
+
+#[test]
 fn completions_emit_shell_scripts_and_json() {
     let tmp = tempfile::tempdir().unwrap();
     let bash = ok(tmp.path(), &["completions", "bash"]);

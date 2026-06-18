@@ -12,11 +12,17 @@ Inspect the effective config from the CLI:
 ```bash
 asp config show
 asp --json config show
+asp config validate
+asp --json config validate
 ```
 
-The report includes whether `.asp/config.toml` exists, the resolved config
-values, the effective checkpoint excludes written into the shadow git repo, the
+`show` reports whether `.asp/config.toml` exists, the resolved config values,
+the effective checkpoint excludes written into the shadow git repo, the
 large-file blob threshold in bytes, and the promote branch template.
+
+`validate` uses a narrow read path: it discovers the workspace root and parses
+only `.asp/config.toml`. That makes it suitable for CI and for diagnosing config
+syntax even if another store component needs `asp doctor`.
 
 ## Schema
 

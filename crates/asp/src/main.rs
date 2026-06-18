@@ -324,6 +324,8 @@ enum SyncCmd {
 enum ConfigCmd {
     /// Show effective `.asp/config.toml` settings.
     Show,
+    /// Validate `.asp/config.toml` without reading other workspace state.
+    Validate,
 }
 
 #[derive(Subcommand)]
@@ -459,6 +461,7 @@ struct ConfigShowReport {
     root: PathBuf,
     path: PathBuf,
     exists: bool,
+    valid: bool,
     config: asp_core::config::Config,
     shadow_excludes: Vec<String>,
     blob_threshold_bytes: u64,
@@ -700,12 +703,20 @@ fn run(cli: Cli) -> Result<(), Error> {
         }
         Cmd::Config { command } => match command {
             ConfigCmd::Show => {
-                let ws = open(&cli.dir)?;
-                let report = config_show_report(&ws);
+                let report = config_show_report(&cli.dir)?;
                 if json {
                     ui::print_json(true, &report);
                 } else {
                     print_config_show(&report);
+                }
+                Ok(())
+            }
+            ConfigCmd::Validate => {
+                let report = config_show_report(&cli.dir)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_config_validate(&report);
                 }
                 Ok(())
             }
@@ -2578,16 +2589,38 @@ fn print_diff_summary(summary: &asp_core::workspace::DiffSummary) {
     print_diff_summary_table("change", &summary.by_change_type);
 }
 
-fn config_show_report(ws: &Workspace) -> ConfigShowReport {
-    let path = ws.root().join(ASP_DIR).join("config.toml");
-    ConfigShowReport {
-        root: ws.root().to_path_buf(),
+fn config_show_report(cli_dir: &Option<PathBuf>) -> Result<ConfigShowReport, Error> {
+    let root = config_workspace_root(cli_dir)?;
+    let path = root.join(ASP_DIR).join("config.toml");
+    let config = asp_core::config::Config::load(&path)?;
+    Ok(ConfigShowReport {
+        root,
         exists: path.is_file(),
         path,
-        config: ws.config.clone(),
-        shadow_excludes: ws.config.shadow_excludes(),
-        blob_threshold_bytes: ws.config.blob_threshold_bytes(),
-    }
+        valid: true,
+        shadow_excludes: config.shadow_excludes(),
+        blob_threshold_bytes: config.blob_threshold_bytes(),
+        config,
+    })
+}
+
+fn config_workspace_root(cli_dir: &Option<PathBuf>) -> Result<PathBuf, Error> {
+    let start = cwd(cli_dir)?;
+    let canonical;
+    let start = match start.canonicalize() {
+        Ok(path) => {
+            canonical = path;
+            canonical.as_path()
+        }
+        Err(_) => start.as_path(),
+    };
+    find_root(start).ok_or_else(|| {
+        Error::new(
+            ErrorCode::NotAWorkspace,
+            format!("no asp workspace found at or above {}", start.display()),
+        )
+        .with_hint("run `asp init` in your project root to create one")
+    })
 }
 
 fn print_config_show(report: &ConfigShowReport) {
@@ -2620,6 +2653,22 @@ fn print_config_show(report: &ConfigShowReport) {
     );
     println!();
     print!("{}", ui::table(&rows));
+}
+
+fn print_config_validate(report: &ConfigShowReport) {
+    println!(
+        "{} config valid at {}",
+        ui::green("✓"),
+        report.path.display()
+    );
+    println!(
+        "  source: {}",
+        if report.exists {
+            ".asp/config.toml"
+        } else {
+            "defaults (config file missing)"
+        }
+    );
 }
 
 fn quickstart_report(directory: PathBuf) -> QuickstartReport {

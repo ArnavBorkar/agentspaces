@@ -125,6 +125,7 @@ fn command_cheat_sheet_covers_daily_workflows() {
         "## Audit and policy",
         "asp secrets scan",
         "asp config show",
+        "asp config validate --json",
         "## Sync and support",
         "asp sync push",
         "## Shell and packaging",
@@ -184,6 +185,9 @@ fn config_docs_cover_effective_config_inspection() {
     for needle in [
         "asp config show",
         "asp --json config show",
+        "asp config validate",
+        "asp --json config validate",
+        "narrow read path",
         "effective checkpoint excludes",
         "large-file blob threshold",
         "promote branch template",
