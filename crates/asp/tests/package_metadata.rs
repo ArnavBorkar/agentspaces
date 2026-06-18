@@ -298,7 +298,10 @@ fn config_docs_cover_effective_config_inspection() {
         "asp --json config show",
         "asp config validate",
         "asp --json config validate",
+        "asp config diff --against baseline.toml",
+        "asp --json config diff --against baseline.toml",
         "narrow read path",
+        "field-level drift",
         "effective checkpoint excludes",
         "large-file blob threshold",
         "promote branch template",
@@ -313,8 +316,12 @@ fn schema_docs_cover_config_result_contracts() {
     for needle in [
         "asp config show --json",
         "asp config validate --json",
+        "asp config diff --against <file> --json",
         "#/$defs/configShowReport",
+        "#/$defs/configDiffReport",
         "`configShowReport`",
+        "`configDiffReport`",
+        "`matches` plus field-level `changes[]`",
         "successful results always carry `valid: true`",
         "schema-inventory-audit.md",
     ] {
@@ -325,17 +332,20 @@ fn schema_docs_cover_config_result_contracts() {
     let schema: serde_json::Value =
         serde_json::from_str(&schema_text).expect("result schema should be valid JSON");
     let defs = schema["$defs"].as_object().expect("schema defs object");
-    for def in ["configShowReport", "workspaceConfig"] {
+    for def in ["configShowReport", "configDiffReport", "workspaceConfig"] {
         assert!(defs.contains_key(def), "result schema missing {def}");
     }
 
     let variants = schema["anyOf"].as_array().expect("schema anyOf array");
-    assert!(
-        variants
-            .iter()
-            .any(|variant| variant["$ref"] == "#/$defs/configShowReport"),
-        "result schema anyOf missing configShowReport"
-    );
+    for def in ["configShowReport", "configDiffReport"] {
+        let expected = format!("#/$defs/{def}");
+        assert!(
+            variants
+                .iter()
+                .any(|variant| variant["$ref"].as_str() == Some(expected.as_str())),
+            "result schema anyOf missing {def}"
+        );
+    }
 }
 
 #[test]
@@ -522,6 +532,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp quickstart --json",
         "asp config show --json",
         "asp config validate --json",
+        "asp config diff --against <file> --json",
         "asp bench self --json",
         "asp schema --json",
         "asp completions <shell> --json",
@@ -580,6 +591,7 @@ fn config_review_docs_cover_security_and_rollout_checks() {
     for needle in [
         "asp config validate",
         "asp --json config show",
+        "asp --json config diff --against baseline.toml",
         "asp policy validate --json",
         "asp secrets scan",
         "capture.excludes",
@@ -589,6 +601,8 @@ fn config_review_docs_cover_security_and_rollout_checks() {
         "`.gitignore` alignment",
         "## JSON Review Artifact",
         "#/$defs/configShowReport",
+        "#/$defs/configDiffReport",
+        "`changes[]`",
         "\"shadow_excludes\"",
         "\"blob_threshold_bytes\"",
         "\"branch_template\": \"review/{workspace}/{fork}\"",
@@ -656,6 +670,7 @@ fn fleet_rollout_docs_cover_multi_repo_adoption() {
         "asp init --template monorepo",
         "asp config validate",
         "asp --json config show > asp-config.json",
+        "asp --json config diff --against baseline.toml > asp-config-diff.json",
         "asp preflight",
         "asp checkpoint -m \"rollout: baseline\"",
         "asp fork --name rollout-smoke",
@@ -666,6 +681,7 @@ fn fleet_rollout_docs_cover_multi_repo_adoption() {
         "asp setup claude",
         "asp setup codex",
         "asp setup opencode",
+        "asp config diff --against <file>",
         "## Rollback",
         "Only delete `.asp/`",
         "## Done When",

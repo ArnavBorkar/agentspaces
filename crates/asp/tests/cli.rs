@@ -272,6 +272,61 @@ fn config_validate_reads_only_config_state() {
 }
 
 #[test]
+fn config_diff_reports_drift_against_required_file() {
+    let (_tmp, root) = project();
+    ok(&root, &["init"]);
+    let workspace_config = "[capture]\nextra_excludes = [\"coverage/\"]\nblob_threshold_mb = 10\n\n[promote]\nbranch_template = \"review/{workspace}/{fork}\"\n";
+    std::fs::write(root.join(".asp/config.toml"), workspace_config).unwrap();
+    std::fs::write(
+        root.join("baseline.toml"),
+        "[capture]\nextra_excludes = [\"baseline/\"]\nblob_threshold_mb = 25\n\n[promote]\nbranch_template = \"asp/{fork}\"\n",
+    )
+    .unwrap();
+
+    let human = ok(&root, &["config", "diff", "--against", "baseline.toml"]);
+    assert!(human.contains("config drift"), "{human}");
+    assert!(human.contains("capture.extra_excludes"), "{human}");
+    assert!(human.contains("coverage/"), "{human}");
+    assert!(human.contains("baseline/"), "{human}");
+    assert!(human.contains("promote.branch_template"), "{human}");
+
+    let json = ok_json(&root, &["config", "diff", "--against", "baseline.toml"]);
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["result"]["matches"], false);
+    assert_eq!(json["result"]["exists"], true);
+    assert!(json["result"]["against_path"]
+        .as_str()
+        .unwrap()
+        .ends_with("baseline.toml"));
+    let changes = json["result"]["changes"].as_array().unwrap();
+    assert!(changes
+        .iter()
+        .any(|change| change["field"] == "capture.extra_excludes"));
+    assert!(changes
+        .iter()
+        .any(|change| change["field"] == "shadow_excludes"));
+
+    std::fs::write(root.join("matching.toml"), workspace_config).unwrap();
+    let matching = ok_json(&root, &["config", "diff", "--against", "matching.toml"]);
+    assert_eq!(matching["result"]["matches"], true);
+    assert!(matching["result"]["changes"].as_array().unwrap().is_empty());
+
+    let out = asp(
+        &root,
+        &["--json", "config", "diff", "--against", "missing.toml"],
+    );
+    assert!(!out.status.success());
+    let err: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    assert_eq!(err["ok"], false);
+    assert_eq!(err["error"]["code"], "io");
+    assert!(err["error"]["hint"]
+        .as_str()
+        .unwrap()
+        .contains("pass a readable TOML file"));
+}
+
+#[test]
 fn preflight_reports_readiness_and_blocks_secrets() {
     let (_tmp, root) = project();
     ok(&root, &["init"]);

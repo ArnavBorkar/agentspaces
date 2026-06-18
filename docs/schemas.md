@@ -52,6 +52,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp quickstart --json` | `#/$defs/quickstartReport` |
 | `asp config show --json` | `#/$defs/configShowReport` |
 | `asp config validate --json` | `#/$defs/configShowReport` |
+| `asp config diff --against <file> --json` | `#/$defs/configDiffReport` |
 | `asp bench self --json` | `#/$defs/benchSelfReport` |
 | `asp schema --json` | `#/$defs/schemaReport` |
 | `asp completions <shell> --json` | `#/$defs/completionResult` |
@@ -141,6 +142,10 @@ filesystem capabilities, and removes the probe before exiting.
 `configShowReport` when the effective config parses successfully. Invalid
 config files fail through the standard CLI error envelope with a corrective
 `hint`, so successful results always carry `valid: true`.
+`asp config diff --against <file> --json` returns `configDiffReport` with
+`matches` plus field-level `changes[]` entries for raw config fields and derived
+effective fields. The `--against` file is required and missing files fail
+through the standard error envelope instead of comparing against defaults.
 
 `asp sync push --json --remote <dir>` returns `syncPushReport` with checkpoint,
 git-object, CAS-blob, and ref counts split into uploaded/present/updated

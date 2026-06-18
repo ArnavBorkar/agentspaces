@@ -9,7 +9,8 @@ This audit compares shipped `asp --json` command surfaces against
 The Result Map now covers the core workspace, policy, config, readiness,
 security, evidence, sync, review, diff, race, diagnostics, and setup payloads:
 
-- `asp config show --json` and `asp config validate --json`
+- `asp config show --json`, `asp config validate --json`, and
+  `asp config diff --against <file> --json`
 - `asp quickstart --json`
 - `asp completions <shell> --json`
 - `asp manpage --json`

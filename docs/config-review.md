@@ -11,6 +11,7 @@ secret scanning, see [ignore/config/secrets coordination](ignore-config-secrets.
 ```bash
 asp config validate
 asp --json config show
+asp --json config diff --against baseline.toml
 asp policy validate --json
 asp secrets scan
 asp doctor --runbook
@@ -19,6 +20,8 @@ asp doctor --runbook
 `asp config validate` intentionally reads only `.asp/config.toml`, so it is a
 good first CI check. `asp config show` prints the effective defaults and
 project-specific overrides reviewers should compare against the proposed diff.
+Use `asp config diff --against <file>` when a platform team has a checked-in or
+ticket-attached baseline and wants a field-level drift artifact.
 
 ## JSON Review Artifact
 
@@ -52,6 +55,12 @@ Use `config.capture` to review the intended TOML settings, `shadow_excludes` to
 review the effective checkpoint ignore list, and `blob_threshold_bytes` for
 automation that should not recalculate MiB conversions.
 
+`asp --json config diff --against baseline.toml` returns
+`#/$defs/configDiffReport` with a boolean `matches` field and `changes[]`
+entries containing `field`, `workspace`, and `against` values. Keep the
+baseline file beside the rollout ticket or CI job so reviewers can reproduce the
+same comparison locally.
+
 ## What To Check
 
 | Area | Review question | Risk if wrong |
@@ -66,7 +75,9 @@ automation that should not recalculate MiB conversions.
 ## Rollout Pattern
 
 1. Put `.asp/config.toml` changes in their own PR when possible.
-2. Include `asp --json config show` output in the PR or CI artifact.
+2. Include `asp --json config show` output and, when a fleet baseline exists,
+   `asp --json config diff --against baseline.toml` output in the PR or CI
+   artifact.
 3. Run `asp checkpoint -m "before config rollout"` before testing new settings.
 4. Exercise one checkpoint, one fork, and one promote dry path in a disposable
    branch or sample repo.

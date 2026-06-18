@@ -1,0 +1,65 @@
+{
+  "ok": true,
+  "result": {
+    "against_path": "<workspace-root>/baseline.toml",
+    "changes": [
+      {
+        "against": [
+          "baseline/"
+        ],
+        "field": "capture.extra_excludes",
+        "workspace": [
+          "coverage/"
+        ]
+      },
+      {
+        "against": 25,
+        "field": "capture.blob_threshold_mb",
+        "workspace": 10
+      },
+      {
+        "against": "asp/{fork}",
+        "field": "promote.branch_template",
+        "workspace": "review/{workspace}/{fork}"
+      },
+      {
+        "against": [
+          "/.asp/",
+          "node_modules/",
+          "target/",
+          ".venv/",
+          "venv/",
+          "__pycache__/",
+          "build/",
+          "dist/",
+          ".next/",
+          ".cache/",
+          "baseline/"
+        ],
+        "field": "shadow_excludes",
+        "workspace": [
+          "/.asp/",
+          "node_modules/",
+          "target/",
+          ".venv/",
+          "venv/",
+          "__pycache__/",
+          "build/",
+          "dist/",
+          ".next/",
+          ".cache/",
+          "coverage/"
+        ]
+      },
+      {
+        "against": 26214400,
+        "field": "blob_threshold_bytes",
+        "workspace": 10485760
+      }
+    ],
+    "exists": true,
+    "matches": false,
+    "path": "<workspace-root>/.asp/config.toml",
+    "root": "<workspace-root>"
+  }
+}

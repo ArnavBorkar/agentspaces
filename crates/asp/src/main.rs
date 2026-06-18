@@ -503,6 +503,12 @@ enum ConfigCmd {
     Show,
     /// Validate `.asp/config.toml` without reading other workspace state.
     Validate,
+    /// Compare effective workspace config against a required TOML file.
+    Diff {
+        /// TOML file to compare the workspace config against.
+        #[arg(long, value_name = "FILE")]
+        against: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -718,6 +724,23 @@ struct ConfigShowReport {
     config: asp_core::config::Config,
     shadow_excludes: Vec<String>,
     blob_threshold_bytes: u64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ConfigDiffReport {
+    root: PathBuf,
+    path: PathBuf,
+    exists: bool,
+    against_path: PathBuf,
+    matches: bool,
+    changes: Vec<ConfigDiffChange>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ConfigDiffChange {
+    field: &'static str,
+    workspace: serde_json::Value,
+    against: serde_json::Value,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1041,6 +1064,15 @@ fn run(cli: Cli) -> Result<(), Error> {
                     ui::print_json(true, &report);
                 } else {
                     print_config_validate(&report);
+                }
+                Ok(())
+            }
+            ConfigCmd::Diff { against } => {
+                let report = config_diff_report(&cli.dir, &against)?;
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    print_config_diff(&report);
                 }
                 Ok(())
             }
@@ -3386,6 +3418,155 @@ fn print_config_validate(report: &ConfigShowReport) {
             "defaults (config file missing)"
         }
     );
+}
+
+fn config_diff_report(
+    cli_dir: &Option<PathBuf>,
+    against: &Path,
+) -> Result<ConfigDiffReport, Error> {
+    let report = config_show_report(cli_dir)?;
+    let cli_cwd = cwd(cli_dir)?;
+    let against_path = resolve_cli_path(&cli_cwd, against);
+    if !against_path.is_file() {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("config diff baseline not found: {}", against_path.display()),
+        )
+        .with_hint(
+            "pass a readable TOML file, for example `asp config diff --against .asp/config.toml`",
+        ));
+    }
+
+    let against_path = against_path.canonicalize().unwrap_or(against_path);
+    let against_config = asp_core::config::Config::load(&against_path)?;
+    let against_shadow_excludes = against_config.shadow_excludes();
+    let against_blob_threshold_bytes = against_config.blob_threshold_bytes();
+
+    let mut changes = Vec::new();
+    push_config_diff(
+        &mut changes,
+        "capture.excludes",
+        &report.config.capture.excludes,
+        &against_config.capture.excludes,
+    );
+    push_config_diff(
+        &mut changes,
+        "capture.extra_excludes",
+        &report.config.capture.extra_excludes,
+        &against_config.capture.extra_excludes,
+    );
+    push_config_diff(
+        &mut changes,
+        "capture.blob_threshold_mb",
+        &report.config.capture.blob_threshold_mb,
+        &against_config.capture.blob_threshold_mb,
+    );
+    push_config_diff(
+        &mut changes,
+        "promote.branch_template",
+        &report.config.promote.branch_template,
+        &against_config.promote.branch_template,
+    );
+    push_config_diff(
+        &mut changes,
+        "shadow_excludes",
+        &report.shadow_excludes,
+        &against_shadow_excludes,
+    );
+    push_config_diff(
+        &mut changes,
+        "blob_threshold_bytes",
+        &report.blob_threshold_bytes,
+        &against_blob_threshold_bytes,
+    );
+
+    Ok(ConfigDiffReport {
+        root: report.root,
+        path: report.path,
+        exists: report.exists,
+        against_path,
+        matches: changes.is_empty(),
+        changes,
+    })
+}
+
+fn resolve_cli_path(base: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base.join(path)
+    }
+}
+
+fn push_config_diff<T: serde::Serialize + ?Sized>(
+    changes: &mut Vec<ConfigDiffChange>,
+    field: &'static str,
+    workspace: &T,
+    against: &T,
+) {
+    let workspace = config_diff_value(workspace);
+    let against = config_diff_value(against);
+    if workspace != against {
+        changes.push(ConfigDiffChange {
+            field,
+            workspace,
+            against,
+        });
+    }
+}
+
+fn config_diff_value<T: serde::Serialize + ?Sized>(value: &T) -> serde_json::Value {
+    serde_json::to_value(value).expect("config diff value serializes")
+}
+
+fn print_config_diff(report: &ConfigDiffReport) {
+    println!(
+        "{}",
+        ui::bold(&format!("config diff {}", report.root.display()))
+    );
+    println!(
+        "  workspace: {} ({})",
+        report.path.display(),
+        if report.exists {
+            "present"
+        } else {
+            "missing; defaults in effect"
+        }
+    );
+    println!("  against: {}", report.against_path.display());
+
+    if report.matches {
+        println!("{} no config drift", ui::green("✓"));
+        return;
+    }
+
+    println!(
+        "{} config drift: {} field{}",
+        ui::yellow("!"),
+        report.changes.len(),
+        if report.changes.len() == 1 { "" } else { "s" }
+    );
+    let mut rows = vec![vec![
+        "FIELD".to_string(),
+        "WORKSPACE".to_string(),
+        "AGAINST".to_string(),
+    ]];
+    rows.extend(report.changes.iter().map(|change| {
+        vec![
+            change.field.to_string(),
+            config_diff_value_text(&change.workspace),
+            config_diff_value_text(&change.against),
+        ]
+    }));
+    println!();
+    print!("{}", ui::table(&rows));
+}
+
+fn config_diff_value_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        _ => serde_json::to_string(value).expect("config diff value encodes"),
+    }
 }
 
 fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightReport, Error> {

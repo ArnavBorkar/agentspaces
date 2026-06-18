@@ -7,6 +7,7 @@
     { "$ref": "#/$defs/benchSelfReport" },
     { "$ref": "#/$defs/checkpointInfo" },
     { "$ref": "#/$defs/completionResult" },
+    { "$ref": "#/$defs/configDiffReport" },
     { "$ref": "#/$defs/configShowReport" },
     { "$ref": "#/$defs/codexSetupReport" },
     { "$ref": "#/$defs/diagnosticBundle" },
@@ -171,6 +172,49 @@
           "items": { "type": "string" }
         },
         "blob_threshold_bytes": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "configDiffReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "path",
+        "exists",
+        "against_path",
+        "matches",
+        "changes"
+      ],
+      "properties": {
+        "root": { "type": "string" },
+        "path": { "type": "string" },
+        "exists": { "type": "boolean" },
+        "against_path": { "type": "string" },
+        "matches": { "type": "boolean" },
+        "changes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/configDiffChange" }
+        }
+      }
+    },
+    "configDiffChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "workspace", "against"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "capture.excludes",
+            "capture.extra_excludes",
+            "capture.blob_threshold_mb",
+            "promote.branch_template",
+            "shadow_excludes",
+            "blob_threshold_bytes"
+          ]
+        },
+        "workspace": true,
+        "against": true
       }
     },
     "diagnosticBundle": {

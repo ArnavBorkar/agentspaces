@@ -18,6 +18,8 @@ asp config show
 asp --json config show
 asp config validate
 asp --json config validate
+asp config diff --against baseline.toml
+asp --json config diff --against baseline.toml
 ```
 
 `show` reports whether `.asp/config.toml` exists, the resolved config values,
@@ -27,6 +29,14 @@ large-file blob threshold in bytes, and the promote branch template.
 `validate` uses a narrow read path: it discovers the workspace root and parses
 only `.asp/config.toml`. That makes it suitable for CI and for diagnosing config
 syntax even if another store component needs `asp doctor`.
+
+`diff --against <file>` compares the current workspace config against a required
+TOML file. It reports field-level drift for `capture.excludes`,
+`capture.extra_excludes`, `capture.blob_threshold_mb`,
+`promote.branch_template`, `shadow_excludes`, and `blob_threshold_bytes` without
+mutating the workspace. A missing workspace `.asp/config.toml` still means
+defaults; a missing `--against` file is an error so rollout scripts do not
+silently compare against the wrong baseline.
 
 ## Schema
 

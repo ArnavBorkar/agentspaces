@@ -60,6 +60,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
         "cli_config_show" => include_str!("snapshots/cli_config_show.json"),
         "cli_config_validate" => include_str!("snapshots/cli_config_validate.json"),
+        "cli_config_diff" => include_str!("snapshots/cli_config_diff.json"),
         "cli_quickstart" => include_str!("snapshots/cli_quickstart.json"),
         "cli_completions" => include_str!("snapshots/cli_completions.json"),
         "cli_manpage" => include_str!("snapshots/cli_manpage.json"),
@@ -177,8 +178,8 @@ fn normalize_value(value: &mut Value, root: &Path) {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 match key.as_str() {
-                    "root" | "path" | "packet" | "manifest_file" | "log_file" | "settings_file"
-                    | "config_file" | "directory" | "workspace_root" => {
+                    "root" | "path" | "against_path" | "packet" | "manifest_file" | "log_file"
+                    | "settings_file" | "config_file" | "directory" | "workspace_root" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_path(s, root));
                         } else {
@@ -351,6 +352,17 @@ fn cli_config_shapes_match_snapshots() {
         "config validate should return the same successful payload as config show"
     );
     snapshot("cli_config_validate", config_validate);
+
+    std::fs::write(
+        root.join("baseline.toml"),
+        "[capture]\nextra_excludes = [\"baseline/\"]\nblob_threshold_mb = 25\n\n[promote]\nbranch_template = \"asp/{fork}\"\n",
+    )
+    .unwrap();
+    let config_diff = normalize(
+        ok_json(&root, &["config", "diff", "--against", "baseline.toml"]),
+        &root,
+    );
+    snapshot("cli_config_diff", config_diff);
 }
 
 #[test]

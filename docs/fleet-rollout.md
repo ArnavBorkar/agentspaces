@@ -44,9 +44,11 @@ Then initialize with the selected template:
 asp init --template monorepo
 asp config validate
 asp --json config show > asp-config.json
+asp --json config diff --against baseline.toml > asp-config-diff.json
 ```
 
-Keep `asp-config.json` with the rollout ticket for review.
+Keep `asp-config.json` and, when a fleet baseline exists,
+`asp-config-diff.json` with the rollout ticket for review.
 
 ## Phase 2: Smoke Test Locally
 
@@ -102,7 +104,7 @@ asp setup opencode
 
 For each harness:
 
-- capture the before and after config diff;
+- capture the before and after config diff with `asp config diff --against <file>`;
 - verify the remove path in a temporary HOME when possible;
 - run `asp status` after a small agent edit;
 - confirm auto-checkpoints include session or tool provenance where supported.
