@@ -10,6 +10,9 @@
 //! `asp setup codex` registers the same MCP server in Codex's documented
 //! `.codex/config.toml` shape.
 //!
+//! `asp setup opencode` registers the MCP server in OpenCode's documented
+//! `opencode.json` shape.
+//!
 //! `asp hook-event` (hidden) is the command those hooks invoke: it reads the
 //! hook JSON from stdin and takes a provenance-stamped checkpoint. It NEVER
 //! fails the session: any error exits 0 with a note on stderr.
@@ -118,6 +121,14 @@ pub struct CodexSetupReport {
     pub removed: bool,
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct OpencodeSetupReport {
+    pub config_file: PathBuf,
+    pub user_scope: bool,
+    pub mcp_registered: bool,
+    pub removed: bool,
+}
+
 /// Install (or remove) the Claude Code integration.
 pub fn setup_claude(root: &Path, user_scope: bool, remove: bool) -> Result<SetupReport, Error> {
     let settings_file = if user_scope {
@@ -201,6 +212,48 @@ pub fn setup_codex(root: &Path, user_scope: bool, remove: bool) -> Result<CodexS
     }
 
     Ok(CodexSetupReport {
+        config_file,
+        user_scope,
+        mcp_registered: !remove,
+        removed: remove,
+    })
+}
+
+/// Install (or remove) the OpenCode MCP configuration.
+pub fn setup_opencode(
+    root: &Path,
+    user_scope: bool,
+    remove: bool,
+) -> Result<OpencodeSetupReport, Error> {
+    let config_file = if user_scope {
+        home_dir()?
+            .join(".config")
+            .join("opencode")
+            .join("opencode.json")
+    } else {
+        root.join("opencode.json")
+    };
+
+    let existing = read_json_file_for(&config_file, "asp setup opencode")?;
+    let next = if remove {
+        remove_opencode_server(existing, &config_file)?
+    } else {
+        Some(install_opencode_server(existing, &config_file)?)
+    };
+
+    if let Some(config) = next {
+        let empty = config
+            .as_object()
+            .map(|object| object.is_empty())
+            .unwrap_or(false);
+        if empty && config_file.exists() {
+            std::fs::remove_file(&config_file)?;
+        } else {
+            write_json_file(&config_file, &config)?;
+        }
+    }
+
+    Ok(OpencodeSetupReport {
         config_file,
         user_scope,
         mcp_registered: !remove,
@@ -332,6 +385,112 @@ fn codex_toml_error(path: &Path, error: toml::de::Error) -> Error {
     .with_hint("fix the Codex config TOML, then re-run `asp setup codex`")
 }
 
+fn opencode_server_value() -> Value {
+    json!({
+        "type": "local",
+        "command": ["asp", "mcp"],
+        "enabled": true,
+    })
+}
+
+fn install_opencode_server(existing: Option<Value>, path: &Path) -> Result<Value, Error> {
+    let mut config = existing.unwrap_or_else(|| {
+        json!({
+            "$schema": "https://opencode.ai/config.json"
+        })
+    });
+    ensure_json_object(&mut config, path, "root")?;
+    if config.get("$schema").is_none() {
+        config["$schema"] = json!("https://opencode.ai/config.json");
+    }
+    if config
+        .get("mcp")
+        .map(|mcp| !mcp.is_object())
+        .unwrap_or(true)
+    {
+        config["mcp"] = json!({});
+    }
+
+    let existing_server = config["mcp"].get("agentspaces").cloned();
+    if let Some(server) = existing_server {
+        if !is_our_opencode_server(&server) {
+            return Err(Error::new(
+                ErrorCode::Io,
+                format!("{} already contains mcp.agentspaces", path.display()),
+            )
+            .with_hint(
+                "rename or remove the existing OpenCode MCP server entry, then re-run `asp setup opencode`",
+            ));
+        }
+    }
+
+    config["mcp"]["agentspaces"] = opencode_server_value();
+    Ok(config)
+}
+
+fn remove_opencode_server(existing: Option<Value>, path: &Path) -> Result<Option<Value>, Error> {
+    let Some(mut config) = existing else {
+        return Ok(None);
+    };
+    ensure_json_object(&mut config, path, "root")?;
+    let Some(mcp) = config.get_mut("mcp") else {
+        return Ok(None);
+    };
+    if !mcp.is_object() {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("{} has non-object mcp config", path.display()),
+        )
+        .with_hint("fix the OpenCode config JSON, then re-run `asp setup opencode`"));
+    }
+    let Some(server) = mcp.get("agentspaces").cloned() else {
+        return Ok(None);
+    };
+    if !is_our_opencode_server(&server) {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("{} contains unmanaged mcp.agentspaces", path.display()),
+        )
+        .with_hint(
+            "remove or rename that OpenCode MCP server entry manually; asp will not delete unmanaged config",
+        ));
+    }
+    mcp.as_object_mut()
+        .expect("mcp is object")
+        .remove("agentspaces");
+    if mcp
+        .as_object()
+        .map(|object| object.is_empty())
+        .unwrap_or(false)
+    {
+        config
+            .as_object_mut()
+            .expect("config is object")
+            .remove("mcp");
+    }
+    Ok(Some(config))
+}
+
+fn is_our_opencode_server(server: &Value) -> bool {
+    server
+        .get("type")
+        .and_then(|kind| kind.as_str())
+        .is_some_and(|kind| kind == "local")
+        && server.get("command") == Some(&json!(["asp", "mcp"]))
+}
+
+fn ensure_json_object(value: &mut Value, path: &Path, label: &str) -> Result<(), Error> {
+    if value.is_object() {
+        Ok(())
+    } else {
+        Err(Error::new(
+            ErrorCode::Io,
+            format!("{} {label} must be a JSON object", path.display()),
+        )
+        .with_hint("fix the OpenCode config JSON, then re-run `asp setup opencode`"))
+    }
+}
+
 fn hook_command() -> Value {
     json!({ "type": "command", "command": "asp hook-event", "timeout": 60 })
 }
@@ -408,6 +567,10 @@ fn remove_our_hooks(settings: &mut Value) {
 }
 
 fn read_json_file(path: &Path) -> Result<Option<Value>, Error> {
+    read_json_file_for(path, "asp setup claude")
+}
+
+fn read_json_file_for(path: &Path, command: &str) -> Result<Option<Value>, Error> {
     match std::fs::read_to_string(path) {
         Ok(text) if text.trim().is_empty() => Ok(None),
         Ok(text) => serde_json::from_str(&text).map(Some).map_err(|e| {
@@ -415,7 +578,7 @@ fn read_json_file(path: &Path) -> Result<Option<Value>, Error> {
                 ErrorCode::Io,
                 format!("{} is not valid JSON: {e}", path.display()),
             )
-            .with_hint("fix or remove the file, then re-run `asp setup claude`")
+            .with_hint(format!("fix or remove the file, then re-run `{command}`"))
         }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),

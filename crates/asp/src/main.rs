@@ -321,6 +321,15 @@ enum SetupHarness {
         #[arg(long)]
         remove: bool,
     },
+    /// OpenCode: MCP registration in opencode.json.
+    Opencode {
+        /// Write ~/.config/opencode/opencode.json instead of project opencode.json.
+        #[arg(long)]
+        user: bool,
+        /// Remove the integration instead of installing it.
+        #[arg(long)]
+        remove: bool,
+    },
 }
 
 #[derive(Args)]
@@ -1246,104 +1255,144 @@ fn run(cli: Cli) -> Result<(), Error> {
             mcp::serve()
                 .map_err(|e| Error::new(ErrorCode::Io, format!("mcp server I/O error: {e}")))
         }
-        Cmd::Setup { harness } => match harness {
-            SetupHarness::Claude { user, remove } => {
-                // Setting up implies the directory should be a workspace.
-                let dir = cwd(&cli.dir)?;
-                let root = match Workspace::open(&dir) {
-                    Ok(ws) => ws.root().to_path_buf(),
-                    Err(_) if !remove => {
-                        let ws = Workspace::init(&dir, None)?;
-                        if !json {
-                            println!(
-                                "{} initialized asp workspace at {}",
-                                ui::green("✓"),
-                                ws.root().display()
-                            );
+        Cmd::Setup { harness } => {
+            match harness {
+                SetupHarness::Claude { user, remove } => {
+                    // Setting up implies the directory should be a workspace.
+                    let dir = cwd(&cli.dir)?;
+                    let root = match Workspace::open(&dir) {
+                        Ok(ws) => ws.root().to_path_buf(),
+                        Err(_) if !remove => {
+                            let ws = Workspace::init(&dir, None)?;
+                            if !json {
+                                println!(
+                                    "{} initialized asp workspace at {}",
+                                    ui::green("✓"),
+                                    ws.root().display()
+                                );
+                            }
+                            ws.root().to_path_buf()
                         }
-                        ws.root().to_path_buf()
+                        Err(e) => return Err(e),
+                    };
+                    let report = hooks::setup_claude(&root, user, remove)?;
+                    if json {
+                        ui::print_json(true, &report);
+                        return Ok(());
                     }
-                    Err(e) => return Err(e),
-                };
-                let report = hooks::setup_claude(&root, user, remove)?;
-                if json {
-                    ui::print_json(true, &report);
-                    return Ok(());
-                }
-                if remove {
-                    println!("{} Claude Code integration removed", ui::green("✓"));
-                    return Ok(());
-                }
-                println!(
-                    "{} auto-checkpoint hooks installed → {}",
-                    ui::green("✓"),
-                    report.settings_file.display()
-                );
-                if let Some(m) = &report.mcp_file {
-                    println!("{} MCP server registered → {}", ui::green("✓"), m.display());
-                }
-                println!(
-                    "\nEvery file edit and bash command in Claude Code sessions is now \
+                    if remove {
+                        println!("{} Claude Code integration removed", ui::green("✓"));
+                        return Ok(());
+                    }
+                    println!(
+                        "{} auto-checkpoint hooks installed → {}",
+                        ui::green("✓"),
+                        report.settings_file.display()
+                    );
+                    if let Some(m) = &report.mcp_file {
+                        println!("{} MCP server registered → {}", ui::green("✓"), m.display());
+                    }
+                    println!(
+                        "\nEvery file edit and bash command in Claude Code sessions is now \
                      checkpointed.\nTry it: make some changes in a session, then {} or ask the \
                      agent to call {}.",
-                    ui::cyan("asp log"),
-                    ui::cyan("workspace_undo")
-                );
-                println!(
+                        ui::cyan("asp log"),
+                        ui::cyan("workspace_undo")
+                    );
+                    println!(
                     "{}",
                     ui::dim(
                         "note: `asp` must be on PATH for hooks to fire (restart Claude Code after install)"
                     )
                 );
-                Ok(())
-            }
-            SetupHarness::Codex { user, remove } => {
-                // Setting up implies the directory should be a workspace.
-                let dir = cwd(&cli.dir)?;
-                let root = match Workspace::open(&dir) {
-                    Ok(ws) => ws.root().to_path_buf(),
-                    Err(_) if !remove => {
-                        let ws = Workspace::init(&dir, None)?;
-                        if !json {
-                            println!(
-                                "{} initialized asp workspace at {}",
-                                ui::green("✓"),
-                                ws.root().display()
-                            );
+                    Ok(())
+                }
+                SetupHarness::Codex { user, remove } => {
+                    // Setting up implies the directory should be a workspace.
+                    let dir = cwd(&cli.dir)?;
+                    let root = match Workspace::open(&dir) {
+                        Ok(ws) => ws.root().to_path_buf(),
+                        Err(_) if !remove => {
+                            let ws = Workspace::init(&dir, None)?;
+                            if !json {
+                                println!(
+                                    "{} initialized asp workspace at {}",
+                                    ui::green("✓"),
+                                    ws.root().display()
+                                );
+                            }
+                            ws.root().to_path_buf()
                         }
-                        ws.root().to_path_buf()
+                        Err(e) => return Err(e),
+                    };
+                    let report = hooks::setup_codex(&root, user, remove)?;
+                    if json {
+                        ui::print_json(true, &report);
+                        return Ok(());
                     }
-                    Err(e) => return Err(e),
-                };
-                let report = hooks::setup_codex(&root, user, remove)?;
-                if json {
-                    ui::print_json(true, &report);
-                    return Ok(());
-                }
-                if remove {
-                    println!("{} Codex integration removed", ui::green("✓"));
-                    return Ok(());
-                }
-                println!(
-                    "{} Codex MCP server registered → {}",
-                    ui::green("✓"),
-                    report.config_file.display()
-                );
-                if !user {
+                    if remove {
+                        println!("{} Codex integration removed", ui::green("✓"));
+                        return Ok(());
+                    }
                     println!(
+                        "{} Codex MCP server registered → {}",
+                        ui::green("✓"),
+                        report.config_file.display()
+                    );
+                    if !user {
+                        println!(
                         "{}",
                         ui::dim(
                             "note: Codex loads project .codex/config.toml after the project is trusted"
                         )
                     );
-                }
-                println!(
+                    }
+                    println!(
                     "{}",
                     ui::dim("note: restart Codex or open a new session, then use /mcp to inspect servers")
                 );
-                Ok(())
+                    Ok(())
+                }
+                SetupHarness::Opencode { user, remove } => {
+                    // Setting up implies the directory should be a workspace.
+                    let dir = cwd(&cli.dir)?;
+                    let root = match Workspace::open(&dir) {
+                        Ok(ws) => ws.root().to_path_buf(),
+                        Err(_) if !remove => {
+                            let ws = Workspace::init(&dir, None)?;
+                            if !json {
+                                println!(
+                                    "{} initialized asp workspace at {}",
+                                    ui::green("✓"),
+                                    ws.root().display()
+                                );
+                            }
+                            ws.root().to_path_buf()
+                        }
+                        Err(e) => return Err(e),
+                    };
+                    let report = hooks::setup_opencode(&root, user, remove)?;
+                    if json {
+                        ui::print_json(true, &report);
+                        return Ok(());
+                    }
+                    if remove {
+                        println!("{} OpenCode integration removed", ui::green("✓"));
+                        return Ok(());
+                    }
+                    println!(
+                        "{} OpenCode MCP server registered → {}",
+                        ui::green("✓"),
+                        report.config_file.display()
+                    );
+                    println!(
+                    "{}",
+                    ui::dim("note: restart OpenCode, then run `opencode mcp list` to inspect servers")
+                );
+                    Ok(())
+                }
             }
-        },
+        }
         Cmd::HookEvent => {
             hooks::handle_hook_event();
             Ok(())

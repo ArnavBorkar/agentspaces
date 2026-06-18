@@ -251,6 +251,95 @@ fn setup_codex_user_scope_uses_temporary_home() {
 }
 
 #[test]
+fn setup_opencode_writes_mcp_config_idempotently() {
+    let (_tmp, root) = project();
+    std::fs::write(
+        root.join("opencode.json"),
+        r#"{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/gpt-5.5",
+  "mcp": {
+    "existing": {
+      "type": "local",
+      "command": ["existing-tool"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let out = asp(&root, &["setup", "opencode"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("opencode.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["model"], "openai/gpt-5.5");
+    assert_eq!(config["mcp"]["existing"]["command"][0], "existing-tool");
+    assert_eq!(config["mcp"]["agentspaces"]["type"], "local");
+    assert_eq!(
+        config["mcp"]["agentspaces"]["command"],
+        serde_json::json!(["asp", "mcp"])
+    );
+    assert_eq!(config["mcp"]["agentspaces"]["enabled"], true);
+
+    let out = asp(&root, &["setup", "opencode"]);
+    assert!(out.status.success());
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("opencode.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        config["mcp"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| *k == "agentspaces")
+            .count(),
+        1
+    );
+
+    let out = asp(&root, &["setup", "opencode", "--remove"]);
+    assert!(out.status.success());
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("opencode.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["model"], "openai/gpt-5.5");
+    assert!(config["mcp"].get("agentspaces").is_none());
+    assert!(config["mcp"].get("existing").is_some());
+}
+
+#[test]
+fn setup_opencode_refuses_to_clobber_unmanaged_agentspaces_server() {
+    let (_tmp, root) = project();
+    let original = r#"{
+  "mcp": {
+    "agentspaces": {
+      "type": "local",
+      "command": ["custom"]
+    }
+  }
+}
+"#;
+    std::fs::write(root.join("opencode.json"), original).unwrap();
+
+    let out = asp(&root, &["setup", "opencode"]);
+
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("already contains mcp.agentspaces"));
+    assert!(stderr.contains("hint:"), "{stderr}");
+    assert_eq!(
+        std::fs::read_to_string(root.join("opencode.json")).unwrap(),
+        original
+    );
+}
+
+#[test]
 fn hook_event_checkpoints_with_provenance() {
     let (_tmp, root) = project();
     asp(&root, &["init"]);
