@@ -447,6 +447,21 @@
 
 ---
 
+## EPIC 35 — Evidence integrity and support handoff
+
+**Done when:** teams can collect, bind, verify, and share local support evidence without leaking extra workspace state or relying on ad hoc scripts.
+
+- **S35.1 Evidence manifests**
+  - [x] T35.1.1 Add `asp evidence manifest` to create SHA-256 manifests for collected evidence packets.
+  - [ ] T35.1.2 Add `asp evidence verify` to validate packet bytes against a manifest before sharing or review.
+  - [ ] T35.1.3 Add JSON schema and snapshot coverage for manifest verification results.
+- **S35.2 Support handoff workflows**
+  - [ ] T35.2.1 Add support-ticket templates that reference redaction, manifest, and signature expectations.
+  - [ ] T35.2.2 Add CI examples that upload evidence packet, manifest, and SARIF artifacts together.
+  - [ ] T35.2.3 Add signing guidance for Sigstore and offline minisign flows using CLI-generated manifests.
+
+---
+
 ## Decision log (newest first)
 
 - 2026-06-11 · Doctor never deletes directories it can't prove asp created — fork() registers Pending intent entries before cloning; cleanup is registry-driven, heuristics are info-only. (From review: rm -rf of `cp -r proj proj@backup` was possible.)

@@ -71,6 +71,7 @@ fn snapshot(name: &str, actual: Value) {
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
+        "cli_evidence_manifest" => include_str!("snapshots/cli_evidence_manifest.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
         "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
@@ -191,7 +192,9 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         *child = json!("<asp-version>");
                     }
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
-                    "ts" | "generated_at" | "last_activity" => *child = json!("<timestamp>"),
+                    "ts" | "generated_at" | "created_at" | "last_activity" => {
+                        *child = json!("<timestamp>")
+                    }
                     "duration_ms" | "store_bytes" | "blob_bytes" | "age_hours"
                         if child.is_number() =>
                     {
@@ -481,6 +484,29 @@ fn cli_preflight_and_evidence_shapes_match_snapshots() {
     );
     normalized_output["result"]["packet"] = json!("<evidence-packet>");
     snapshot("cli_evidence_output", normalized_output);
+
+    let manifest_path = root.join("asp-evidence.manifest.json");
+    let mut evidence_manifest = normalize(
+        ok_json(
+            &root,
+            &[
+                "evidence",
+                "manifest",
+                "--packet",
+                evidence_path.to_str().unwrap(),
+                "--output",
+                manifest_path.to_str().unwrap(),
+            ],
+        ),
+        &root,
+    );
+    let sha256 = evidence_manifest["result"]["manifest"]["sha256"]
+        .as_str()
+        .unwrap();
+    assert_eq!(sha256.len(), 64);
+    assert!(sha256.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    evidence_manifest["result"]["manifest"]["sha256"] = json!("<sha256>");
+    snapshot("cli_evidence_manifest", evidence_manifest);
 }
 
 struct McpClient {

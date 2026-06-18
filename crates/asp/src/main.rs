@@ -10,6 +10,7 @@ mod mcp;
 mod race;
 mod ui;
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -20,6 +21,7 @@ use asp_core::workspace::{CheckpointOpts, DiffTextMode, Finding, Severity};
 use asp_core::{Error, ErrorCode, Workspace};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
+use sha2::{Digest, Sha256};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 #[derive(Parser)]
@@ -300,6 +302,8 @@ enum SecretsCmd {
 enum EvidenceCmd {
     /// Collect diagnostics, preflight, schema, and recent audit evidence.
     Collect(EvidenceCollectArgs),
+    /// Create a SHA-256 manifest for an evidence packet.
+    Manifest(EvidenceManifestArgs),
 }
 
 #[derive(Args)]
@@ -316,6 +320,16 @@ struct EvidenceCollectArgs {
     /// Write the evidence packet to this JSON file instead of stdout.
     #[arg(short, long, value_name = "FILE")]
     output: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct EvidenceManifestArgs {
+    /// Evidence packet JSON file to bind into the manifest.
+    #[arg(long, value_name = "FILE")]
+    packet: PathBuf,
+    /// Write the manifest to this JSON file.
+    #[arg(short, long, value_name = "FILE")]
+    output: PathBuf,
 }
 
 #[derive(Args)]
@@ -518,6 +532,21 @@ struct EvidenceAuditEvent {
     source: Option<Source>,
     duration_ms: Option<u64>,
     files_changed: Option<u64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceManifest {
+    artifact: String,
+    bytes: u64,
+    sha256: String,
+    created_at: String,
+    created_by: &'static str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceManifestOutputResult {
+    path: PathBuf,
+    manifest: EvidenceManifest,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1828,6 +1857,25 @@ fn run(cli: Cli) -> Result<(), Error> {
                 }
                 Ok(())
             }
+            EvidenceCmd::Manifest(args) => {
+                let ws = open(&cli.dir)?;
+                let packet = resolve_output_path(ws.root(), args.packet);
+                let manifest = evidence_manifest(&packet)?;
+                let path = resolve_output_path(ws.root(), args.output);
+                let result = EvidenceManifestOutputResult { path, manifest };
+                write_json_file(&result.path, &result.manifest)?;
+                if json {
+                    ui::print_json(true, &result);
+                } else {
+                    println!(
+                        "{} wrote evidence manifest to {}",
+                        ui::green("✓"),
+                        ui::bold(&result.path.display().to_string())
+                    );
+                    println!("  sha256: {}", ui::cyan(&result.manifest.sha256));
+                }
+                Ok(())
+            }
         },
     }
 }
@@ -2300,6 +2348,58 @@ fn evidence_collect_report(
         schema: schema_report(),
         recent_audit_events,
     })
+}
+
+fn evidence_manifest(packet: &Path) -> Result<EvidenceManifest, Error> {
+    let metadata = std::fs::metadata(packet)
+        .map_err(|e| evidence_packet_io_error(packet, "read evidence packet metadata", e))?;
+    if !metadata.is_file() {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("evidence packet is not a file: {}", packet.display()),
+        )
+        .with_hint("pass a JSON file created by `asp evidence collect --output <file>`"));
+    }
+
+    let artifact = packet
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| packet.display().to_string());
+
+    Ok(EvidenceManifest {
+        artifact,
+        bytes: metadata.len(),
+        sha256: sha256_file(packet)?,
+        created_at: asp_core::now_rfc3339(),
+        created_by: "asp evidence manifest",
+    })
+}
+
+fn sha256_file(path: &Path) -> Result<String, Error> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| evidence_packet_io_error(path, "open evidence packet", e))?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file
+            .read(&mut buf)
+            .map_err(|e| evidence_packet_io_error(path, "read evidence packet", e))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn evidence_packet_io_error(path: &Path, action: &str, source: std::io::Error) -> Error {
+    Error::new(
+        ErrorCode::Io,
+        format!("cannot {action} {}: {source}", path.display()),
+    )
+    .with_hint("pass a JSON file created by `asp evidence collect --output <file>`")
+    .with_source(source)
 }
 
 fn evidence_preflight_checks(

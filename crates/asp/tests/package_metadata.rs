@@ -271,6 +271,8 @@ fn schema_inventory_audit_tracks_known_result_map_gaps() {
         "diffHtmlOutputResult",
         "asp doctor --json --runbook",
         "doctorRunbookReport",
+        "asp evidence manifest --packet file.json --output manifest.json --json",
+        "evidenceManifestOutputResult",
         "_None currently._",
         "## Audit Rule",
         "the Result Map points at an existing shared schema",
@@ -441,6 +443,7 @@ fn known_cli_json_surfaces_are_mapped_or_audited() {
         "asp secrets scan --json",
         "asp evidence collect --json",
         "asp evidence collect --json --output file.json",
+        "asp evidence manifest --packet file.json --output manifest.json --json",
         "asp retention plan --json",
         "asp sync push --json --remote <dir>",
         "asp sync fetch --json --remote <dir>",
@@ -659,7 +662,9 @@ fn evidence_docs_cover_redacted_local_packets() {
         "does not upload anything",
         "## Signed Manifest",
         "asp-evidence.manifest.json",
+        "asp evidence manifest",
         "sha256",
+        "created_by: \"asp evidence manifest\"",
         "cosign sign-blob",
         "cosign verify-blob",
         "minisign",
@@ -684,6 +689,8 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "#/$defs/evidenceReport",
         "asp evidence collect --json --output file.json",
         "#/$defs/evidenceOutputResult",
+        "asp evidence manifest --packet file.json --output manifest.json --json",
+        "#/$defs/evidenceManifestOutputResult",
         "preflight.config",
         "preflight.policy",
         "preflight.doctor",
@@ -711,6 +718,8 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
         "preflightCheckId",
         "evidenceReport",
         "evidenceOutputResult",
+        "evidenceManifest",
+        "evidenceManifestOutputResult",
         "evidencePreflightReport",
         "evidenceAuditEvent",
     ] {
@@ -718,7 +727,12 @@ fn schema_docs_cover_preflight_and_evidence_contracts() {
     }
 
     let variants = schema["anyOf"].as_array().expect("schema anyOf array");
-    for def in ["preflightReport", "evidenceReport", "evidenceOutputResult"] {
+    for def in [
+        "preflightReport",
+        "evidenceReport",
+        "evidenceOutputResult",
+        "evidenceManifestOutputResult",
+    ] {
         let reference = format!("#/$defs/{def}");
         assert!(
             variants.iter().any(|variant| variant["$ref"] == reference),
@@ -737,6 +751,10 @@ fn schema_docs_cover_post_epic_30_machine_readable_outputs() {
         (
             "asp evidence collect --json --output file.json",
             "#/$defs/evidenceOutputResult",
+        ),
+        (
+            "asp evidence manifest --packet file.json --output manifest.json --json",
+            "#/$defs/evidenceManifestOutputResult",
         ),
     ];
     for (command, schema) in enveloped_outputs {

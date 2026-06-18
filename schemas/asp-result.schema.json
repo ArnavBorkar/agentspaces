@@ -16,6 +16,7 @@
     { "$ref": "#/$defs/diffTextReport" },
     { "$ref": "#/$defs/discardResult" },
     { "$ref": "#/$defs/doctorRunbookReport" },
+    { "$ref": "#/$defs/evidenceManifestOutputResult" },
     { "$ref": "#/$defs/evidenceOutputResult" },
     { "$ref": "#/$defs/evidenceReport" },
     { "$ref": "#/$defs/forkCompareRows" },
@@ -555,6 +556,30 @@
         "path": { "type": "string" },
         "redacted": { "type": "boolean" },
         "packet": { "$ref": "#/$defs/evidenceReport" }
+      }
+    },
+    "evidenceManifestOutputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "manifest"],
+      "properties": {
+        "path": { "type": "string" },
+        "manifest": { "$ref": "#/$defs/evidenceManifest" }
+      }
+    },
+    "evidenceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "bytes", "sha256", "created_at", "created_by"],
+      "properties": {
+        "artifact": { "type": "string" },
+        "bytes": { "$ref": "#/$defs/u64" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "created_at": { "$ref": "#/$defs/dateTime" },
+        "created_by": { "const": "asp evidence manifest" }
       }
     },
     "evidenceReport": {

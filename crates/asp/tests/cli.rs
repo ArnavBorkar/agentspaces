@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use sha2::{Digest, Sha256};
+
 fn asp(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_asp"))
         .arg("-C")
@@ -400,6 +402,43 @@ fn full_cli_loop() {
         !evidence_report_json.contains(root.to_str().unwrap()),
         "{evidence_report_json}"
     );
+    let manifest_report = root.parent().unwrap().join("evidence.manifest.json");
+    let manifest = ok_json(
+        &root,
+        &[
+            "evidence",
+            "manifest",
+            "--packet",
+            evidence_report.to_str().unwrap(),
+            "--output",
+            manifest_report.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        manifest["result"]["path"],
+        manifest_report.to_str().unwrap()
+    );
+    assert_eq!(
+        manifest["result"]["manifest"]["artifact"].as_str().unwrap(),
+        evidence_report
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
+    );
+    assert_eq!(
+        manifest["result"]["manifest"]["created_by"],
+        "asp evidence manifest"
+    );
+    assert_eq!(
+        manifest["result"]["manifest"]["bytes"],
+        evidence_report_json.len() as u64
+    );
+    let expected_sha256 = format!("{:x}", Sha256::digest(evidence_report_json.as_bytes()));
+    assert_eq!(manifest["result"]["manifest"]["sha256"], expected_sha256);
+    let manifest_file: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_report).unwrap()).unwrap();
+    assert_eq!(manifest_file, manifest["result"]["manifest"]);
 
     // no-op checkpoint exits 0
     let noop = ok_json(&root, &["checkpoint"]);

@@ -61,6 +61,7 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp secrets scan --json` | `#/$defs/secretScanReport` |
 | `asp evidence collect --json` | `#/$defs/evidenceReport` |
 | `asp evidence collect --json --output file.json` | `#/$defs/evidenceOutputResult` |
+| `asp evidence manifest --packet file.json --output manifest.json --json` | `#/$defs/evidenceManifestOutputResult` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
 | `asp sync push --json --remote <dir>` | `#/$defs/syncPushReport` |
 | `asp sync fetch --json --remote <dir>` | `#/$defs/syncFetchReport` |
@@ -90,6 +91,10 @@ corrective next step or `null` for unexpected infrastructure failures.
 `asp evidence collect --json` emits the evidence packet directly; when
 `--output file.json` is also used, the JSON result is a write confirmation
 containing `path`, `redacted`, and the same packet under `packet`.
+`asp evidence manifest --packet file.json --output manifest.json --json`
+returns a write confirmation containing the manifest path and an
+`evidenceManifest` with packet file name, byte length, SHA-256 digest,
+creation time, and creator command.
 Checkpoint journal entries may include `detail.paths` with workspace-relative
 changed paths; clients should treat unknown `detail` fields as operation-specific
 metadata.

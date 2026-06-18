@@ -36,26 +36,14 @@ verification.
 
 ```bash
 asp evidence collect --output asp-evidence.json
-python3 - <<'PY'
-import hashlib
-import json
-import pathlib
-import time
-
-packet = pathlib.Path("asp-evidence.json")
-manifest = {
-    "artifact": str(packet),
-    "bytes": packet.stat().st_size,
-    "sha256": hashlib.sha256(packet.read_bytes()).hexdigest(),
-    "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    "created_by": "asp evidence collect",
-}
-pathlib.Path("asp-evidence.manifest.json").write_text(
-    json.dumps(manifest, indent=2) + "\n",
-    encoding="utf-8",
-)
-PY
+asp evidence manifest \
+  --packet asp-evidence.json \
+  --output asp-evidence.manifest.json
 ```
+
+The manifest records the packet file name, byte length, SHA-256 digest,
+creation time, and `created_by: "asp evidence manifest"`. It does not include
+the full local path to the packet.
 
 Sign with Sigstore when the environment already uses keyless signing:
 
