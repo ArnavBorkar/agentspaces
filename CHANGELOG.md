@@ -52,6 +52,9 @@
 - `docs/ci.md` now includes scheduled GitHub Actions and GitLab examples that
   run non-destructive recovery and fork drills in a temporary workspace and
   upload JSON evidence.
+- `docs/drills.md` now maps recovery and fork drill failure signals to
+  corrective commands, evidence fields, escalation boundaries, and preservation
+  steps for repeated failures.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

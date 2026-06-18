@@ -533,7 +533,7 @@ produce minimal forensic evidence afterward.
   - [x] T39.1.2 Add `asp drill fork` to prove fork cleanup and promote paths on the current filesystem.
   - [x] T39.1.3 Add JSON drill reports for audit systems.
   - [x] T39.1.4 Add CI examples that run non-destructive recovery drills on schedule.
-  - [ ] T39.1.5 Add docs mapping drill failures to corrective actions.
+  - [x] T39.1.5 Add docs mapping drill failures to corrective actions.
 - **S39.2 Forensic evidence exports**
   - [ ] T39.2.1 Add `asp evidence timeline` for a redacted incident timeline.
   - [ ] T39.2.2 Add evidence packet sections for recovery drills and last doctor findings.

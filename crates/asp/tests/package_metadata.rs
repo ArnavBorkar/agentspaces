@@ -1468,6 +1468,10 @@ fn schema_docs_cover_recovery_drill_contract() {
         "git checkout-index -a -f",
         "The live workspace is not restored",
         "Failure Triage",
+        "Corrective Action Matrix",
+        "error.code: \"git_failed\"",
+        "asp diagnostics --output asp-diagnostics.json",
+        "missing sidecar blob",
         "Large files managed through the sidecar",
     ] {
         assert!(drills.contains(needle), "drill docs missing {needle}");
@@ -1522,6 +1526,10 @@ fn schema_docs_cover_fork_drill_contract() {
         "does not create a user git branch",
         "does update `.asp/` metadata",
         "Fork Failure Triage",
+        "cleanup.path_removed: false",
+        "promote.ready: false",
+        "asp policy explain",
+        "asp doctor --fix",
         "`cleanup.registry_status`",
         "`promote.ready`",
         "creating and deleting branches",

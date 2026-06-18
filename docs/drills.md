@@ -160,3 +160,38 @@ If `promote.ready` is `false` because `user_git_repo` is `false`, initialize or
 clone the project with ordinary Git before relying on `asp promote` during an
 incident workflow. The drill intentionally reports readiness rather than
 creating and deleting branches in the user's repository.
+
+## Corrective Action Matrix
+
+Use this matrix for local drills, scheduled CI drill artifacts, and support
+handoffs. Start with the `error.code` from the standard JSON error envelope when
+the command exits nonzero. For successful fork drills, also inspect
+`promote.ready`, `cleanup.path_removed`, and `cleanup.registry_status`.
+
+| Drill Signal | Evidence Field | First Command | Corrective Action | Escalate When |
+| --- | --- | --- | --- | --- |
+| No checkpoint exists | `error.code: "nothing_to_do"` | `asp log -n 5` | Run `asp checkpoint -m "baseline"` in the workspace or CI temp copy, then rerun `asp drill recovery`. | `asp log` shows checkpoints but the drill still reports `nothing_to_do`. |
+| Requested checkpoint is unknown | `error.code: "checkpoint_not_found"` | `asp log -n 20` | Rerun with a listed `#seq` or commit prefix; update scheduled jobs that pin old checkpoint IDs. | The checkpoint ref should exist in a backup but is missing locally. |
+| Git is unavailable | `error.code: "git_missing"` | `git --version` | Install Git on the runner or workstation and ensure it is on `PATH`. | The runner image claims Git is installed but `asp` still cannot spawn it. |
+| Checkpoint ref is missing | `error.code: "git_failed"` and `show-ref` in the message | `asp doctor --deep` | Restore `.asp/` from the latest backup that contains `refs/asp/checkpoints/<seq>`, then rerun the drill. | The ref is missing from every backup or `asp doctor --deep` reports shadow-git corruption. |
+| Shadow object restore fails | `error.code: "git_failed"` with `read-tree` or `checkout-index` | `asp doctor --deep` | Check `TMPDIR` permissions and free space; restore `.asp/shadow.git/objects` from backup if objects are missing. | The same object is missing after backup restore. Preserve `.asp/` before repair. |
+| Large file appears as pointer JSON | Successful recovery report with sidecar pointer content | `asp doctor --deep` | Locate the named blob under `.asp/blobs/` and copy it over the pointer path during manual recovery. | The pointer references a missing blob; preserve the report and run `asp diagnostics --include-paths` in a trusted channel. |
+| Fork policy blocks the drill | `error.code: "policy_violation"` | `asp policy explain` | Resolve max-active-fork or checkpoint-age policy requirements, then rerun `asp drill fork`. | Policy and current workspace state disagree, or the rule cannot be satisfied safely. |
+| Fork cleanup did not finish | `cleanup.path_removed: false`, `cleanup.registry_status`, or `error.code: "store_corrupt"` | `asp forks` | Preserve the fork path if it contains unexpected work; otherwise run `asp doctor --fix` and rerun `asp drill fork`. | Cleanup fails twice or the registry points at a path outside the expected fork directory. |
+| Promote readiness is false | `promote.ready: false` | `git status` | Initialize or clone with ordinary Git, or choose a branch template that does not collide with an existing branch. | Incident workflow depends on `asp promote` and no safe user-git branch can be created. |
+| Scheduled CI artifact is missing | Missing `asp-drill-evidence/*.json` artifact | CI job log | Confirm the install step, temp-copy step, and `asp checkpoint -m "ci scheduled drill baseline"` ran before the drills. | The job reached the upload step but both JSON reports are absent. |
+
+When a drill failure repeats after the corrective action, preserve evidence
+before running destructive cleanup:
+
+```bash
+asp diagnostics --output asp-diagnostics.json
+asp doctor --deep > asp-doctor-deep.txt
+asp log -n 20 --json > asp-log.json
+```
+
+Keep the failing drill JSON report, command stderr, CI run URL, and a backup or
+snapshot of `.asp/` until the root cause is understood. Do not run
+`asp doctor --fix`, delete drill fork paths, or rotate backups before preserving
+that evidence when the signal is `store_corrupt`, missing shadow objects, or a
+missing sidecar blob.
