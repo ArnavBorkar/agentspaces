@@ -97,6 +97,8 @@
 - `docs/evidence.md` expands evidence manifest signing guidance for Sigstore
   keyless identities, GitHub Actions OIDC verification, and offline minisign
   key workflows.
+- `BACKLOG.md` now carries the next 100 enterprise adoption tasks across EPIC
+  36-45, with tests guarding the roadmap and old clone-framing cleanup.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

@@ -106,6 +106,89 @@ fn generic_mcp_docs_include_supported_client_shapes() {
 }
 
 #[test]
+fn tracked_files_do_not_reference_old_clone_framing() {
+    let root = repo_file(".");
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .arg("ls-files")
+        .output()
+        .expect("git ls-files should run");
+
+    assert!(
+        output.status.success(),
+        "git ls-files failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let forbidden = format!("{}{}", "arch", "ile");
+    let mut offenders = Vec::new();
+    for relative in String::from_utf8_lossy(&output.stdout).lines() {
+        let path = root.join(relative);
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        let Ok(text) = std::str::from_utf8(&bytes) else {
+            continue;
+        };
+        if text.to_ascii_lowercase().contains(&forbidden) {
+            offenders.push(relative.to_string());
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "tracked files mention old clone framing: {offenders:?}"
+    );
+}
+
+#[test]
+fn backlog_tracks_next_enterprise_adoption_wave() {
+    let backlog = fs::read_to_string(repo_file("BACKLOG.md")).unwrap();
+    for needle in [
+        "## Enterprise adoption roadmap, wave 2 (next 100 tasks)",
+        "## EPIC 36 — Fleet onboarding and policy packs",
+        "## EPIC 37 — User-owned remote sync backends",
+        "## EPIC 38 — Native Windows support",
+        "## EPIC 39 — Incident recovery and forensic drills",
+        "## EPIC 40 — IDE and agent harness deep integrations",
+        "## EPIC 41 — Scale and performance v2",
+        "## EPIC 42 — Policy-as-code and local approvals",
+        "## EPIC 43 — Review intelligence without SaaS",
+        "## EPIC 44 — Security and privacy hardening v2",
+        "## EPIC 45 — Ecosystem, docs, and community operations",
+        "T36.1.1 Add `asp init --template <name>`",
+        "T37.1.1 Add an S3-compatible remote adapter",
+        "T38.1.1 Implement Windows-safe path handling",
+        "T39.1.1 Add `asp drill recovery`",
+        "T40.1.1 Add VS Code task and command-palette integration docs",
+        "T41.1.1 Add a million-file benchmark fixture",
+        "T42.1.1 Add path glob groups with owners and rationale fields",
+        "T43.1.1 Add configurable risk markers",
+        "T44.1.1 Add secret-scan baselines",
+        "T45.2.5 Add governance docs for accepting new integrations",
+    ] {
+        assert!(backlog.contains(needle), "backlog missing {needle}");
+    }
+
+    let wave = backlog
+        .split("## Enterprise adoption roadmap, wave 2 (next 100 tasks)")
+        .nth(1)
+        .and_then(|tail| tail.split("## Decision log").next())
+        .expect("wave 2 roadmap section should exist");
+    let pending_tasks = wave
+        .lines()
+        .filter(|line| line.trim_start().starts_with("- [ ] T"))
+        .count();
+
+    assert_eq!(
+        pending_tasks, 100,
+        "wave 2 roadmap should contain exactly 100 pending tasks"
+    );
+}
+
+#[test]
 fn command_cheat_sheet_covers_daily_workflows() {
     let docs = fs::read_to_string(repo_file("docs/cheatsheet.md")).unwrap();
 

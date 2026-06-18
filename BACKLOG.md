@@ -462,6 +462,195 @@
 
 ---
 
+## Enterprise adoption roadmap, wave 2 (next 100 tasks)
+
+**PM intent:** Keep the open-source local engine useful for real teams without
+requiring hosted custody, mandatory telemetry, or private support paths. Each
+task should land as a tested, reviewable increment with docs when user-facing.
+
+## EPIC 36 — Fleet onboarding and policy packs
+
+**Done when:** platform teams can roll out `asp` to many repositories with
+repeatable defaults, reviewable policy, and minimal per-repo hand editing.
+
+- **S36.1 Repository bootstrap packs**
+  - [ ] T36.1.1 Add `asp init --template <name>` for common repository shapes.
+  - [ ] T36.1.2 Ship built-in templates for service, monorepo, generated-code, and media-heavy repos.
+  - [ ] T36.1.3 Add `asp init --print-template <name>` for review before writing config.
+  - [ ] T36.1.4 Add tests that templates never weaken default secret and derived-state exclusions.
+  - [ ] T36.1.5 Document a rollout checklist for adding `asp` to 10+ repos safely.
+- **S36.2 Organization rollout controls**
+  - [ ] T36.2.1 Add `asp config diff --against <file>` for reviewing local config drift.
+  - [ ] T36.2.2 Add `asp policy explain` to show why each rule exists and which commands it affects.
+  - [ ] T36.2.3 Add org policy bundle examples for regulated, startup, and OSS maintainer workflows.
+  - [ ] T36.2.4 Add CI examples that fail on unsafe config drift without mutating workspaces.
+  - [ ] T36.2.5 Add docs for phased rollout, rollback, and owner handoff.
+
+## EPIC 37 — User-owned remote sync backends
+
+**Done when:** teams can sync checkpoints and blobs to their own storage
+providers with explicit credentials, conflict handling, and no source custody by
+the project.
+
+- **S37.1 Cloud object storage adapters**
+  - [ ] T37.1.1 Add an S3-compatible remote adapter behind the existing sync trait.
+  - [ ] T37.1.2 Add a GCS remote adapter with conditional-write tests.
+  - [ ] T37.1.3 Add an Azure Blob remote adapter with conditional-write tests.
+  - [ ] T37.1.4 Add integration-test fixtures that run against local emulators where possible.
+  - [ ] T37.1.5 Document credential scopes and least-privilege bucket policies.
+- **S37.2 Sync security and conflict UX**
+  - [ ] T37.2.1 Add client-side encryption design for remote blobs and refs.
+  - [ ] T37.2.2 Add `asp sync status` showing local/remote divergence without fetching objects.
+  - [ ] T37.2.3 Add conflict reports that name the exact refs that would be overwritten.
+  - [ ] T37.2.4 Add resumable sync for interrupted uploads and downloads.
+  - [ ] T37.2.5 Add recovery docs for restoring a workspace from a remote-only backup.
+
+## EPIC 38 — Native Windows support
+
+**Done when:** Windows is either fully supported on tested filesystems or
+blocked with precise, actionable diagnostics for unsupported cases.
+
+- **S38.1 Windows engine portability**
+  - [ ] T38.1.1 Implement Windows-safe path handling for long paths and reserved names.
+  - [ ] T38.1.2 Preserve supported symlinks and reject unsafe reparse points with hints.
+  - [ ] T38.1.3 Add ReFS block-clone support behind verified filesystem probes.
+  - [ ] T38.1.4 Add NTFS copy fallback that preserves permissions needed for restore.
+  - [ ] T38.1.5 Add Windows-specific stock-git recovery tests.
+- **S38.2 Windows release and CI gates**
+  - [ ] T38.2.1 Replace the unsupported-platform CI gate with real Windows behavior tests.
+  - [ ] T38.2.2 Add a Windows release target and installer selection tests.
+  - [ ] T38.2.3 Add Windows filesystem capability docs for NTFS, ReFS, WSL2, and network shares.
+  - [ ] T38.2.4 Add support-ticket fields for Windows filesystem and Developer Mode state.
+  - [ ] T38.2.5 Add first-run diagnostics that explain Windows permission prerequisites.
+
+## EPIC 39 — Incident recovery and forensic drills
+
+**Done when:** teams can practice and prove recovery before an incident, then
+produce minimal forensic evidence afterward.
+
+- **S39.1 Recovery drill automation**
+  - [ ] T39.1.1 Add `asp drill recovery` to rehearse stock-git restore in a temp directory.
+  - [ ] T39.1.2 Add `asp drill fork` to prove fork cleanup and promote paths on the current filesystem.
+  - [ ] T39.1.3 Add JSON drill reports for audit systems.
+  - [ ] T39.1.4 Add CI examples that run non-destructive recovery drills on schedule.
+  - [ ] T39.1.5 Add docs mapping drill failures to corrective actions.
+- **S39.2 Forensic evidence exports**
+  - [ ] T39.2.1 Add `asp evidence timeline` for a redacted incident timeline.
+  - [ ] T39.2.2 Add evidence packet sections for recovery drills and last doctor findings.
+  - [ ] T39.2.3 Add chain-of-custody fields for packet collector, reviewer, and retention window.
+  - [ ] T39.2.4 Add signed timeline manifests for incident packets.
+  - [ ] T39.2.5 Add reviewer docs for validating packet, manifest, signature, and timeline together.
+
+## EPIC 40 — IDE and agent harness deep integrations
+
+**Done when:** users can start, inspect, checkpoint, and recover `asp` work from
+their everyday editor or agent harness without losing CLI parity.
+
+- **S40.1 Editor workflows**
+  - [ ] T40.1.1 Add VS Code task and command-palette integration docs.
+  - [ ] T40.1.2 Add JetBrains external-tool integration docs.
+  - [ ] T40.1.3 Add editor-safe status output for compact panels and notifications.
+  - [ ] T40.1.4 Add machine-readable command examples for editor extensions.
+  - [ ] T40.1.5 Add screenshot-backed docs for the most common editor flows.
+- **S40.2 Harness-specific checkpointing**
+  - [ ] T40.2.1 Add Codex hook guidance when harness APIs expose file and shell events.
+  - [ ] T40.2.2 Add Cursor integration docs for MCP and manual checkpoint workflows.
+  - [ ] T40.2.3 Add Continue.dev integration docs for MCP-compatible clients.
+  - [ ] T40.2.4 Add integration smoke tests for config files written by setup commands.
+  - [ ] T40.2.5 Add an integration compatibility matrix with tested versions and limitations.
+
+## EPIC 41 — Scale and performance v2
+
+**Done when:** `asp` remains predictable on million-file repos, networked
+workspaces, and large binary-heavy trees.
+
+- **S41.1 Million-file readiness**
+  - [ ] T41.1.1 Add a million-file benchmark fixture that can run outside normal CI.
+  - [ ] T41.1.2 Add path-sharded file-state indexes for very large trees.
+  - [ ] T41.1.3 Add memory ceiling tests for checkpoint, status, and diff on large trees.
+  - [ ] T41.1.4 Add progress output for first checkpoint and large restore operations.
+  - [ ] T41.1.5 Publish updated benchmark methodology for large-tree results.
+- **S41.2 Network and slow filesystem UX**
+  - [ ] T41.2.1 Add filesystem latency probes to `asp bench self`.
+  - [ ] T41.2.2 Add warnings for network or synced folders that weaken performance assumptions.
+  - [ ] T41.2.3 Add checkpoint batching options for slow filesystems.
+  - [ ] T41.2.4 Add tests for timeout and cancellation behavior during long scans.
+  - [ ] T41.2.5 Document recommended layouts for cloud-synced and network-mounted repos.
+
+## EPIC 42 — Policy-as-code and local approvals
+
+**Done when:** teams can require review gates around risky local operations while
+keeping the final authority in local, inspectable files.
+
+- **S42.1 Rich policy rules**
+  - [ ] T42.1.1 Add path glob groups with owners and rationale fields.
+  - [ ] T42.1.2 Add command-specific policy messages for promote, restore, discard, and sync.
+  - [ ] T42.1.3 Add policy schema examples for CODEOWNERS-aligned review.
+  - [ ] T42.1.4 Add policy tests for overlapping allow, deny, and owner rules.
+  - [ ] T42.1.5 Add `asp policy docs` to render local policy into Markdown.
+- **S42.2 Local approval packets**
+  - [ ] T42.2.1 Add `asp approval create` to write a local review packet for a fork.
+  - [ ] T42.2.2 Add `asp approval verify` to check packet freshness before promote.
+  - [ ] T42.2.3 Add signed approval manifests using existing evidence signing guidance.
+  - [ ] T42.2.4 Add PR body templates that embed approval packet summaries.
+  - [ ] T42.2.5 Document how local approval packets map to existing code-review systems.
+
+## EPIC 43 — Review intelligence without SaaS
+
+**Done when:** best-of-N agent work produces useful local review summaries and
+quality signals without uploading source or prompts to a hosted scorer.
+
+- **S43.1 Local quality signals**
+  - [ ] T43.1.1 Add configurable risk markers for generated files, tests, migrations, and secrets-adjacent paths.
+  - [ ] T43.1.2 Add diff-size and churn heuristics to fork comparison JSON.
+  - [ ] T43.1.3 Add test-result trend summaries across race lanes.
+  - [ ] T43.1.4 Add reviewer notes that can be attached to fork comparison outputs.
+  - [ ] T43.1.5 Add docs explaining local heuristics and their limits.
+- **S43.2 Review artifact generation**
+  - [ ] T43.2.1 Add `asp review packet` for Markdown summaries of a fork or race.
+  - [ ] T43.2.2 Add `asp review packet --json` for bots and dashboards.
+  - [ ] T43.2.3 Add optional inclusion of diff stats, test reports, and evidence manifests.
+  - [ ] T43.2.4 Add snapshot tests for review packet shape and redaction behavior.
+  - [ ] T43.2.5 Add CI comment examples for posting review packets without source upload.
+
+## EPIC 44 — Security and privacy hardening v2
+
+**Done when:** sensitive local state is harder to capture by mistake, and known
+filesystem and environment attacks stay covered by regression tests.
+
+- **S44.1 Sensitive data controls**
+  - [ ] T44.1.1 Add secret-scan baselines so known test fixtures do not hide new findings.
+  - [ ] T44.1.2 Add config for organization-specific secret patterns.
+  - [ ] T44.1.3 Add checkpoint deny rules that explain the exact matching policy.
+  - [ ] T44.1.4 Add evidence packet redaction previews before writing private artifacts.
+  - [ ] T44.1.5 Add docs for handling false positives without disabling secret protection.
+- **S44.2 Filesystem and environment attack tests**
+  - [ ] T44.2.1 Add regression tests for inherited hostile `GIT_*` environments around every git call.
+  - [ ] T44.2.2 Add Linux tests for non-UTF8 filenames and actionable failure hints.
+  - [ ] T44.2.3 Add fork tests for read-only directories in reflink and copy fallback paths.
+  - [ ] T44.2.4 Add doctor detection for unregistered partial fork directories.
+  - [ ] T44.2.5 Add threat-model docs for remaining accepted filesystem risks.
+
+## EPIC 45 — Ecosystem, docs, and community operations
+
+**Done when:** maintainers can grow usage without drowning in unclear issues,
+stale docs, or release-channel confusion.
+
+- **S45.1 Release channel maturity**
+  - [ ] T45.1.1 Add nightly or canary release workflow with clear stability labels.
+  - [ ] T45.1.2 Add upgrade and downgrade docs for format-compatible releases.
+  - [ ] T45.1.3 Add release note templates that call out trust-model impact.
+  - [ ] T45.1.4 Add install smoke tests for cargo, Homebrew, npm, and direct archive flows.
+  - [ ] T45.1.5 Add docs for enterprise mirrors and offline release verification.
+- **S45.2 Community and maintainer scale**
+  - [ ] T45.2.1 Add a good-first-issue map tied to the architecture docs.
+  - [ ] T45.2.2 Add maintainer response macros for missing evidence, security reports, and performance reports.
+  - [ ] T45.2.3 Add stale-issue policy that never auto-closes crash-safety or data-loss reports.
+  - [ ] T45.2.4 Add contributor recognition and release credit guidance.
+  - [ ] T45.2.5 Add governance docs for accepting new integrations without weakening local-first guarantees.
+
+---
+
 ## Decision log (newest first)
 
 - 2026-06-11 · Doctor never deletes directories it can't prove asp created — fork() registers Pending intent entries before cloning; cleanup is registry-driven, heuristics are info-only. (From review: rm -rf of `cp -r proj proj@backup` was possible.)
