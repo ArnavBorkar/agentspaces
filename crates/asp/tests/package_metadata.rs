@@ -439,6 +439,24 @@ fn doctor_runbook_docs_cover_common_repair_scenarios() {
 }
 
 #[test]
+fn windows_docs_cover_portable_checkpoint_path_guards() {
+    let docs = fs::read_to_string(repo_file("docs/windows.md")).unwrap();
+
+    for needle in [
+        "Windows-portable shape",
+        "reserved device names",
+        "`CON`",
+        "`NUL`",
+        "alternate data streams",
+        "trailing-space/trailing-dot",
+        "overlong Windows components",
+        "rename the path before checkpointing",
+    ] {
+        assert!(docs.contains(needle), "windows docs missing {needle}");
+    }
+}
+
+#[test]
 fn config_docs_cover_effective_config_inspection() {
     let docs = fs::read_to_string(repo_file("docs/config.md")).unwrap();
 

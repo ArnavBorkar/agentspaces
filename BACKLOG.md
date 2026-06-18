@@ -511,7 +511,7 @@ the project.
 blocked with precise, actionable diagnostics for unsupported cases.
 
 - **S38.1 Windows engine portability**
-  - [ ] T38.1.1 Implement Windows-safe path handling for long paths and reserved names.
+  - [x] T38.1.1 Implement Windows-safe path handling for long paths and reserved names.
   - [ ] T38.1.2 Preserve supported symlinks and reject unsafe reparse points with hints.
   - [ ] T38.1.3 Add ReFS block-clone support behind verified filesystem probes.
   - [ ] T38.1.4 Add NTFS copy fallback that preserves permissions needed for restore.

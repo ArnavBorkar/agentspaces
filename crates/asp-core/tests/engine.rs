@@ -1552,6 +1552,30 @@ fn non_utf8_filenames_are_captured() {
 }
 
 #[test]
+fn checkpoint_rejects_windows_reserved_paths_before_capture() {
+    let (_tmp, root) = project();
+    let ws = Workspace::init(&root, None).unwrap();
+    cp(&ws, "base").unwrap();
+
+    write(&root, "NUL.txt", "reserved device name\n");
+    let err = ws
+        .checkpoint(CheckpointOpts {
+            message: Some("reserved path".into()),
+            ..Default::default()
+        })
+        .unwrap_err();
+
+    assert_eq!(err.code, ErrorCode::Io);
+    assert!(err.message.contains("not portable to native Windows"));
+    assert!(err.message.contains("reserved Windows device name"));
+    assert!(err.hint.unwrap().contains("rename the path"));
+    assert_eq!(ws.checkpoint_refs().unwrap().len(), 1);
+
+    std::fs::rename(root.join("NUL.txt"), root.join("nul-safe.txt")).unwrap();
+    cp(&ws, "renamed").unwrap();
+}
+
+#[test]
 fn restore_handles_case_only_renames() {
     // Found by proptest on macOS CI: checkpoint A has "L/a", state B has
     // "l/a" (same file on case-insensitive filesystems). Restoring A must

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use asp_core::journal::{Entry, Journal, Op};
+use asp_core::store::windows_path_violation;
 use asp_core::workspace::CheckpointOpts;
 use asp_core::Workspace;
 use proptest::prelude::*;
@@ -94,7 +95,10 @@ fn file_tree() -> impl Strategy<Value = BTreeMap<String, Vec<u8>>> {
         name.prop_filter("no dots-only", |s| s != "." && s != ".."),
         1..4,
     )
-    .prop_map(|parts| parts.join("/"));
+    .prop_map(|parts| parts.join("/"))
+    .prop_filter("Windows-portable checkpoint path", |path| {
+        windows_path_violation(path).is_none()
+    });
     prop::collection::btree_map(rel_path, prop::collection::vec(any::<u8>(), 0..512), 1..12)
         .prop_filter("case-insensitive-unique and no prefix-dir conflicts", |m| {
             // Lowercase comparisons: paths differing only by case are the

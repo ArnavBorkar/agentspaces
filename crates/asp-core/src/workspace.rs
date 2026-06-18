@@ -1230,6 +1230,9 @@ impl Workspace {
                     }
                 }
             }
+            if !xy.contains(&b'D') {
+                validate_checkpoint_path_for_windows(&path)?;
+            }
             if xy.contains(&b'R') || xy.contains(&b'C') {
                 // Rename/copy: the following record is the source path; its
                 // staged deletion is already in the index.
@@ -1282,6 +1285,7 @@ impl Workspace {
                     Ok(md) if md.is_file() && md.len() >= threshold => {
                         let rec = &bf.files[&path];
                         if md.len() != rec.size || blobs::mtime_ms(&md) != rec.mtime_ms {
+                            validate_checkpoint_path_for_windows(&path)?;
                             if enforce_checkpoint_deny {
                                 self.enforce_checkpoint_deny_paths(std::iter::once(path.clone()))?;
                             }
@@ -1320,6 +1324,7 @@ impl Workspace {
                         // Genuinely shrunk below the threshold: it goes back
                         // to being an ordinary git blob — STAGE it, or the
                         // checkpoint would record a deletion of a live file.
+                        validate_checkpoint_path_for_windows(&path)?;
                         if enforce_checkpoint_deny {
                             self.enforce_checkpoint_deny_paths(std::iter::once(path.clone()))?;
                         }
@@ -4275,6 +4280,19 @@ fn actual_worktree_case(root: &Path, rel: &str) -> Option<String> {
 
 fn policy_violation(message: impl Into<String>, hint: impl Into<String>) -> Error {
     Error::new(ErrorCode::PolicyViolation, message).with_hint(hint)
+}
+
+fn validate_checkpoint_path_for_windows(path: &str) -> Result<()> {
+    if let Some(reason) = crate::store::windows_path_violation(path) {
+        return Err(Error::new(
+            ErrorCode::Io,
+            format!("path {path:?} is not portable to native Windows ({reason})"),
+        )
+        .with_hint(
+            "rename the path before checkpointing; Windows reserves device names, alternate streams, trailing spaces/dots, and overlong components",
+        ));
+    }
+    Ok(())
 }
 
 fn policy_path_matches(pattern: &str, path: &str) -> bool {

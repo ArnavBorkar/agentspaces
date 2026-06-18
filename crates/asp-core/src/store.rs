@@ -126,7 +126,105 @@ pub fn safe_rel_path(root: &Path, rel: &str) -> Result<PathBuf> {
         )
         .with_hint("the .asp store may be corrupt or tampered with; run `asp doctor`"));
     }
+    if let Some(reason) = windows_path_violation(rel) {
+        return Err(unsafe_store_path(
+            rel,
+            &format!("Windows-incompatible path: {reason}"),
+        ));
+    }
     Ok(root.join(p))
+}
+
+/// Report why a slash-separated workspace-relative path cannot round-trip on
+/// native Windows. The store format is OS-neutral, so checkpoint metadata must
+/// not admit names that become device aliases, alternate streams, or unopenable
+/// paths when the same workspace is recovered on Windows later.
+pub fn windows_path_violation(rel: &str) -> Option<String> {
+    const MAX_COMPONENT_UTF16: usize = 255;
+    const MAX_EXTENDED_REL_UTF16: usize = 32_000;
+
+    if rel.is_empty() {
+        return Some("path is empty".to_string());
+    }
+    if rel.encode_utf16().count() > MAX_EXTENDED_REL_UTF16 {
+        return Some(format!(
+            "path exceeds {MAX_EXTENDED_REL_UTF16} UTF-16 code units"
+        ));
+    }
+    if rel.contains('\\') {
+        return Some("contains a Windows path separator".to_string());
+    }
+
+    for component in rel.split('/') {
+        if component.is_empty() || component == "." || component == ".." {
+            return Some("contains an empty, dot, or parent component".to_string());
+        }
+        if component.encode_utf16().count() > MAX_COMPONENT_UTF16 {
+            return Some(format!(
+                "component {component:?} exceeds {MAX_COMPONENT_UTF16} UTF-16 code units"
+            ));
+        }
+        if component.ends_with(' ') || component.ends_with('.') {
+            return Some(format!("component {component:?} ends with a space or dot"));
+        }
+        if component.chars().any(windows_forbidden_char) {
+            return Some(format!(
+                "component {component:?} contains a Windows-forbidden character"
+            ));
+        }
+        if windows_reserved_device_name(component) {
+            return Some(format!(
+                "component {component:?} is a reserved Windows device name"
+            ));
+        }
+    }
+
+    None
+}
+
+fn windows_forbidden_char(ch: char) -> bool {
+    matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*') || ch.is_control()
+}
+
+fn windows_reserved_device_name(component: &str) -> bool {
+    let base = component
+        .split_once('.')
+        .map(|(base, _)| base)
+        .unwrap_or(component)
+        .to_uppercase();
+    matches!(
+        base.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "CONIN$"
+            | "CONOUT$"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "COM\u{00B9}"
+            | "COM\u{00B2}"
+            | "COM\u{00B3}"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+            | "LPT\u{00B9}"
+            | "LPT\u{00B2}"
+            | "LPT\u{00B3}"
+    )
 }
 
 /// Validate a store-supplied path before materializing file contents into the
@@ -318,5 +416,46 @@ mod tests {
         assert_eq!(err.code, ErrorCode::Locked);
         drop(l1);
         StoreLock::acquire(&layout).unwrap();
+    }
+
+    #[test]
+    fn windows_path_violation_rejects_reserved_and_unopenable_names() {
+        for path in [
+            "CON",
+            "dir/NUL.txt",
+            "COM1.log",
+            "LPT9",
+            "name.",
+            "name ",
+            "src/main.rs:Zone.Identifier",
+            "src\\main.rs",
+            "bad<name>",
+            "line\nbreak",
+        ] {
+            assert!(
+                windows_path_violation(path).is_some(),
+                "{path:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_path_violation_rejects_overlong_components() {
+        let path = format!("src/{}.txt", "a".repeat(256));
+        assert!(windows_path_violation(&path)
+            .unwrap()
+            .contains("exceeds 255 UTF-16 code units"));
+    }
+
+    #[test]
+    fn windows_path_violation_allows_portable_slash_paths() {
+        for path in [
+            "src/main.rs",
+            ".env.example",
+            "docs/README.v1.md",
+            "unicode/cafe\u{301}.txt",
+        ] {
+            assert_eq!(windows_path_violation(path), None, "{path:?}");
+        }
     }
 }

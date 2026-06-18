@@ -10,6 +10,13 @@ The current blockers are practical filesystem semantics, not lack of interest:
 - path normalization, drive prefixes, and case behavior need dedicated tests;
 - shadow-git environment isolation must be verified with Git for Windows.
 
+The engine already keeps checkpoint store paths in a Windows-portable shape on
+supported Unix hosts. UTF-8 paths that would become reserved device names
+(`CON`, `NUL`, `COM1`, `LPT1`, and variants), alternate data streams,
+backslash-separated paths, trailing-space/trailing-dot names, control-character
+names, or overlong Windows components are rejected before they enter checkpoint
+metadata. The corrective hint says `rename the path before checkpointing`.
+
 The CLI reports `unsupported_platform` on Windows with a hint to use WSL2 and
 track native support through the
 [Windows issue list](https://github.com/ArnavBorkar/agentspaces/issues?q=is%3Aissue+label%3Awindows).
