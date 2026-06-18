@@ -4,6 +4,9 @@
 
 ### Added
 
+- `asp-core` now includes an S3-compatible sync remote adapter behind the
+  `SyncRemote` trait, with SigV4 signing, ETag conditional writes, scoped
+  prefixes, and paginated `ListObjectsV2` parsing.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

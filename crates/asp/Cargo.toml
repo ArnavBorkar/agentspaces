@@ -26,7 +26,7 @@ clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_complete = "4"
 clap_mangen = "0.2"
 libc.workspace = true
-quick-xml = "0.38"
+quick-xml.workspace = true
 sha2.workspace = true
 time.workspace = true
 toml.workspace = true

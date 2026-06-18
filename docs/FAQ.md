@@ -37,4 +37,4 @@ Not yet. macOS (APFS) and Linux (btrfs/XFS reflink; other filesystems fall back 
 Mutations take an exclusive advisory lock per workspace; concurrent readers are lock-free. A crashed process's lock clears automatically.
 
 **Is my code sent anywhere?**
-No. asp is fully local: no network calls, no telemetry, no account. The format is designed for optional bring-your-own-bucket sync later — that will be opt-in and documented when it exists.
+No by default. asp has no telemetry and no account requirement. The shipped CLI sync commands are explicit opt-in local-remote commands, and `asp-core` has an S3-compatible adapter for integrators who wire their own credentials and transport.

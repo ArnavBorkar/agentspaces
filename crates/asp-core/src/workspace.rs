@@ -22,7 +22,7 @@ use crate::store::{
     atomic_write, atomic_write_json, find_root, read_json, ForkRecord, ForkRegistry, ForkStatus,
     Layout, ParentRef, StoreLock, WorkspaceMeta, FORMAT_VERSION,
 };
-use crate::sync::{LocalRemote, PutOutcome};
+use crate::sync::{LocalRemote, PutOutcome, SyncRemote};
 use walkdir::WalkDir;
 
 pub const CHECKPOINT_REF_PREFIX: &str = "refs/asp/checkpoints/";
@@ -3299,7 +3299,7 @@ fn doctor_repair_plan(message: &str, deep: bool) -> Option<RepairPlan> {
 }
 
 fn put_immutable_count(
-    remote: &LocalRemote,
+    remote: &dyn SyncRemote,
     key: &str,
     bytes: &[u8],
     created: &mut u64,
@@ -3338,7 +3338,7 @@ fn sync_ref_json(
 }
 
 fn put_append_only_ref(
-    remote: &LocalRemote,
+    remote: &dyn SyncRemote,
     key: &str,
     bytes: &[u8],
     report: &mut SyncPushReport,
@@ -3373,7 +3373,7 @@ fn put_append_only_ref(
 }
 
 fn put_head_ref(
-    remote: &LocalRemote,
+    remote: &dyn SyncRemote,
     key: &str,
     bytes: &[u8],
     local_seq: u64,
@@ -3427,7 +3427,11 @@ fn put_head_ref(
     }
 }
 
-fn verify_remote_workspace(remote: &LocalRemote, prefix: &str, workspace_id: &str) -> Result<()> {
+fn verify_remote_workspace(
+    remote: &dyn SyncRemote,
+    prefix: &str,
+    workspace_id: &str,
+) -> Result<()> {
     let key = format!("{prefix}/workspace.json");
     let Some(object) = remote.get(&key)? else {
         return Err(Error::new(
@@ -3456,7 +3460,7 @@ fn verify_remote_workspace(remote: &LocalRemote, prefix: &str, workspace_id: &st
 }
 
 fn remote_sync_refs(
-    remote: &LocalRemote,
+    remote: &dyn SyncRemote,
     key_prefix: &str,
     kind: &str,
 ) -> Result<BTreeMap<u64, SyncRef>> {
@@ -3484,7 +3488,7 @@ fn remote_sync_refs(
     Ok(refs)
 }
 
-fn remote_head_ref(remote: &LocalRemote, prefix: &str) -> Result<Option<SyncRef>> {
+fn remote_head_ref(remote: &dyn SyncRemote, prefix: &str) -> Result<Option<SyncRef>> {
     let key = format!("{prefix}/refs/head.json");
     let Some(object) = remote.get(&key)? else {
         return Ok(None);
@@ -3516,7 +3520,7 @@ fn plan_ref_imports(
     imports
 }
 
-fn remote_git_objects(remote: &LocalRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+fn remote_git_objects(remote: &dyn SyncRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
     let object_prefix = format!("{prefix}/objects/git/sha1");
     let mut objects = BTreeMap::new();
     for entry in remote.list(&object_prefix)? {
@@ -3561,7 +3565,7 @@ fn remote_git_oid(object_prefix: &str, key: &str) -> Result<String> {
     Ok(oid)
 }
 
-fn remote_cas_blobs(remote: &LocalRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+fn remote_cas_blobs(remote: &dyn SyncRemote, prefix: &str) -> Result<BTreeMap<String, Vec<u8>>> {
     let blob_prefix = format!("{prefix}/objects/blobs/blake3");
     let mut blobs = BTreeMap::new();
     for entry in remote.list(&blob_prefix)? {

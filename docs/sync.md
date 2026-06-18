@@ -3,7 +3,7 @@
 `asp sync` is an explicit, opt-in backup/sync surface for user-owned storage.
 The first implementation supports a local filesystem remote so teams can test
 the protocol with a mounted drive, shared volume, or fixture directory before
-object-storage backends exist.
+turning on cloud storage.
 
 ```bash
 asp sync push --remote /path/to/asp-remote
@@ -67,7 +67,14 @@ checkpoint-sequence terms or when the local head is missing.
 
 ## Current Limits
 
-The first sync commands support local filesystem remotes only. They are enough
-to create and restore an auditable remote backup, but they are not yet a full
-multi-device reconciliation workflow. Conflict renumbering and object-storage
-backends are future milestones.
+The `asp` CLI sync commands support local filesystem remotes only. They are
+enough to create and restore an auditable remote backup, but they are not yet a
+full multi-device reconciliation workflow.
+
+`asp-core` also includes an S3-compatible adapter behind the `SyncRemote` trait
+for integrators that are ready to wire their own credential loading and HTTP
+transport. The adapter signs AWS SigV4 requests, scopes keys under an optional
+prefix, maps remote versions to S3 ETags, uses `If-None-Match: *` for immutable
+objects, uses `If-Match` for compare-and-swap ref writes, and parses paginated
+`ListObjectsV2` responses. The CLI will stay local-only until the credential,
+policy, and recovery UX is explicit enough for operators to audit.
