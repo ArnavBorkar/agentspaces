@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "result": {
+    "checks": [
+      {
+        "id": "preflight.config",
+        "name": "config",
+        "ok": true,
+        "runbook": "docs/config.md",
+        "summary": "<workspace-root>/.asp/config.toml (present)"
+      },
+      {
+        "id": "preflight.policy",
+        "name": "policy",
+        "ok": true,
+        "runbook": "docs/policy.md",
+        "summary": "valid; no local policy rules are set"
+      },
+      {
+        "id": "preflight.doctor",
+        "name": "doctor",
+        "ok": true,
+        "runbook": "docs/doctor-runbook.md",
+        "summary": "workspace is healthy"
+      },
+      {
+        "id": "preflight.secrets",
+        "name": "secrets",
+        "ok": true,
+        "runbook": "docs/ignore-config-secrets.md",
+        "summary": "2 file(s) scanned; no likely secrets found"
+      }
+    ],
+    "doctor_findings": [],
+    "ready": true,
+    "root": "<workspace-root>",
+    "secret_findings": []
+  }
+}

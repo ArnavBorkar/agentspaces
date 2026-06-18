@@ -59,6 +59,8 @@
 - `schemas/asp-result.schema.json` now documents `asp preflight --json`,
   `asp evidence collect --json`, and the evidence output-file confirmation
   payload for automation clients.
+- JSON snapshot coverage now guards `asp preflight --json`,
+  `asp evidence collect --json`, and evidence output-file confirmation payloads.
 - `docs/cheatsheet.md` maps daily `asp` workflows to copyable command
   sequences for setup, recovery, review, races, promotion, audit, and support.
 - `docs/backup-recovery.md` gives operators a `.asp/` backup, restore drill,

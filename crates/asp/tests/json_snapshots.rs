@@ -57,6 +57,9 @@ fn snapshot(name: &str, actual: Value) {
         "cli_log" => include_str!("snapshots/cli_log.json"),
         "cli_audit" => include_str!("snapshots/cli_audit.json"),
         "cli_bench_self" => include_str!("snapshots/cli_bench_self.json"),
+        "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
+        "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
+        "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
         "cli_retention_plan" => include_str!("snapshots/cli_retention_plan.json"),
         "cli_sync_push" => include_str!("snapshots/cli_sync_push.json"),
         "cli_sync_fetch" => include_str!("snapshots/cli_sync_fetch.json"),
@@ -182,7 +185,7 @@ fn normalize_value(value: &mut Value, root: &Path) {
                     {
                         *child = json!(0);
                     }
-                    "message" | "hint" => {
+                    "message" | "hint" | "summary" => {
                         if let Some(s) = child.as_str() {
                             *child = json!(normalize_text(s, root));
                         }
@@ -304,6 +307,41 @@ fn cli_json_shapes_match_snapshots() {
     let mut error: Value = serde_json::from_slice(&out.stdout).expect("error json");
     error["error"]["message"] = json!("<message>");
     snapshot("cli_error", error);
+}
+
+#[test]
+fn cli_preflight_and_evidence_shapes_match_snapshots() {
+    let (_tmp, root) = project();
+
+    ok_json(&root, &["init"]);
+    ok_json(&root, &["checkpoint", "-m", "base"]);
+
+    let preflight = ok_json(&root, &["preflight"]);
+    snapshot("cli_preflight", normalize(preflight, &root));
+
+    let evidence = ok_json(&root, &["evidence", "collect", "--audit-limit", "2"]);
+    let normalized_evidence = normalize(evidence, &root);
+    snapshot("cli_evidence_collect", normalized_evidence.clone());
+
+    let evidence_path = root.join("asp-evidence.json");
+    let evidence_output = ok_json(
+        &root,
+        &[
+            "evidence",
+            "collect",
+            "--audit-limit",
+            "2",
+            "--output",
+            evidence_path.to_str().unwrap(),
+        ],
+    );
+    let mut normalized_output = normalize(evidence_output, &root);
+    assert_eq!(
+        normalized_output["result"]["packet"], normalized_evidence["result"],
+        "output confirmation packet should match direct evidence output"
+    );
+    normalized_output["result"]["packet"] = json!("<evidence-packet>");
+    snapshot("cli_evidence_output", normalized_output);
 }
 
 struct McpClient {

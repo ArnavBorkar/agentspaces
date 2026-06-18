@@ -1,0 +1,179 @@
+{
+  "ok": true,
+  "result": {
+    "asp_version": "<asp-version>",
+    "diagnostics": {
+      "asp_version": "<asp-version>",
+      "config": {
+        "blob_threshold_mb": 50,
+        "excludes_count": 9,
+        "extra_excludes_count": 0
+      },
+      "doctor_findings": [],
+      "forks": [],
+      "format_version": 1,
+      "generated_at": "<timestamp>",
+      "recent_operations": [
+        {
+          "duration_ms": 0,
+          "files_changed": 2,
+          "message": "base",
+          "op": "checkpoint",
+          "seq": 1,
+          "ts": "<timestamp>"
+        },
+        {
+          "duration_ms": null,
+          "files_changed": null,
+          "message": null,
+          "op": "init",
+          "seq": null,
+          "ts": "<timestamp>"
+        }
+      ],
+      "redaction": {
+        "notes": [
+          "file contents and environment variables are never collected",
+          "checkpoint messages and finding text are scanned for common secret tokens"
+        ],
+        "paths_redacted": true,
+        "secrets_redacted": true
+      },
+      "stats": {
+        "blob_bytes": 0,
+        "blobs": 0,
+        "checkpoints": 1,
+        "forks_active": 0,
+        "forks_discarded": 0,
+        "forks_pending": 0,
+        "forks_promoted": 0,
+        "forks_total": 0,
+        "journal_entries": 2,
+        "store_bytes": 0
+      },
+      "status": {
+        "active_forks": 0,
+        "deleted_files": 0,
+        "dirty_files": 0,
+        "last_checkpoint": {
+          "message": "base",
+          "seq": 1,
+          "ts": "<timestamp>"
+        },
+        "untracked_files": 0
+      },
+      "workspace": {
+        "is_fork": false,
+        "parent_fork_name": null,
+        "parent_workspace_id": null,
+        "root": "<workspace-root>",
+        "workspace_id": "<workspace-id>"
+      }
+    },
+    "generated_at": "<timestamp>",
+    "preflight": {
+      "checks": [
+        {
+          "hint": null,
+          "id": "preflight.config",
+          "name": "config",
+          "ok": true,
+          "runbook": "docs/config.md",
+          "summary": "<workspace-root>/.asp/config.toml (present)"
+        },
+        {
+          "hint": null,
+          "id": "preflight.policy",
+          "name": "policy",
+          "ok": true,
+          "runbook": "docs/policy.md",
+          "summary": "valid; no local policy rules are set"
+        },
+        {
+          "hint": null,
+          "id": "preflight.doctor",
+          "name": "doctor",
+          "ok": true,
+          "runbook": "docs/doctor-runbook.md",
+          "summary": "workspace is healthy"
+        },
+        {
+          "hint": null,
+          "id": "preflight.secrets",
+          "name": "secrets",
+          "ok": true,
+          "runbook": "docs/ignore-config-secrets.md",
+          "summary": "2 file(s) scanned; no likely secrets found"
+        }
+      ],
+      "doctor_findings": 0,
+      "ready": true,
+      "secret_findings": 0
+    },
+    "recent_audit_events": [
+      {
+        "duration_ms": 0,
+        "files_changed": 2,
+        "op": "checkpoint",
+        "seq": 1,
+        "source": "manual",
+        "ts": "<timestamp>"
+      },
+      {
+        "duration_ms": null,
+        "files_changed": null,
+        "op": "init",
+        "seq": null,
+        "source": null,
+        "ts": "<timestamp>"
+      }
+    ],
+    "redaction": {
+      "audit_details_included": false,
+      "audit_messages_included": false,
+      "paths_redacted": true,
+      "secrets_redacted": true
+    },
+    "schema": {
+      "asp_version": "<asp-version>",
+      "schemas": [
+        {
+          "kind": "json_schema",
+          "name": "cli_json_envelope",
+          "path": "schemas/cli-json-envelope.schema.json",
+          "version": 1
+        },
+        {
+          "kind": "json_schema",
+          "name": "result_payloads",
+          "path": "schemas/asp-result.schema.json",
+          "version": 1
+        },
+        {
+          "kind": "json_schema",
+          "name": "mcp_tool_result",
+          "path": "schemas/mcp-tool-result.schema.json",
+          "version": 1
+        },
+        {
+          "kind": "toml_schema_doc",
+          "name": "workspace_config_toml",
+          "path": "docs/config.md",
+          "version": 1
+        },
+        {
+          "kind": "toml_schema_doc",
+          "name": "workspace_policy_toml",
+          "path": "docs/policy.md",
+          "version": 1
+        },
+        {
+          "kind": "store_format",
+          "name": "on_disk_format",
+          "path": "docs/design/format.md",
+          "version": 1
+        }
+      ]
+    }
+  }
+}

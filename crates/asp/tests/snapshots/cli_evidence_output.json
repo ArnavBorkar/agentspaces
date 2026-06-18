@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "result": {
+    "packet": "<evidence-packet>",
+    "path": "<workspace-root>/asp-evidence.json",
+    "redacted": true
+  }
+}
