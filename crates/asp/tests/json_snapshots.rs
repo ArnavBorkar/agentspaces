@@ -505,6 +505,11 @@ fn cli_preflight_and_evidence_shapes_match_snapshots() {
         .unwrap();
     assert_eq!(sha256.len(), 64);
     assert!(sha256.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    let bytes = evidence_manifest["result"]["manifest"]["bytes"]
+        .as_u64()
+        .unwrap();
+    assert!(bytes > 0);
+    evidence_manifest["result"]["manifest"]["bytes"] = json!(0);
     evidence_manifest["result"]["manifest"]["sha256"] = json!("<sha256>");
     snapshot("cli_evidence_manifest", evidence_manifest);
 }

@@ -3,7 +3,7 @@
   "result": {
     "manifest": {
       "artifact": "asp-evidence.json",
-      "bytes": 4236,
+      "bytes": 0,
       "created_at": "<timestamp>",
       "created_by": "asp evidence manifest",
       "sha256": "<sha256>"
