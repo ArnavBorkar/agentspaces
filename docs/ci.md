@@ -25,6 +25,19 @@ jobs:
         run: asp config validate
       - name: Run asp preflight
         run: asp --json preflight > asp-preflight.json
+      - name: Annotate asp preflight failures
+        if: failure() && hashFiles('asp-preflight.json') != ''
+        run: |
+          python3 - <<'PY'
+          import json
+
+          with open("asp-preflight.json", encoding="utf-8") as handle:
+              report = json.load(handle)["result"]
+
+          for check in report["checks"]:
+              if not check["ok"]:
+                  print(f"::error title={check['id']}::{check['summary']} ({check['runbook']})")
+          PY
       - name: Upload asp preflight report
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,6 +71,8 @@ asp_preflight:
   `asp restore`, `asp promote`, or `asp discard`.
 - Run `asp config validate` before `asp preflight` so syntax failures are easy
   to spot in logs.
+- Use the JSON `id` field, such as `preflight.secrets`, for stable CI
+  annotations and dashboards; `name` is human display text.
 - Upload the JSON report when teams want persistent evidence for security or
   platform review.
 - If `asp preflight` fails, use `asp doctor --runbook` and `asp secrets scan`

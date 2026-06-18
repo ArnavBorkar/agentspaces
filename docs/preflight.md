@@ -23,6 +23,16 @@ uses the normal success envelope so CI systems and agents can inspect the full
 report. Each check includes a runbook link; human output prints the link beside
 failing checks.
 
+Each JSON check also includes a stable check ID for CI annotations and
+dashboards. Treat `name` as display text and `id` as the automation key.
+
+| ID | Check | Runbook |
+| --- | --- | --- |
+| `preflight.config` | config | `docs/config.md` |
+| `preflight.policy` | policy | `docs/policy.md` |
+| `preflight.doctor` | doctor | `docs/doctor-runbook.md` |
+| `preflight.secrets` | secrets | `docs/ignore-config-secrets.md` |
+
 ## CI Example
 
 ```bash

@@ -276,6 +276,9 @@ fn preflight_docs_cover_ci_readiness_gate() {
         "asp secrets scan",
         "exits nonzero",
         "runbook link",
+        "stable check ID",
+        "preflight.config",
+        "preflight.secrets",
         "Do not pair it with `asp doctor --fix`",
     ] {
         assert!(docs.contains(needle), "preflight docs missing {needle}");
@@ -293,6 +296,8 @@ fn ci_docs_cover_preflight_examples() {
         "## GitLab CI",
         "asp config validate",
         "asp --json preflight > asp-preflight.json",
+        "::error title=",
+        "preflight.secrets",
         "do not run `asp doctor --fix`",
         "asp doctor --runbook",
     ] {

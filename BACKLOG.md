@@ -396,7 +396,7 @@
   - [x] T31.1.3 Add preflight docs for agent harness launch checks before long-running work.
 - **S31.2 Failure triage**
   - [x] T31.2.1 Add preflight-to-runbook links for each failing check.
-  - [ ] T31.2.2 Add machine-readable preflight check IDs for stable CI annotations.
+  - [x] T31.2.2 Add machine-readable preflight check IDs for stable CI annotations.
 
 ---
 

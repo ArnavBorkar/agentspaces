@@ -184,6 +184,21 @@ fn preflight_reports_readiness_and_blocks_secrets() {
     let json = ok_json(&root, &["preflight"]);
     assert_eq!(json["ok"], true);
     assert_eq!(json["result"]["ready"], true);
+    let check_ids: Vec<_> = json["result"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|check| check["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        check_ids,
+        vec![
+            "preflight.config",
+            "preflight.policy",
+            "preflight.doctor",
+            "preflight.secrets"
+        ]
+    );
     assert!(json["result"]["checks"]
         .as_array()
         .unwrap()
@@ -206,7 +221,8 @@ fn preflight_reports_readiness_and_blocks_secrets() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|check| check["name"] == "secrets"
+        .any(|check| check["id"] == "preflight.secrets"
+            && check["name"] == "secrets"
             && check["ok"] == false
             && check["runbook"] == "docs/ignore-config-secrets.md"));
 }

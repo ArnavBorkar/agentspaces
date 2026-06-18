@@ -484,6 +484,7 @@ struct PreflightReport {
 
 #[derive(Debug, serde::Serialize)]
 struct PreflightCheck {
+    id: &'static str,
     name: &'static str,
     ok: bool,
     summary: String,
@@ -2728,6 +2729,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
 
     let checks = vec![
         PreflightCheck {
+            id: "preflight.config",
             name: "config",
             ok: true,
             summary: format!(
@@ -2743,6 +2745,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
             hint: None,
         },
         PreflightCheck {
+            id: "preflight.policy",
             name: "policy",
             ok: true,
             summary: if policy_rules == 0 {
@@ -2754,6 +2757,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
             hint: None,
         },
         PreflightCheck {
+            id: "preflight.doctor",
             name: "doctor",
             ok: doctor_blocking == 0,
             summary: if doctor_findings.is_empty() {
@@ -2775,6 +2779,7 @@ fn preflight_report(cli_dir: &Option<PathBuf>, deep: bool) -> Result<PreflightRe
             }),
         },
         PreflightCheck {
+            id: "preflight.secrets",
             name: "secrets",
             ok: secret_count == 0,
             summary: if secret_count == 0 {
