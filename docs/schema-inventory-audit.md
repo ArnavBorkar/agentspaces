@@ -20,6 +20,9 @@ payloads:
 - `asp preflight --json`
 - `asp evidence collect --json`
 - `asp evidence collect --json --output file.json`
+- `asp evidence timeline --json` (`evidenceTimelineReport`)
+- `asp evidence timeline --json --output file.json`
+  (`evidenceTimelineOutputResult`)
 - `asp evidence manifest --packet file.json --output manifest.json --json`
   (`evidenceManifestOutputResult`)
 - `asp evidence verify --packet file.json --manifest manifest.json --json`

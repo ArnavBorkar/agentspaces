@@ -22,6 +22,8 @@
     { "$ref": "#/$defs/evidenceManifestOutputResult" },
     { "$ref": "#/$defs/evidenceOutputResult" },
     { "$ref": "#/$defs/evidenceReport" },
+    { "$ref": "#/$defs/evidenceTimelineOutputResult" },
+    { "$ref": "#/$defs/evidenceTimelineReport" },
     { "$ref": "#/$defs/evidenceVerifyReport" },
     { "$ref": "#/$defs/forkCompareRows" },
     { "$ref": "#/$defs/forkInfos" },
@@ -845,6 +847,128 @@
         },
         "artifact_matches": { "type": "boolean" },
         "valid": { "type": "boolean" }
+      }
+    },
+    "evidenceTimelineOutputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "redacted", "timeline"],
+      "properties": {
+        "path": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "timeline": { "$ref": "#/$defs/evidenceTimelineReport" }
+      }
+    },
+    "evidenceTimelineReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated_at",
+        "asp_version",
+        "redaction",
+        "filters",
+        "total_events",
+        "first_ts",
+        "last_ts",
+        "operations",
+        "events"
+      ],
+      "properties": {
+        "generated_at": { "$ref": "#/$defs/dateTime" },
+        "asp_version": { "type": "string" },
+        "redaction": { "$ref": "#/$defs/evidenceTimelineRedaction" },
+        "filters": { "$ref": "#/$defs/evidenceTimelineFilters" },
+        "total_events": { "$ref": "#/$defs/u64" },
+        "first_ts": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "last_ts": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "operations": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/u64" }
+        },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceTimelineEvent" }
+        }
+      }
+    },
+    "evidenceTimelineRedaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paths_redacted",
+        "secrets_redacted",
+        "messages_included",
+        "details_included"
+      ],
+      "properties": {
+        "paths_redacted": { "type": "boolean" },
+        "secrets_redacted": { "type": "boolean" },
+        "messages_included": { "type": "boolean" },
+        "details_included": { "type": "boolean" }
+      }
+    },
+    "evidenceTimelineFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "tool", "ops", "paths", "since", "until", "limit"],
+      "properties": {
+        "session": { "$ref": "#/$defs/nullableString" },
+        "tool": { "$ref": "#/$defs/nullableString" },
+        "ops": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/op" }
+        },
+        "paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "since": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "until": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "limit": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "evidenceTimelineEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts",
+        "op",
+        "seq",
+        "commit",
+        "source",
+        "session_id",
+        "tool",
+        "message",
+        "summary",
+        "files_changed",
+        "duration_ms",
+        "detail"
+      ],
+      "properties": {
+        "ts": { "$ref": "#/$defs/dateTime" },
+        "op": { "$ref": "#/$defs/op" },
+        "seq": { "$ref": "#/$defs/nullableU64" },
+        "commit": {
+          "anyOf": [{ "$ref": "#/$defs/gitOid" }, { "type": "null" }]
+        },
+        "source": {
+          "anyOf": [{ "$ref": "#/$defs/source" }, { "type": "null" }]
+        },
+        "session_id": { "$ref": "#/$defs/nullableString" },
+        "tool": { "$ref": "#/$defs/nullableString" },
+        "message": { "$ref": "#/$defs/nullableString" },
+        "summary": { "type": "string" },
+        "files_changed": { "$ref": "#/$defs/nullableU64" },
+        "duration_ms": { "$ref": "#/$defs/nullableU64" },
+        "detail": true
       }
     },
     "evidenceReport": {

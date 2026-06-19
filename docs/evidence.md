@@ -7,6 +7,7 @@ handoffs, and incident timelines. It does not upload anything.
 asp evidence collect
 asp --json evidence collect
 asp evidence collect --output asp-evidence.json
+asp --json evidence timeline --limit 100 > asp-timeline.json
 ```
 
 The packet includes:
@@ -27,6 +28,28 @@ asp evidence collect --audit-limit 50 --output asp-evidence.json
 Use `--deep` when the packet should include deep preflight doctor checks such
 as CAS verification. Use `--include-paths` only for a private support channel
 where full local paths are acceptable.
+
+## Incident Timeline
+
+Use `asp evidence timeline` when an incident reviewer needs ordered local audit
+events without collecting diagnostics or source content:
+
+```bash
+asp evidence timeline
+asp --json evidence timeline --since 2026-06-18T00:00:00Z --op checkpoint
+asp evidence timeline --output asp-timeline.json
+```
+
+The timeline uses the same filters as `asp audit`: `--session`, `--tool`,
+repeated `--op`, repeated `--path`, `--since`, `--until`, and `--limit`. Events
+are returned oldest-to-newest after selecting the most recent matching entries.
+By default, free-form audit `message` text and operation `detail` payloads are
+omitted. Use `--include-messages` or `--include-details` only for trusted
+channels, and add `--include-paths` only when full local paths are acceptable.
+
+The JSON report includes `filters`, `operations`, `first_ts`, `last_ts`,
+`total_events`, and redaction flags so incident dashboards can index the
+timeline without parsing prose.
 
 ## Signed Manifest
 

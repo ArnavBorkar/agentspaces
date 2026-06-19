@@ -437,6 +437,8 @@ enum SecretsCmd {
 enum EvidenceCmd {
     /// Collect diagnostics, preflight, schema, and recent audit evidence.
     Collect(EvidenceCollectArgs),
+    /// Build a redacted incident timeline from local audit events.
+    Timeline(EvidenceTimelineArgs),
     /// Create a SHA-256 manifest for an evidence packet.
     Manifest(EvidenceManifestArgs),
     /// Verify an evidence packet against a manifest.
@@ -455,6 +457,43 @@ struct EvidenceCollectArgs {
     #[arg(long, default_value_t = 25)]
     audit_limit: usize,
     /// Write the evidence packet to this JSON file instead of stdout.
+    #[arg(short, long, value_name = "FILE")]
+    output: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct EvidenceTimelineArgs {
+    /// Include only entries with this agent session id.
+    #[arg(long)]
+    session: Option<String>,
+    /// Include only entries created by this tool.
+    #[arg(long)]
+    tool: Option<String>,
+    /// Include only this operation. Repeat to include multiple operations.
+    #[arg(long = "op", value_parser = parse_op_filter)]
+    ops: Vec<Op>,
+    /// Include only path-aware entries touching this workspace-relative path.
+    #[arg(long = "path")]
+    paths: Vec<String>,
+    /// Include entries at or after this RFC3339 timestamp.
+    #[arg(long, value_parser = parse_rfc3339)]
+    since: Option<OffsetDateTime>,
+    /// Include entries at or before this RFC3339 timestamp.
+    #[arg(long, value_parser = parse_rfc3339)]
+    until: Option<OffsetDateTime>,
+    /// Max events to include after filtering.
+    #[arg(short = 'n', long, default_value = "100")]
+    limit: usize,
+    /// Include free-form audit messages. Use only for trusted channels.
+    #[arg(long)]
+    include_messages: bool,
+    /// Include operation detail payloads. Use only for trusted channels.
+    #[arg(long)]
+    include_details: bool,
+    /// Include full local paths when redacting message/detail strings.
+    #[arg(long)]
+    include_paths: bool,
+    /// Write the timeline to this JSON file instead of stdout.
     #[arg(short, long, value_name = "FILE")]
     output: Option<PathBuf>,
 }
@@ -693,6 +732,61 @@ struct EvidenceAuditEvent {
     source: Option<Source>,
     duration_ms: Option<u64>,
     files_changed: Option<u64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceTimelineReport {
+    generated_at: String,
+    asp_version: &'static str,
+    redaction: EvidenceTimelineRedaction,
+    filters: EvidenceTimelineFilters,
+    total_events: usize,
+    first_ts: Option<String>,
+    last_ts: Option<String>,
+    operations: BTreeMap<String, u64>,
+    events: Vec<EvidenceTimelineEvent>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceTimelineRedaction {
+    paths_redacted: bool,
+    secrets_redacted: bool,
+    messages_included: bool,
+    details_included: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceTimelineFilters {
+    session: Option<String>,
+    tool: Option<String>,
+    ops: Vec<Op>,
+    paths: Vec<String>,
+    since: Option<String>,
+    until: Option<String>,
+    limit: usize,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceTimelineEvent {
+    ts: String,
+    op: Op,
+    seq: Option<u64>,
+    commit: Option<String>,
+    source: Option<Source>,
+    session_id: Option<String>,
+    tool: Option<String>,
+    message: Option<String>,
+    summary: String,
+    files_changed: Option<u64>,
+    duration_ms: Option<u64>,
+    detail: Option<serde_json::Value>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EvidenceTimelineOutputResult {
+    path: PathBuf,
+    redacted: bool,
+    timeline: EvidenceTimelineReport,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -2314,6 +2408,37 @@ fn run(cli: Cli) -> Result<(), Error> {
                 }
                 Ok(())
             }
+            EvidenceCmd::Timeline(args) => {
+                let ws = open(&cli.dir)?;
+                let output = args.output.clone();
+                let report = evidence_timeline_report(&ws, &args)?;
+                if let Some(output) = output {
+                    let path = resolve_output_path(ws.root(), output);
+                    let result = EvidenceTimelineOutputResult {
+                        path,
+                        redacted: report.redaction.paths_redacted,
+                        timeline: report,
+                    };
+                    write_json_file(&result.path, &result.timeline)?;
+                    if json {
+                        ui::print_json(true, &result);
+                    } else {
+                        println!(
+                            "{} wrote {}evidence timeline to {}",
+                            ui::green("✓"),
+                            if result.redacted { "redacted " } else { "" },
+                            ui::bold(&result.path.display().to_string())
+                        );
+                    }
+                    return Ok(());
+                }
+                if json {
+                    ui::print_json(true, &report);
+                } else {
+                    println!("{}", json_pretty(&report)?);
+                }
+                Ok(())
+            }
             EvidenceCmd::Manifest(args) => {
                 let ws = open(&cli.dir)?;
                 let packet = resolve_output_path(ws.root(), args.packet);
@@ -3604,6 +3729,157 @@ fn evidence_collect_report(
         schema: schema_report(),
         recent_audit_events,
     })
+}
+
+fn evidence_timeline_report(
+    ws: &Workspace,
+    args: &EvidenceTimelineArgs,
+) -> Result<EvidenceTimelineReport, Error> {
+    let audit_args = AuditArgs {
+        session: args.session.clone(),
+        tool: args.tool.clone(),
+        ops: args.ops.clone(),
+        paths: args.paths.clone(),
+        since: args.since,
+        until: args.until,
+        format: AuditFormat::Table,
+        limit: args.limit,
+    };
+    let mut entries = audit_entries(ws, &audit_args)?;
+    entries.reverse();
+
+    let mut operations = BTreeMap::new();
+    let events = entries
+        .into_iter()
+        .map(|entry| {
+            let op = op_name(&entry.op).to_string();
+            *operations.entry(op).or_insert(0) += 1;
+            evidence_timeline_event(ws.root(), entry, args)
+        })
+        .collect::<Vec<_>>();
+    let first_ts = events.first().map(|event| event.ts.clone());
+    let last_ts = events.last().map(|event| event.ts.clone());
+
+    Ok(EvidenceTimelineReport {
+        generated_at: asp_core::now_rfc3339(),
+        asp_version: asp_core::version(),
+        redaction: EvidenceTimelineRedaction {
+            paths_redacted: !args.include_paths,
+            secrets_redacted: true,
+            messages_included: args.include_messages,
+            details_included: args.include_details,
+        },
+        filters: EvidenceTimelineFilters {
+            session: args.session.clone(),
+            tool: args.tool.clone(),
+            ops: args.ops.clone(),
+            paths: args.paths.clone(),
+            since: format_optional_rfc3339(args.since)?,
+            until: format_optional_rfc3339(args.until)?,
+            limit: args.limit,
+        },
+        total_events: events.len(),
+        first_ts,
+        last_ts,
+        operations,
+        events,
+    })
+}
+
+fn evidence_timeline_event(
+    root: &Path,
+    entry: Entry,
+    args: &EvidenceTimelineArgs,
+) -> EvidenceTimelineEvent {
+    let summary = evidence_timeline_summary(&entry);
+    let message = if args.include_messages {
+        entry
+            .message
+            .map(|message| redact_timeline_text(&message, root, args.include_paths))
+    } else {
+        None
+    };
+    let detail = if args.include_details {
+        entry
+            .detail
+            .map(|detail| redact_timeline_value(detail, root, args.include_paths))
+    } else {
+        None
+    };
+
+    EvidenceTimelineEvent {
+        ts: entry.ts,
+        op: entry.op,
+        seq: entry.seq,
+        commit: entry.commit,
+        source: entry.source,
+        session_id: entry.session_id,
+        tool: entry.tool,
+        message,
+        summary,
+        files_changed: entry.files_changed,
+        duration_ms: entry.duration_ms,
+        detail,
+    }
+}
+
+fn evidence_timeline_summary(entry: &Entry) -> String {
+    let op = op_name(&entry.op);
+    if let Some(seq) = entry.seq {
+        return format!("{op} #{seq}");
+    }
+    if let Some(files) = entry.files_changed {
+        return format!(
+            "{op} ({files} changed file{})",
+            if files == 1 { "" } else { "s" }
+        );
+    }
+    op.to_string()
+}
+
+fn format_optional_rfc3339(value: Option<OffsetDateTime>) -> Result<Option<String>, Error> {
+    value
+        .map(|value| {
+            value.format(&Rfc3339).map_err(|e| {
+                Error::new(
+                    ErrorCode::Io,
+                    format!("format timeline filter timestamp: {e}"),
+                )
+            })
+        })
+        .transpose()
+}
+
+fn redact_timeline_text(text: &str, root: &Path, include_paths: bool) -> String {
+    if include_paths {
+        text.to_string()
+    } else {
+        redact_workspace_path_text(text, root)
+    }
+}
+
+fn redact_timeline_value(
+    value: serde_json::Value,
+    root: &Path,
+    include_paths: bool,
+) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(text) => {
+            serde_json::Value::String(redact_timeline_text(&text, root, include_paths))
+        }
+        serde_json::Value::Array(items) => serde_json::Value::Array(
+            items
+                .into_iter()
+                .map(|item| redact_timeline_value(item, root, include_paths))
+                .collect(),
+        ),
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.into_iter()
+                .map(|(key, value)| (key, redact_timeline_value(value, root, include_paths)))
+                .collect(),
+        ),
+        other => other,
+    }
 }
 
 fn evidence_manifest(packet: &Path) -> Result<EvidenceManifest, Error> {

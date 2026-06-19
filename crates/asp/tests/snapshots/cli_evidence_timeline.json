@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "result": {
+    "generated_at": "<timestamp>",
+    "asp_version": "<asp-version>",
+    "redaction": {
+      "paths_redacted": true,
+      "secrets_redacted": true,
+      "messages_included": false,
+      "details_included": false
+    },
+    "filters": {
+      "session": null,
+      "tool": null,
+      "ops": [],
+      "paths": [],
+      "since": null,
+      "until": null,
+      "limit": 2
+    },
+    "total_events": 2,
+    "first_ts": "<timestamp>",
+    "last_ts": "<timestamp>",
+    "operations": {
+      "checkpoint": 1,
+      "init": 1
+    },
+    "events": [
+      {
+        "ts": "<timestamp>",
+        "op": "init",
+        "seq": null,
+        "commit": "<git-oid>",
+        "source": null,
+        "session_id": null,
+        "tool": null,
+        "message": null,
+        "summary": "init",
+        "files_changed": null,
+        "duration_ms": null,
+        "detail": null
+      },
+      {
+        "ts": "<timestamp>",
+        "op": "checkpoint",
+        "seq": 1,
+        "commit": "<git-oid>",
+        "source": "manual",
+        "session_id": null,
+        "tool": null,
+        "message": null,
+        "summary": "checkpoint #1",
+        "files_changed": 2,
+        "duration_ms": 0,
+        "detail": null
+      }
+    ]
+  }
+}

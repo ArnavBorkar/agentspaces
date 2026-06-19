@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "result": {
+    "path": "<workspace-root>/asp-timeline.json",
+    "redacted": true,
+    "timeline": "<evidence-timeline>"
+  }
+}

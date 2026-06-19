@@ -55,6 +55,9 @@
 - `docs/drills.md` now maps recovery and fork drill failure signals to
   corrective commands, evidence fields, escalation boundaries, and preservation
   steps for repeated failures.
+- `asp evidence timeline` now exports a redacted oldest-to-newest incident
+  timeline from local audit events, with audit-style filters, JSON schema, and
+  snapshot coverage.
 - `asp race` accepts repeated `--label` flags and templated `--env KEY=VALUE`
   variables for per-lane agent configuration.
 - `asp race` accepts `--timeout`, `--retries`, and `--cancel-on-success` runner

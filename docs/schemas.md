@@ -66,6 +66,8 @@ corrective next step or `null` for unexpected infrastructure failures.
 | `asp secrets scan --json` | `#/$defs/secretScanReport` |
 | `asp evidence collect --json` | `#/$defs/evidenceReport` |
 | `asp evidence collect --json --output file.json` | `#/$defs/evidenceOutputResult` |
+| `asp evidence timeline --json` | `#/$defs/evidenceTimelineReport` |
+| `asp evidence timeline --json --output file.json` | `#/$defs/evidenceTimelineOutputResult` |
 | `asp evidence manifest --packet file.json --output manifest.json --json` | `#/$defs/evidenceManifestOutputResult` |
 | `asp evidence verify --packet file.json --manifest manifest.json --json` | `#/$defs/evidenceVerifyReport` |
 | `asp retention plan --json` | `#/$defs/retentionPlan` |
@@ -106,6 +108,13 @@ creation time, and creator command.
 returns expected versus actual artifact, byte, and SHA-256 values plus
 `artifact_matches` and `valid`; invalid verification exits nonzero after
 printing the report.
+`asp evidence timeline --json` returns a redacted oldest-to-newest incident
+timeline with `filters`, `operations`, `first_ts`, `last_ts`, `total_events`,
+and `events[]`. Free-form audit `message` and `detail` payloads are omitted by
+default; `--include-messages`, `--include-details`, and `--include-paths` make
+the corresponding `redaction` fields explicit. With `--output file.json`, the
+result is a write confirmation containing `path`, `redacted`, and the same
+timeline under `timeline`.
 `asp init --print-template <name> --json` returns the selected built-in config
 template as `name`, `summary`, and raw TOML text without creating `.asp/`.
 Checkpoint journal entries may include `detail.paths` with workspace-relative

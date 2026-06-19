@@ -74,6 +74,10 @@ fn snapshot(name: &str, actual: Value) {
         "cli_doctor_runbook" => include_str!("snapshots/cli_doctor_runbook.json"),
         "cli_preflight" => include_str!("snapshots/cli_preflight.json"),
         "cli_evidence_collect" => include_str!("snapshots/cli_evidence_collect.json"),
+        "cli_evidence_timeline" => include_str!("snapshots/cli_evidence_timeline.json"),
+        "cli_evidence_timeline_output" => {
+            include_str!("snapshots/cli_evidence_timeline_output.json")
+        }
         "cli_evidence_output" => include_str!("snapshots/cli_evidence_output.json"),
         "cli_evidence_manifest" => include_str!("snapshots/cli_evidence_manifest.json"),
         "cli_evidence_verify" => include_str!("snapshots/cli_evidence_verify.json"),
@@ -267,9 +271,8 @@ fn normalize_value(value: &mut Value, root: &Path) {
                         *child = json!("<asp-version>");
                     }
                     "commit" | "target_commit" => *child = json!("<git-oid>"),
-                    "ts" | "generated_at" | "created_at" | "last_activity" => {
-                        *child = json!("<timestamp>")
-                    }
+                    "ts" | "first_ts" | "last_ts" | "generated_at" | "created_at"
+                    | "last_activity" => *child = json!("<timestamp>"),
                     "duration_ms" | "store_bytes" | "blob_bytes" | "age_hours"
                         if child.is_number() =>
                     {
@@ -613,6 +616,31 @@ fn cli_preflight_and_evidence_shapes_match_snapshots() {
     let evidence = ok_json(&root, &["evidence", "collect", "--audit-limit", "2"]);
     let normalized_evidence = normalize(evidence, &root);
     snapshot("cli_evidence_collect", normalized_evidence.clone());
+
+    let timeline = ok_json(&root, &["evidence", "timeline", "--limit", "2"]);
+    let normalized_timeline = normalize(timeline, &root);
+    snapshot("cli_evidence_timeline", normalized_timeline.clone());
+
+    let timeline_path = root.join("asp-timeline.json");
+    let timeline_output = ok_json(
+        &root,
+        &[
+            "evidence",
+            "timeline",
+            "--limit",
+            "2",
+            "--output",
+            timeline_path.to_str().unwrap(),
+        ],
+    );
+    let mut normalized_timeline_output = normalize(timeline_output, &root);
+    assert_eq!(
+        normalized_timeline_output["result"]["timeline"], normalized_timeline["result"],
+        "output confirmation timeline should match direct timeline output"
+    );
+    normalized_timeline_output["result"]["timeline"] = json!("<evidence-timeline>");
+    snapshot("cli_evidence_timeline_output", normalized_timeline_output);
+    std::fs::remove_file(&timeline_path).unwrap();
 
     let evidence_path = root.join("asp-evidence.json");
     let evidence_output = ok_json(
